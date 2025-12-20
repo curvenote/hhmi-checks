@@ -1,0 +1,14 @@
+version: 1
+project:
+  title: PMC Module Docs
+  github: https://github.com/curvenote/journals
+  id: 985d6a00-6493-4bf8-a8ff-75258843a5a3
+  toc:
+    - file: inbound-email.md
+site:
+  title: PMC Module Docs
+  options:
+    logo_text: PMC Module Docs
+  nav: []
+  domains:
+    - stevejpurves.curve.space

@@ -1,0 +1,13 @@
+# $schema: https://json-schema.org/draft/2020-12/schema
+title: 'Image Integrity Checks Extension Module'
+description: 'Image Integrity Checks Extension Module Configuration'
+type: 'object'
+properties:
+  task:
+    type: boolean
+    description: This extension will register one or more tasks
+    default: true
+  checks:
+    type: boolean
+    description: This extension will register one or more check services
+    default: true

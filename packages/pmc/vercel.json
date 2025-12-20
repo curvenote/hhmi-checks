@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/v1/hooks/pmc-workflow-sync",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/v1/hooks/pmc-workflow-sync",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/v1/hooks/pmc-workflow-sync",
+      "schedule": "0 15 * * *"
+    }
+  ]
+}

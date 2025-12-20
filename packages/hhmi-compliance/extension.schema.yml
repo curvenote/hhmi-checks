@@ -1,0 +1,31 @@
+# $schema: https://json-schema.org/draft/2020-12/schema
+title: 'HHMI Compliance Extension Module'
+description: 'HHMI Compliance Extension Module Configuration'
+type: 'object'
+properties:
+  task:
+    type: boolean
+    description: This extension will register one of more tasks
+    default: false
+  routes:
+    type: boolean
+    description: This extension will register new routes
+  dataModels:
+    type: boolean
+    description: This extension will register new (prisma) data models and migrations
+  workflows:
+    type: boolean
+    description: This extension will register new workflows
+  navigation:
+    type: boolean
+    description: This extension will register new site navigation items
+    default: false
+  airtable:
+    type: object
+    required:
+      - apiKey
+    properties:
+      apiKey:
+        type: string
+        secret: true
+        description: Airtable API key for accessing the HHMI compliance database

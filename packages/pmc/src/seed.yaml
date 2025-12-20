@@ -1,0 +1,25 @@
+name: pmc
+title: PMC Deposit
+description: PubMed Central external site for receviing and administering PMC deposits
+private: true
+external: true
+default_workflow: PMC_DEPOSIT
+logo: https://cdn.curvenote.com/static/site/pmc/pmc-task-graphic.svg
+kinds:
+  - name: deposit
+    content:
+      title: PMC Deposit
+      description: A PMC Deposit compatible with the PMC bulk deposit specification
+    default: true
+    checks: []
+collections:
+  - name: deposits
+    slug: deposits
+    workflow: PMC_DEPOSIT
+    kinds:
+      - deposit
+    content:
+      title: PMC Deposits
+      description: The default collection of PMC Deposits
+    open: true
+    default: true

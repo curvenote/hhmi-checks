@@ -1,0 +1,117 @@
+# $schema: https://json-schema.org/draft/2020-12/schema
+title: 'PMC Extension Module'
+description: 'PMC Extension Module Configuration'
+type: object
+properties:
+  task:
+    type: boolean
+    description: This extension will register one of more tasks
+    default: false
+  routes:
+    type: boolean
+    description: This extension will register new routes
+  dataModels:
+    type: boolean
+    description: This extension will register new (prisma) data models and migrations
+  workflows:
+    type: boolean
+    description: This extension will register new workflows
+  navigation:
+    type: boolean
+    description: This extension will register new site navigation items
+    default: false
+  depositService:
+    type: object
+    required:
+      - secretKeyfile
+      - projectId
+      - topic
+    properties:
+      secretKeyfile:
+        type: string
+        secret: true
+      projectId:
+        type: string
+      topic:
+        type: string
+  inboundEmail:
+    type: object
+    properties:
+      enabled:
+        type: boolean
+        default: false
+      senders:
+        type: array
+        description: A list of email addresses (or regular expressions)that are allowed to send emails to the site
+        items:
+          type: string
+      username:
+        type: string
+      password:
+        type: string
+        secret: true
+  airtable:
+    type: object
+    required:
+      - apiKey
+      - baseId
+      - tables
+    properties:
+      apiKey:
+        type: string
+        secret: true
+        description: Airtable API key for accessing both PMC submissions and scientists databases
+      baseId:
+        type: string
+        description: Airtable base ID for accessing the HHMI databases
+      tables:
+        type: object
+        required:
+          - pmcSubmissions
+          - scientists
+        properties:
+          pmcSubmissions:
+            type: object
+            required:
+              - id
+              - fields
+            properties:
+              id:
+                type: string
+                description: Airtable PMC submissions table ID
+              fields:
+                type: object
+                required:
+                  - nihmsId
+                properties:
+                  nihmsId:
+                    type: string
+                    description: Airtable NIHMSID field ID
+          scientists:
+            type: object
+            required:
+              - id
+              - fields
+            properties:
+              id:
+                type: string
+                description: Airtable scientists table ID
+              viewId:
+                type: string
+                description: Airtable scientists view ID (optional filter)
+              fields:
+                type: object
+                required:
+                  - grantId
+                  - orcid
+                  - fullName
+                properties:
+                  grantId:
+                    type: string
+                    description: Airtable grant ID field ID
+                  orcid:
+                    type: string
+                    description: Airtable ORCID field ID
+                  fullName:
+                    type: string
+                    description: Airtable full name field ID

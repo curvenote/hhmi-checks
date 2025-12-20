@@ -1,0 +1,391 @@
+import type { Workflow } from '@curvenote/scms-core';
+
+/**
+ * Toy Workflow for Testing Abstract Tramline Behavior
+ *
+ * This is a simple workflow designed specifically for testing
+ * the abstract tramline logic without the complexity of the full PMC workflow.
+ * It includes mutually exclusive states and critical path states for comprehensive testing.
+ */
+export const TOY_WORKFLOW: Workflow = {
+  version: 1,
+  name: 'TOY_WORKFLOW',
+  label: 'Toy Workflow for Testing',
+  initialState: 'START',
+  states: {
+    START: {
+      name: 'START',
+      label: 'Start',
+      messages: {
+        user: 'Process has started',
+        admin: 'Process initiated',
+      },
+      visible: true,
+      published: false,
+      authorOnly: false,
+      inbox: true,
+      tags: [],
+    },
+    PROCESSING: {
+      name: 'PROCESSING',
+      label: 'Processing',
+      messages: {
+        user: 'Process is being worked on',
+        admin: 'Process is in progress',
+      },
+      visible: true,
+      published: false,
+      authorOnly: false,
+      inbox: true,
+      tags: [],
+    },
+    FROM_CACHE: {
+      name: 'FROM_CACHE',
+      label: 'From Cache',
+      messages: {
+        user: 'Process is being fetched from cache',
+        admin: 'Process is in cache',
+      },
+      visible: true,
+      published: false,
+      authorOnly: false,
+      inbox: true,
+      tags: ['warning'],
+    },
+    APPROVED: {
+      name: 'APPROVED',
+      label: 'Approved',
+      messages: {
+        user: 'Process has been approved',
+        admin: 'Process approved successfully',
+      },
+      visible: true,
+      published: false,
+      authorOnly: false,
+      inbox: true,
+      tags: [],
+    },
+    REJECTED: {
+      name: 'REJECTED',
+      label: 'Rejected',
+      messages: {
+        user: 'Process has been rejected',
+        admin: 'Process was rejected',
+      },
+      visible: true,
+      published: false,
+      authorOnly: false,
+      inbox: false,
+      tags: ['error', 'end'],
+    },
+    COMPLETED: {
+      name: 'COMPLETED',
+      label: 'Completed',
+      messages: {
+        user: 'Process completed successfully',
+        admin: 'Process finished successfully',
+      },
+      visible: true,
+      published: true,
+      authorOnly: false,
+      inbox: false,
+      tags: ['end'],
+    },
+    FAILED: {
+      name: 'FAILED',
+      label: 'Failed',
+      messages: {
+        user: 'Process encountered an error',
+        admin: 'Process failed',
+      },
+      visible: true,
+      published: false,
+      authorOnly: false,
+      inbox: false,
+      tags: ['error', 'end'],
+    },
+    UNEXPECTED_FAILURE: {
+      name: 'UNEXPECTED_FAILURE',
+      label: 'Unexpected Failure',
+      messages: {
+        user: 'Process encountered an unexpected failure',
+        admin: 'Process failed',
+      },
+      visible: true,
+      published: false,
+      authorOnly: false,
+      inbox: false,
+      tags: ['error', 'end'],
+    },
+    CANCELLED: {
+      name: 'CANCELLED',
+      label: 'Cancelled',
+      messages: {
+        user: 'Process has been cancelled',
+        admin: 'Process was cancelled',
+      },
+      visible: true,
+      published: false,
+      authorOnly: false,
+      inbox: false,
+      tags: ['end'],
+    },
+    REQUEST_NEW_VERSION: {
+      name: 'REQUEST_NEW_VERSION',
+      label: 'Request New Version',
+      messages: {
+        user: 'A new version has been requested',
+        admin: 'New version requested',
+      },
+      visible: true,
+      published: false,
+      authorOnly: false,
+      inbox: true,
+      tags: ['warning', 'end'],
+    },
+  },
+  transitions: [
+    // Critical path transitions
+    {
+      version: 1,
+      name: 'start_processing',
+      sourceStateName: 'START',
+      targetStateName: 'PROCESSING',
+      labels: {
+        button: 'Start Processing',
+        confirmation: 'Are you sure you want to start processing?',
+        success: 'Processing started',
+        action: 'Start Processing',
+        inProgress: 'Starting processing...',
+      },
+      userTriggered: true,
+      help: 'Move from start to processing',
+      requiredScopes: ['test.start'],
+      requiresJob: false,
+    },
+    {
+      version: 1,
+      name: 'start_from_cache',
+      sourceStateName: 'START',
+      targetStateName: 'FROM_CACHE',
+      labels: {
+        button: 'Start Processing',
+        confirmation: 'Are you sure you want to start processing?',
+        success: 'Processing started',
+        action: 'Start Processing',
+        inProgress: 'Starting processing...',
+      },
+      userTriggered: true,
+      help: 'Move from start to processing',
+      requiredScopes: ['test.start'],
+      requiresJob: false,
+    },
+    {
+      version: 1,
+      name: 'approve',
+      sourceStateName: 'PROCESSING',
+      targetStateName: 'APPROVED',
+      labels: {
+        button: 'Approve',
+        confirmation: 'Are you sure you want to approve this?',
+        success: 'Approved successfully',
+        action: 'Approve',
+        inProgress: 'Approving...',
+      },
+      userTriggered: true,
+      help: 'Approve the process',
+      requiredScopes: ['test.approve'],
+      requiresJob: false,
+    },
+    {
+      version: 1,
+      name: 'approve_from_cache',
+      sourceStateName: 'FROM_CACHE',
+      targetStateName: 'APPROVED',
+      labels: {
+        button: 'Approve',
+        confirmation: 'Are you sure you want to approve this?',
+        success: 'Approved successfully',
+        action: 'Approve',
+        inProgress: 'Approving...',
+      },
+      userTriggered: true,
+      help: 'Approve the process',
+      requiredScopes: ['test.approve'],
+      requiresJob: false,
+    },
+    {
+      version: 1,
+      name: 'complete',
+      sourceStateName: 'APPROVED',
+      targetStateName: 'COMPLETED',
+      labels: {
+        button: 'Complete',
+        confirmation: 'Are you sure you want to complete this?',
+        success: 'Completed successfully',
+        action: 'Complete',
+        inProgress: 'Completing...',
+      },
+      userTriggered: true,
+      help: 'Complete the process',
+      requiredScopes: ['test.complete'],
+      requiresJob: false,
+    },
+    // Mutually exclusive transitions (rejection path)
+    {
+      version: 1,
+      name: 'reject',
+      sourceStateName: 'PROCESSING',
+      targetStateName: 'REJECTED',
+      labels: {
+        button: 'Reject',
+        confirmation: 'Are you sure you want to reject this?',
+        success: 'Rejected',
+        action: 'Reject',
+        inProgress: 'Rejecting...',
+      },
+      userTriggered: true,
+      help: 'Reject the process',
+      requiredScopes: ['test.reject'],
+      requiresJob: false,
+    },
+    // Error transitions
+    {
+      version: 1,
+      name: 'fail_from_start',
+      sourceStateName: 'START',
+      targetStateName: 'FAILED',
+      labels: {
+        button: 'Mark as Failed',
+        confirmation: 'Are you sure you want to mark this as failed?',
+        success: 'Marked as failed',
+        action: 'Mark as Failed',
+        inProgress: 'Marking as failed...',
+      },
+      userTriggered: true,
+      help: 'Mark the process as failed from start',
+      requiredScopes: ['test.fail'],
+      requiresJob: false,
+    },
+    {
+      version: 1,
+      name: 'fail_from_processing',
+      sourceStateName: 'PROCESSING',
+      targetStateName: 'FAILED',
+      labels: {
+        button: 'Mark as Failed',
+        confirmation: 'Are you sure you want to mark this as failed?',
+        success: 'Marked as failed',
+        action: 'Mark as Failed',
+        inProgress: 'Marking as failed...',
+      },
+      userTriggered: true,
+      help: 'Mark the process as failed from processing',
+      requiredScopes: ['test.fail'],
+      requiresJob: false,
+    },
+    // Cancellation transitions
+    {
+      version: 1,
+      name: 'cancel_from_start',
+      sourceStateName: 'START',
+      targetStateName: 'CANCELLED',
+      labels: {
+        button: 'Cancel',
+        confirmation: 'Are you sure you want to cancel this?',
+        success: 'Cancelled',
+        action: 'Cancel',
+        inProgress: 'Cancelling...',
+      },
+      userTriggered: true,
+      help: 'Cancel the process from start',
+      requiredScopes: ['test.cancel'],
+      requiresJob: false,
+    },
+    {
+      version: 1,
+      name: 'cancel_from_processing',
+      sourceStateName: 'PROCESSING',
+      targetStateName: 'CANCELLED',
+      labels: {
+        button: 'Cancel',
+        confirmation: 'Are you sure you want to cancel this?',
+        success: 'Cancelled',
+        action: 'Cancel',
+        inProgress: 'Cancelling...',
+      },
+      userTriggered: true,
+      help: 'Cancel the process from processing',
+      requiredScopes: ['test.cancel'],
+      requiresJob: false,
+    },
+    // Request new version transitions (can be requested from various states)
+    {
+      version: 1,
+      name: 'request_new_version_from_start',
+      sourceStateName: 'START',
+      targetStateName: 'REQUEST_NEW_VERSION',
+      labels: {
+        button: 'Request New Version',
+        confirmation: 'Are you sure you want to request a new version?',
+        success: 'New version requested',
+        action: 'Request New Version',
+        inProgress: 'Requesting new version...',
+      },
+      userTriggered: true,
+      help: 'Request a new version from start',
+      requiredScopes: ['test.request'],
+      requiresJob: false,
+    },
+    {
+      version: 1,
+      name: 'request_new_version_from_processing',
+      sourceStateName: 'PROCESSING',
+      targetStateName: 'REQUEST_NEW_VERSION',
+      labels: {
+        button: 'Request New Version',
+        confirmation: 'Are you sure you want to request a new version?',
+        success: 'New version requested',
+        action: 'Request New Version',
+        inProgress: 'Requesting new version...',
+      },
+      userTriggered: true,
+      help: 'Request a new version from processing',
+      requiredScopes: ['test.request'],
+      requiresJob: false,
+    },
+    {
+      version: 1,
+      name: 'request_new_version_from_approved',
+      sourceStateName: 'APPROVED',
+      targetStateName: 'REQUEST_NEW_VERSION',
+      labels: {
+        button: 'Request New Version',
+        confirmation: 'Are you sure you want to request a new version?',
+        success: 'New version requested',
+        action: 'Request New Version',
+        inProgress: 'Requesting new version...',
+      },
+      userTriggered: true,
+      help: 'Request a new version from approved',
+      requiredScopes: ['test.request'],
+      requiresJob: false,
+    },
+  ],
+};
+
+/**
+ * Mutually exclusive state mappings for toy workflow
+ * When a variant state appears in activity feed, it replaces the critical path state
+ * Extended to support multiple alternatives per critical path state
+ */
+export const TOY_MUTUALLY_EXCLUSIVE_STATES = {
+  APPROVED: ['REJECTED'],
+  PROCESSING: ['FROM_CACHE', 'FAILED'],
+  START: ['FAILED', 'CANCELLED'],
+} as const;
+
+/**
+ * Critical path states for toy workflow
+ */
+export const TOY_CRITICAL_PATH_STATES = ['START', 'PROCESSING', 'APPROVED', 'COMPLETED'] as const;
