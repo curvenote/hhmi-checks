@@ -1,23 +1,23 @@
 import { Logos } from '../client.js';
-import type { ProofigStage } from '../schema.js';
+import type { ProofigReviewStage } from '../schema.js';
 import { ui } from '@curvenote/scms-core';
 import { ImageStateSummary } from './ImageStateSummary.js';
 import { ImageStateLegend } from './ImageStateLegend.js';
 import { ImageStateHeadline } from './ImageStateHeadline.js';
 
-export function ResultsReviewProgressArea({ data }: { data: ProofigStage }) {
+export function ResultsReviewProgressArea({ data }: { data: ProofigReviewStage }) {
   // TODO: Get actual values from proofig data
   let total = 147;
   let bad = 0;
   let waiting = 34;
   let good = 0;
 
-  if (data.status === 'failed') {
+  if (data.status === 'error') {
     total = 147;
     bad = 2;
     waiting = 14;
     good = 18;
-  } else if (data.status === 'processing') {
+  } else if (data.status === 'not-completed') {
     total = 147;
     bad = 0;
     waiting = 22;

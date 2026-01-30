@@ -54,12 +54,6 @@ export async function handleProofigAction(args: {
 
   // Early check: ensure proofig hasn't already been dispatched
   let proofigStatus: ProofigDataSchema = checksMetadata.proofig;
-  if (proofigStatus.dispatched) {
-    return data(
-      { error: { type: 'validation', message: 'Proofig check has already been dispatched' } },
-      { status: 400 },
-    ) as unknown as Response;
-  }
 
   // Initialize all Proofig stages with default values if they don't exist
   proofigStatus = ensureProofigStages(proofigStatus);
@@ -67,7 +61,6 @@ export async function handleProofigAction(args: {
   // TODO: Implement actual Proofig API call here
   // For now, we'll just update the metadata to mark as dispatched and set initial stage
   // Update to mark initial post as processing
-  proofigStatus.dispatched = true;
   proofigStatus.stages.initialPost = {
     status: 'processing',
     timestamp: new Date().toISOString(),

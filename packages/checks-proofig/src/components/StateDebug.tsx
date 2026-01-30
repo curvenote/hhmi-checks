@@ -21,6 +21,7 @@ const STATUS_OPTIONS: ProofigStageStatus[] = [
   'completed',
   'failed',
   'skipped',
+  'error',
 ];
 
 const STAGE_LABELS: Record<keyof ProofigDataSchema['stages'], string> = {
@@ -38,6 +39,7 @@ const STATUS_COLORS: Record<ProofigStageStatus, string> = {
   completed: 'bg-green-200 hover:bg-green-300 text-green-800',
   failed: 'bg-red-200 hover:bg-red-300 text-red-800',
   skipped: 'bg-yellow-200 hover:bg-yellow-300 text-yellow-800',
+  error: 'bg-red-200 hover:bg-red-300 text-red-800',
 };
 
 export function StateDebug({

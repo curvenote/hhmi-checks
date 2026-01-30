@@ -11,3 +11,7 @@ properties:
     type: boolean
     description: This extension will register one or more check services
     default: true
+  routes:
+    type: boolean
+    description: This extension will register one or more routes
+    default: true

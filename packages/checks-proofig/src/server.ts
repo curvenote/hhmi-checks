@@ -2,6 +2,7 @@ import type { ServerExtension, ExtensionCheckService } from '@curvenote/scms-cor
 import { extension as clientExtension } from './client.js';
 import { handleProofigAction } from './server/actions.js';
 import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSection.js';
+import { registerRoutes } from './routes.js';
 
 export const extension: ServerExtension = {
   ...clientExtension,
@@ -16,4 +17,5 @@ export const extension: ServerExtension = {
       },
     ];
   },
+  registerRoutes,
 };

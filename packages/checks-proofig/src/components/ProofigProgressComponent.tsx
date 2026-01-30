@@ -29,25 +29,25 @@ export function ProofigProgressComponent({
   isSubmitting,
 }: ProofigProgressComponentProps) {
   // Defensive: provide defaults if proofigStatus or stages don't exist
-  const stages = proofigData?.stages ?? DEFAULT_STAGES;
+  const stages = { ...DEFAULT_STAGES, ...proofigData?.stages };
 
   // Calculate current progress step (1-6)
-  const { currentStage, currentStageData } = getCurrentProofigStage(stages);
+  const { currentStage } = getCurrentProofigStage(stages);
 
   let Component = <DefaultArea />;
 
   if (currentStage === 'initialPost') {
-    Component = <InitialPostProgressArea data={currentStageData} />;
+    Component = <InitialPostProgressArea data={stages.initialPost} />;
   } else if (currentStage === 'subimageDetection') {
-    Component = <SubimageDetectionProgressArea data={currentStageData} />;
+    Component = <SubimageDetectionProgressArea data={stages.subimageDetection} />;
   } else if (currentStage === 'subimageSelection') {
-    Component = <SubimageSelectionProgressArea data={currentStageData} />;
+    Component = <SubimageSelectionProgressArea data={stages.subimageSelection} />;
   } else if (currentStage === 'integrityDetection') {
-    Component = <IntegrityDetectionProgressArea data={currentStageData} />;
+    Component = <IntegrityDetectionProgressArea data={stages.integrityDetection} />;
   } else if (currentStage === 'resultsReview') {
-    Component = <ResultsReviewProgressArea data={currentStageData} />;
+    Component = <ResultsReviewProgressArea data={stages.resultsReview} />;
   } else if (currentStage === 'finalReport') {
-    Component = <ResultsFinalizedArea data={currentStageData} />;
+    Component = <ResultsFinalizedArea data={stages.finalReport} />;
   }
   return (
     <>
