@@ -227,22 +227,22 @@ export function updateStagesAndServiceDataFromValidatedNotifyPayload(
 
   if (!updateStages) return null;
 
-  // Update summary/top-level fields
+  // Update summary/top-level fields (preserve reportUrl if payload omits it, e.g. Report: Clean)
   const next: ProofigDataSchema = {
     ...current,
     stages: updateStages,
-    reportId: payload.report_id,
-    reportUrl: payload.report_url,
+    reportId: payload.report_id ?? current.reportId,
+    reportUrl: payload.report_url ?? current.reportUrl,
     summary: {
       state: payload.state,
-      subimagesTotal: payload.subimages_total,
-      matchesReview: payload.matches_review,
-      matchesReport: payload.matches_report,
-      inspectsReport: payload.inspects_report,
-      reportUrl: payload.report_url,
+      subimagesTotal: payload.subimages_total ?? current.summary?.subimagesTotal,
+      matchesReview: payload.matches_review ?? current.summary?.matchesReview,
+      matchesReport: payload.matches_report ?? current.summary?.matchesReport,
+      inspectsReport: payload.inspects_report ?? current.summary?.inspectsReport,
+      reportUrl: payload.report_url ?? current.summary?.reportUrl,
       number: payload.number,
       message: payload.message,
-      submitReqId: payload.submit_req_id || undefined,
+      submitReqId: payload.submit_req_id ?? current.summary?.submitReqId,
       receivedAt,
     },
   };

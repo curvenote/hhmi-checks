@@ -21,21 +21,21 @@ export function ImageStateLegend({ total, bad, waiting, good }: ImageStateLegend
   const stats = [
     {
       value: total,
-      label: 'Figures detected',
+      label: 'Number of sub-images',
       textColor: 'text-blue-600',
       borderColor: 'border-blue-600',
     },
     {
-      value: waiting,
-      label: 'Waiting on you to review them',
-      textColor: 'text-yellow-600',
-      borderColor: 'border-yellow-600',
-    },
-    {
       value: good,
-      label: 'Marked fine',
+      label: 'With no issues',
       textColor: 'text-[#1B8364]',
       borderColor: 'border-[#1B8364]',
+    },
+    {
+      value: waiting,
+      label: 'Awaiting review',
+      textColor: 'text-yellow-600',
+      borderColor: 'border-yellow-600',
     },
     {
       value: bad,

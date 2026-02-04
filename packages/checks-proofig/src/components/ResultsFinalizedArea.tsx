@@ -1,23 +1,20 @@
 import { Logos } from '../client.js';
-import type { ProofigReviewStage } from '../schema.js';
+import type { ProofigDataSchema } from '../schema.js';
+import { getProofigSummaryCounts } from '../proofigSummary.js';
 import { ui } from '@curvenote/scms-core';
 import { ImageStateSummary } from './ImageStateSummary.js';
 import { ImageStateLegend } from './ImageStateLegend.js';
 import { ImageStateHeadline } from './ImageStateHeadline.js';
 
-export function ResultsFinalizedArea({ data }: { data: ProofigReviewStage }) {
-  // TODO: Get actual values from proofig data
-  let total = 147;
-  let bad = 0;
-  let waiting = 0;
-  let good = 34;
-
-  if (data.status === 'error') {
-    total = 147;
-    bad = 4;
-    waiting = 0;
-    good = 30;
-  }
+export function ResultsFinalizedArea({
+  proofigData,
+}: {
+  proofigData: ProofigDataSchema | undefined;
+}) {
+  const { total, waiting, bad, good } = getProofigSummaryCounts(proofigData);
+  const reportUrl = proofigData?.reportUrl;
+  const outcome = proofigData?.stages?.resultsReview?.outcome;
+  const showViewReportButton = reportUrl && outcome !== 'clean';
 
   return (
     <div className="flex flex-col gap-6">
@@ -27,21 +24,21 @@ export function ResultsFinalizedArea({ data }: { data: ProofigReviewStage }) {
         <ImageStateLegend total={total} bad={bad} waiting={waiting} good={good} />
       </div>
 
-      {bad > 0 && (
-        <div className="flex justify-end">
-          <ui.Button variant="default">
-            <div className="flex gap-1 items-center">
-              <div>View final integrity report on</div>
-              <Logos.ProofigLogoMono className="h-7" />
-            </div>
+      <div className="flex gap-4 justify-end items-center">
+        {bad === 0 && (
+          <span className="text-xl font-extralight text-muted-foreground">No action is needed</span>
+        )}
+        {showViewReportButton && (
+          <ui.Button variant="default" asChild>
+            <a href={reportUrl} target="_blank" rel="noopener noreferrer">
+              <div className="flex gap-1 items-center">
+                <div>View final integrity report on</div>
+                <Logos.ProofigLogoMono className="h-7" />
+              </div>
+            </a>
           </ui.Button>
-        </div>
-      )}
-      {bad === 0 && (
-        <div className="flex justify-end text-xl font-extralight text-muted-foreground">
-          No action is needed
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
