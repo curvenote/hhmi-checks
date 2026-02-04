@@ -498,4 +498,101 @@ describe('Proofig Workflow', () => {
       expect(next?.stages.resultsReview?.history).toHaveLength(1);
     });
   });
+  describe('Transitions to existing states do not update metadata', () => {
+    it('Processing (subimages) -> Processing', () => {
+      const timestamp = new Date().toISOString();
+      const initial: ProofigDataSchema = {
+        stages: {
+          initialPost: { status: 'completed', history: [], timestamp },
+          subimageDetection: { status: 'processing', history: [], timestamp },
+        },
+      };
+      const next = updateStagesAndServiceDataFromValidatedNotifyPayload(initial, {
+        ...makeProofigNotifyPayload(),
+        state: KnownState.Processing,
+      });
+      expect(next).toBeNull();
+    });
+    it('Processing (integrity) -> Processing', () => {
+      const timestamp = new Date().toISOString();
+      const initial: ProofigDataSchema = {
+        stages: {
+          initialPost: { status: 'completed', history: [], timestamp },
+          subimageDetection: { status: 'completed', history: [], timestamp },
+          subimageSelection: { status: 'completed', history: [], timestamp },
+          integrityDetection: { status: 'processing', history: [], timestamp },
+        },
+      };
+      const next = updateStagesAndServiceDataFromValidatedNotifyPayload(initial, {
+        ...makeProofigNotifyPayload(),
+        state: KnownState.Processing,
+      });
+      expect(next).toBeNull();
+    });
+    it('Awaiting: Sub-Image Approval -> Awaiting: Sub-Image Approval', () => {
+      const timestamp = new Date().toISOString();
+      const initial: ProofigDataSchema = {
+        stages: {
+          initialPost: { status: 'completed', history: [], timestamp },
+          subimageDetection: { status: 'completed', history: [], timestamp },
+        },
+      };
+      const next = updateStagesAndServiceDataFromValidatedNotifyPayload(initial, {
+        ...makeProofigNotifyPayload(),
+        state: KnownState.AwaitingSubImageApproval,
+      });
+      expect(next).toBeNull();
+    });
+    it('Awaiting: Review -> Awaiting: Review', () => {
+      const timestamp = new Date().toISOString();
+      const initial: ProofigDataSchema = {
+        stages: {
+          initialPost: { status: 'completed', history: [], timestamp },
+          subimageDetection: { status: 'completed', history: [], timestamp },
+          subimageSelection: { status: 'completed', history: [], timestamp },
+          integrityDetection: { status: 'completed', history: [], timestamp },
+          resultsReview: { status: 'requested', outcome: 'pending', history: [], timestamp },
+        },
+      };
+      const next = updateStagesAndServiceDataFromValidatedNotifyPayload(initial, {
+        ...makeProofigNotifyPayload(),
+        state: KnownState.AwaitingReview,
+      });
+      expect(next).toBeNull();
+    });
+    it('Report: Clean -> Report: Clean', () => {
+      const timestamp = new Date().toISOString();
+      const initial: ProofigDataSchema = {
+        stages: {
+          initialPost: { status: 'completed', history: [], timestamp },
+          subimageDetection: { status: 'completed', history: [], timestamp },
+          subimageSelection: { status: 'completed', history: [], timestamp },
+          integrityDetection: { status: 'completed', history: [], timestamp },
+          resultsReview: { status: 'completed', outcome: 'clean', history: [], timestamp },
+        },
+      };
+      const next = updateStagesAndServiceDataFromValidatedNotifyPayload(initial, {
+        ...makeProofigNotifyPayload(),
+        state: KnownState.ReportClean,
+      });
+      expect(next).toBeNull();
+    });
+    it('Report: Flagged -> Report: Flagged', () => {
+      const timestamp = new Date().toISOString();
+      const initial: ProofigDataSchema = {
+        stages: {
+          initialPost: { status: 'completed', history: [], timestamp },
+          subimageDetection: { status: 'completed', history: [], timestamp },
+          subimageSelection: { status: 'completed', history: [], timestamp },
+          integrityDetection: { status: 'completed', history: [], timestamp },
+          resultsReview: { status: 'completed', outcome: 'flagged', history: [], timestamp },
+        },
+      };
+      const next = updateStagesAndServiceDataFromValidatedNotifyPayload(initial, {
+        ...makeProofigNotifyPayload(),
+        state: KnownState.ReportFlagged,
+      });
+      expect(next).toBeNull();
+    });
+  });
 });

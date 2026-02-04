@@ -1,4 +1,5 @@
 import { useFetcher } from 'react-router';
+import { AlertTriangle } from 'lucide-react';
 import { Logos } from '../client.js';
 import { SegmentedProgressBar } from './SegmentedProgressBar.js';
 import type { ProofigStage } from '../schema.js';
@@ -143,7 +144,13 @@ export function SubimageDetectionProgressArea({ data }: { data: ProofigStage }) 
   );
 }
 
-export function SubimageSelectionProgressArea({ data }: { data: ProofigStage }) {
+export function SubimageApprovalProgressArea({
+  data,
+  reportUrl,
+}: {
+  data: ProofigStage;
+  reportUrl?: string;
+}) {
   if (data.status === 'failed')
     return (
       <SimpleErrorArea step={3} numSteps={4} message="Subimage selection failed." data={data} />
@@ -160,12 +167,28 @@ export function SubimageSelectionProgressArea({ data }: { data: ProofigStage }) 
         }
       />
       <StageProgressArea step={3} numSteps={4} message="Awaiting your review of sub-images..." />
-      <div className="flex justify-end">
-        <ui.Button variant="default">
-          <div className="flex gap-1 items-center">
-            <div>Approve sub-images at</div>
-            <Logos.ProofigLogoMono className="h-7" />
-          </div>
+      <div className="flex gap-2 justify-end items-center">
+        {!reportUrl && (
+          <ui.SimpleTooltip
+            title="There has been a problem and the proofing URL is not available. Please contact support."
+            delayDuration={250}
+          >
+            <span
+              className="inline-flex cursor-pointer"
+              role="img"
+              aria-label="Report URL unavailable"
+            >
+              <AlertTriangle className="w-5 h-5 stroke-red-500" strokeWidth={2} />
+            </span>
+          </ui.SimpleTooltip>
+        )}
+        <ui.Button variant="default" asChild disabled={!reportUrl}>
+          <a href={reportUrl} target="_blank" rel="noopener noreferrer">
+            <div className="flex gap-1 items-center">
+              <div>Approve sub-images at</div>
+              <Logos.ProofigLogoMono className="h-7" />
+            </div>
+          </a>
         </ui.Button>
       </div>
     </div>

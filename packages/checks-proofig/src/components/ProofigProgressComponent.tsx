@@ -4,7 +4,7 @@ import {
   DefaultArea,
   InitialPostProgressArea,
   SubimageDetectionProgressArea,
-  SubimageSelectionProgressArea,
+  SubimageApprovalProgressArea,
   IntegrityDetectionProgressArea,
 } from './ProgressAreas.js';
 import { ResultsReviewProgressArea } from './ResultsSummaryArea.js';
@@ -40,7 +40,12 @@ export function ProofigProgressComponent({
   } else if (stages.subimageDetection && currentStage === 'subimageDetection') {
     Component = <SubimageDetectionProgressArea data={stages.subimageDetection} />;
   } else if (stages.subimageSelection && currentStage === 'subimageSelection') {
-    Component = <SubimageSelectionProgressArea data={stages.subimageSelection} />;
+    Component = (
+      <SubimageApprovalProgressArea
+        data={stages.subimageSelection}
+        reportUrl={proofigData?.reportUrl}
+      />
+    );
   } else if (stages.integrityDetection && currentStage === 'integrityDetection') {
     Component = <IntegrityDetectionProgressArea data={stages.integrityDetection} />;
   } else if (stages.resultsReview && currentStage === 'resultsReview') {

@@ -11,7 +11,7 @@ import {
   ProofigNotifyPayloadSchema,
   proofigDataSchema,
 } from '../../schema.js';
-import { updateStagesAndServiceData } from './utils.server.js';
+import { updateStagesAndServiceDataFromValidatedNotifyPayload } from './utils.server.js';
 import {
   PROOFIG_NOTIFY_PAYLOAD_JSON_SCHEMA,
   PROOFIG_NOTIFY_RESULTS_JSON_SCHEMA,
@@ -81,11 +81,13 @@ export async function action(args: ActionFunctionArgs) {
         ? existingServiceDataResult.data
         : undefined;
 
-      const nextServiceData = updateStagesAndServiceData(
+      const nextServiceData = updateStagesAndServiceDataFromValidatedNotifyPayload(
         existingServiceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
         parsed.data,
         receivedAt,
       );
+
+      if (nextServiceData == null) return null;
 
       return {
         ...current,

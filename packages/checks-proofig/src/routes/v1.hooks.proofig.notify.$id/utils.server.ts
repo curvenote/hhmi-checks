@@ -123,7 +123,12 @@ export function updateStagesAndServiceDataFromValidatedNotifyPayload(
       // If we receive Processing before subimage detection is completed, we assume that it is subimage detection in progress.
       // Else, if we receive Processing after subimage detection is completed, but before integrityDetection is completed, we assume that it is integrity detection in progress.
       // Otherwise, we ignore the processing notification.
-      if (currentStatuses.subimageSelection === 'pending') {
+      if (
+        currentStatuses.subimageDetection === 'processing' ||
+        currentStatuses.integrityDetection === 'processing'
+      ) {
+        break;
+      } else if (currentStatuses.subimageSelection === 'pending') {
         updateStages = setLinearStage(stages, 'subimageSelection', 'completed', receivedAt);
         updateStages = setLinearStage(updateStages, 'integrityDetection', 'processing', receivedAt);
       } else if (
@@ -174,7 +179,9 @@ export function updateStagesAndServiceDataFromValidatedNotifyPayload(
 
     case KnownState.ReportClean: {
       // We transitioned here from Processing, meaning the detection algorihtm did not flag any issues.
-      if (currentStatuses.integrityDetection === 'processing') {
+      if (stages.resultsReview?.outcome === 'clean') {
+        break;
+      } else if (currentStatuses.integrityDetection === 'processing') {
         updateStages = setLinearStage(stages, 'integrityDetection', 'completed', receivedAt);
         updateStages = setReviewStage(
           updateStages,
@@ -195,7 +202,9 @@ export function updateStagesAndServiceDataFromValidatedNotifyPayload(
     }
 
     case KnownState.ReportFlagged: {
-      if (currentStatuses.integrityDetection === 'processing') {
+      if (stages.resultsReview?.outcome === 'flagged') {
+        break;
+      } else if (currentStatuses.integrityDetection === 'processing') {
         // transitioning from this state is unexpected, but we will handle it
         updateStages = setReviewStage(
           stages,
