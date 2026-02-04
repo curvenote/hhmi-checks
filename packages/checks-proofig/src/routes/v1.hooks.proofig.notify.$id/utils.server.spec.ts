@@ -497,6 +497,26 @@ describe('Proofig Workflow', () => {
       expect(next?.stages.resultsReview?.outcome).toEqual('flagged');
       expect(next?.stages.resultsReview?.history).toHaveLength(1);
     });
+    it('Report: Flagged -> Report: Flagged', () => {
+      const timestamp = new Date().toISOString();
+      const initial: ProofigDataSchema = {
+        stages: {
+          initialPost: { status: 'completed', history: [], timestamp },
+          subimageDetection: { status: 'completed', history: [], timestamp },
+          subimageSelection: { status: 'completed', history: [], timestamp },
+          integrityDetection: { status: 'completed', history: [], timestamp },
+          resultsReview: { status: 'completed', outcome: 'flagged', history: [], timestamp },
+        },
+      };
+      const next = updateStagesAndServiceDataFromValidatedNotifyPayload(initial, {
+        ...makeProofigNotifyPayload(),
+        state: KnownState.ReportFlagged,
+      });
+      expect(next).not.toBeNull();
+      expect(next?.stages.resultsReview?.status).toEqual('completed');
+      expect(next?.stages.resultsReview?.outcome).toEqual('flagged');
+      expect(next?.stages.resultsReview?.history).toHaveLength(1);
+    });
   });
   describe('Transitions to existing states do not update metadata', () => {
     it('Processing (subimages) -> Processing', () => {
@@ -574,23 +594,6 @@ describe('Proofig Workflow', () => {
       const next = updateStagesAndServiceDataFromValidatedNotifyPayload(initial, {
         ...makeProofigNotifyPayload(),
         state: KnownState.ReportClean,
-      });
-      expect(next).toBeNull();
-    });
-    it('Report: Flagged -> Report: Flagged', () => {
-      const timestamp = new Date().toISOString();
-      const initial: ProofigDataSchema = {
-        stages: {
-          initialPost: { status: 'completed', history: [], timestamp },
-          subimageDetection: { status: 'completed', history: [], timestamp },
-          subimageSelection: { status: 'completed', history: [], timestamp },
-          integrityDetection: { status: 'completed', history: [], timestamp },
-          resultsReview: { status: 'completed', outcome: 'flagged', history: [], timestamp },
-        },
-      };
-      const next = updateStagesAndServiceDataFromValidatedNotifyPayload(initial, {
-        ...makeProofigNotifyPayload(),
-        state: KnownState.ReportFlagged,
       });
       expect(next).toBeNull();
     });

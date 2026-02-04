@@ -26,7 +26,7 @@ export function ImageStateHeadline({ total, bad, waiting, good }: ImageStateHead
   if (isAllClear) {
     return (
       <div className="space-y-1">
-        <div className="text-4xl font-medium text-[#1B8364]">All Clear</div>
+        <div className="text-3xl font-medium text-[#1B8364]">All Clear</div>
         <div className="text-base font-bold">
           {good > 0
             ? `${good}/${total} figures were flagged as suspicious, but approved by you`
@@ -40,7 +40,7 @@ export function ImageStateHeadline({ total, bad, waiting, good }: ImageStateHead
   if (hasOnlyConfirmedProblems) {
     return (
       <div className="space-y-1">
-        <div className="text-4xl font-medium text-[#9B1E1E]">
+        <div className="text-3xl font-medium text-[#9B1E1E]">
           {bad} {bad === 1 ? 'Problem' : 'Problems'}
         </div>
         <div className="text-base font-bold">
@@ -54,7 +54,7 @@ export function ImageStateHeadline({ total, bad, waiting, good }: ImageStateHead
   const flagged = waiting + good;
   return (
     <div className="space-y-1">
-      <div className="text-4xl font-medium text-gray-900 dark:text-gray-100">
+      <div className="text-3xl font-medium text-gray-900 dark:text-gray-100">
         {bad + waiting}
         <span className="font-extralight text-gray-500">/{total}</span>
       </div>

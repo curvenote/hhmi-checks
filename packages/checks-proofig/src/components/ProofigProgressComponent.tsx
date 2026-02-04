@@ -7,8 +7,7 @@ import {
   SubimageApprovalProgressArea,
   IntegrityDetectionProgressArea,
 } from './ProgressAreas.js';
-import { ResultsReviewProgressArea } from './ResultsSummaryArea.js';
-import { ResultsFinalizedArea } from './ResultsFinalizedArea.js';
+import { ResultsSummaryArea } from './ResultsSummaryArea.js';
 
 export const STAGE_LABELS = {
   initialPost: 'Uploading to Proofig',
@@ -50,15 +49,7 @@ export function ProofigProgressComponent({
   } else if (stages.integrityDetection && currentStage === 'integrityDetection') {
     Component = <IntegrityDetectionProgressArea data={stages.integrityDetection} />;
   } else if (stages.resultsReview && currentStage === 'resultsReview') {
-    const reviewStatus = stages.resultsReview.status;
-    const outcome = proofigData?.stages?.resultsReview?.outcome;
-    const isFinalized =
-      (reviewStatus === 'completed' || reviewStatus === 'not-requested') && outcome === 'clean';
-    Component = isFinalized ? (
-      <ResultsFinalizedArea proofigData={proofigData} />
-    ) : (
-      <ResultsReviewProgressArea proofigData={proofigData} />
-    );
+    Component = <ResultsSummaryArea proofigData={proofigData} />;
   }
   return (
     <>

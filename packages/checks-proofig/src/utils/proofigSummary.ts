@@ -1,4 +1,4 @@
-import type { ProofigDataSchema } from './schema.js';
+import type { ProofigDataSchema } from '../schema.js';
 
 export interface ProofigSummaryCounts {
   total: number;

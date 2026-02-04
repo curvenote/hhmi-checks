@@ -202,9 +202,7 @@ export function updateStagesAndServiceDataFromValidatedNotifyPayload(
     }
 
     case KnownState.ReportFlagged: {
-      if (stages.resultsReview?.outcome === 'flagged') {
-        break;
-      } else if (currentStatuses.integrityDetection === 'processing') {
+      if (currentStatuses.integrityDetection === 'processing') {
         // transitioning from this state is unexpected, but we will handle it
         updateStages = setReviewStage(
           stages,

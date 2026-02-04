@@ -1,6 +1,6 @@
 import { useFetcher } from 'react-router';
-import { AlertTriangle } from 'lucide-react';
 import { Logos } from '../client.js';
+import { MissingReportUrlIcon } from './MissingReportUrlIcon.js';
 import { SegmentedProgressBar } from './SegmentedProgressBar.js';
 import type { ProofigStage } from '../schema.js';
 import { ui } from '@curvenote/scms-core';
@@ -168,20 +168,7 @@ export function SubimageApprovalProgressArea({
       />
       <StageProgressArea step={3} numSteps={4} message="Awaiting your review of sub-images..." />
       <div className="flex gap-2 justify-end items-center">
-        {!reportUrl && (
-          <ui.SimpleTooltip
-            title="There has been a problem and the proofing URL is not available. Please contact support."
-            delayDuration={250}
-          >
-            <span
-              className="inline-flex cursor-pointer"
-              role="img"
-              aria-label="Report URL unavailable"
-            >
-              <AlertTriangle className="w-5 h-5 stroke-red-500" strokeWidth={2} />
-            </span>
-          </ui.SimpleTooltip>
-        )}
+        {!reportUrl && <MissingReportUrlIcon />}
         <ui.Button variant="default" asChild disabled={!reportUrl}>
           <a href={reportUrl} target="_blank" rel="noopener noreferrer">
             <div className="flex gap-1 items-center">
