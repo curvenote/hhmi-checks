@@ -2,7 +2,7 @@ import { data } from 'react-router';
 import { getPrismaClient } from '@curvenote/scms-server';
 import type { WorkVersionMetadata } from '@curvenote/scms-server';
 import type { FileMetadataSection } from '@curvenote/scms-core';
-import { ensureProofigStages, type ProofigDataSchema } from '../schema.js';
+import { type ProofigDataSchema } from '../schema.js';
 
 // Define the checks metadata section type (matches app schema)
 export interface ChecksMetadataSection {
@@ -53,16 +53,14 @@ export async function handleProofigAction(args: {
   }
 
   // Early check: ensure proofig hasn't already been dispatched
-  let proofigStatus: ProofigDataSchema = checksMetadata.proofig;
-
-  // Initialize all Proofig stages with default values if they don't exist
-  proofigStatus = ensureProofigStages(proofigStatus);
+  const proofigStatus: ProofigDataSchema = checksMetadata.proofig;
 
   // TODO: Implement actual Proofig API call here
   // For now, we'll just update the metadata to mark as dispatched and set initial stage
   // Update to mark initial post as processing
   proofigStatus.stages.initialPost = {
     status: 'processing',
+    history: [],
     timestamp: new Date().toISOString(),
   };
 

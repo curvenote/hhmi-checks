@@ -17,7 +17,7 @@ export function ResultsReviewProgressArea({ data }: { data: ProofigReviewStage }
     bad = 2;
     waiting = 14;
     good = 18;
-  } else if (data.status === 'not-completed') {
+  } else if (data.status === 'requested') {
     total = 147;
     bad = 0;
     waiting = 22;

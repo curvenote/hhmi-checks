@@ -1,5 +1,5 @@
 import type { ProofigDataSchema } from '../schema.js';
-import { DEFAULT_STAGES, getCurrentProofigStage } from '../schema.js';
+import { ALL_PENDING_STAGES, getCurrentProofigStage } from '../schema.js';
 import {
   DefaultArea,
   InitialPostProgressArea,
@@ -8,7 +8,6 @@ import {
   IntegrityDetectionProgressArea,
 } from './ProgressAreas.js';
 import { ResultsReviewProgressArea } from './ResultsSummaryArea.js';
-import { ResultsFinalizedArea } from './ResultsFinalizedArea.js';
 
 export const STAGE_LABELS = {
   initialPost: 'Uploading to Proofig',
@@ -29,7 +28,7 @@ export function ProofigProgressComponent({
   isSubmitting,
 }: ProofigProgressComponentProps) {
   // Defensive: provide defaults if proofigStatus or stages don't exist
-  const stages = { ...DEFAULT_STAGES, ...proofigData?.stages };
+  const stages = { ...ALL_PENDING_STAGES, ...proofigData?.stages };
 
   // Calculate current progress step (1-6)
   const { currentStage } = getCurrentProofigStage(stages);
@@ -38,16 +37,14 @@ export function ProofigProgressComponent({
 
   if (currentStage === 'initialPost') {
     Component = <InitialPostProgressArea data={stages.initialPost} />;
-  } else if (currentStage === 'subimageDetection') {
+  } else if (stages.subimageDetection && currentStage === 'subimageDetection') {
     Component = <SubimageDetectionProgressArea data={stages.subimageDetection} />;
-  } else if (currentStage === 'subimageSelection') {
+  } else if (stages.subimageSelection && currentStage === 'subimageSelection') {
     Component = <SubimageSelectionProgressArea data={stages.subimageSelection} />;
-  } else if (currentStage === 'integrityDetection') {
+  } else if (stages.integrityDetection && currentStage === 'integrityDetection') {
     Component = <IntegrityDetectionProgressArea data={stages.integrityDetection} />;
-  } else if (currentStage === 'resultsReview') {
+  } else if (stages.resultsReview && currentStage === 'resultsReview') {
     Component = <ResultsReviewProgressArea data={stages.resultsReview} />;
-  } else if (currentStage === 'finalReport') {
-    Component = <ResultsFinalizedArea data={stages.finalReport} />;
   }
   return (
     <>

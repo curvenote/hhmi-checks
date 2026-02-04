@@ -5,14 +5,19 @@ import { z } from 'zod';
  *
  * We validate against the enumerated table in the Proofig documentation (PDF page 16).
  */
-export const ProofigNotifyStateSchema = z.enum([
-  'Processing',
-  'Awaiting: Sub-Image Approval',
-  'Awaiting: Review',
-  'Report: Clean',
-  'Report: Flagged',
-  'Deleted',
-]);
+export enum KnownState {
+  Processing = 'Processing',
+  AwaitingSubImageApproval = 'Awaiting: Sub-Image Approval',
+  AwaitingReview = 'Awaiting: Review',
+  ReportClean = 'Report: Clean',
+  ReportFlagged = 'Report: Flagged',
+  Deleted = 'Deleted',
+}
+
+/** Array of known states for membership checks (e.g. .includes()). */
+export const KNOWN_STATES: readonly KnownState[] = Object.values(KnownState);
+
+export const ProofigNotifyStateSchema = z.enum(KnownState);
 
 /**
  * Zod schema for the Proofig notify webhook payload.
@@ -48,7 +53,6 @@ export const LinearStageStatusSchema = z.enum([
   'processing', // Currently in progress
   'completed', // Successfully completed
   'failed', // Failed with error
-  'skipped', // Stage was skipped
   'error', // Error occurred
 ]);
 
@@ -58,12 +62,17 @@ export const LinearStageStatusSchema = z.enum([
  * NOTE: This schema is intentionally richer than the linear stages to support iterative review.
  */
 export const ReviewStageStatusSchema = z.enum([
-  'pending', // Not started yet
-  'not-completed', // In progress / awaiting manual action
-  'completed', // Review completed (before final report)
-  'clean', // Final report indicates no issues
-  'flagged', // Final report indicates issues
+  'pending', // Not started
+  'requested', // In progress / awaiting manual action
+  'completed', // Review completed (received at least one Report: notification)
+  'not-requested', // No review was requested, transitioned stright to clean
   'error', // Error occurred
+]);
+
+export const ReportReviewOutcomeSchema = z.enum([
+  'pending', // Not started / not requested yet
+  'clean', // No issues found
+  'flagged', // Issues found
 ]);
 
 /**
@@ -71,25 +80,38 @@ export const ReviewStageStatusSchema = z.enum([
  */
 export const LinearStageSchema = z.object({
   status: LinearStageStatusSchema,
-  timestamp: z.string().optional(), // ISO timestamp when status was set
+  history: z.array(
+    z.object({
+      status: LinearStageStatusSchema,
+      timestamp: z.string(),
+    }),
+  ),
+  timestamp: z.string(),
   error: z.string().optional(), // Error message if failed
-  events: z.array(ProofigNotifyEventSchema).optional(), // Notify payload history for this stage
 });
 
 export const ReviewStageSchema = z.object({
   status: ReviewStageStatusSchema,
-  timestamp: z.string().optional(), // ISO timestamp when status was set
+  outcome: ReportReviewOutcomeSchema.optional(),
+  history: z.array(
+    z.object({
+      status: ReviewStageStatusSchema,
+      outcome: ReportReviewOutcomeSchema,
+      timestamp: z.string(),
+    }),
+  ),
+  timestamp: z.string(),
   error: z.string().optional(), // Error message if failed
   events: z.array(ProofigNotifyEventSchema).optional(), // Notify payload history for this stage
 });
 
 export const ProofigSummarySchema = z.object({
   state: ProofigNotifyStateSchema,
-  subimagesTotal: z.number().int().nonnegative(),
-  matchesReview: z.number().int().nonnegative(),
-  matchesReport: z.number().int().nonnegative(),
-  inspectsReport: z.number().int().nonnegative(),
-  reportUrl: z.string(),
+  subimagesTotal: z.number().int().nonnegative().optional(),
+  matchesReview: z.number().int().nonnegative().optional(),
+  matchesReport: z.number().int().nonnegative().optional(),
+  inspectsReport: z.number().int().nonnegative().optional(),
+  reportUrl: z.string().optional(),
   number: z.number().int().nonnegative().optional(),
   message: z.string().optional(),
   submitReqId: z.string().optional(),
@@ -106,30 +128,37 @@ export const proofigDataSchema = z.object({
   deleted: z.boolean().optional(), // Set true if Proofig sends Deleted
   summary: ProofigSummarySchema.optional(),
   stages: z.object({
-    initialPost: LinearStageSchema.default({ status: 'pending', events: [] }),
-    subimageDetection: LinearStageSchema.default({ status: 'pending', events: [] }),
-    subimageSelection: LinearStageSchema.default({ status: 'pending', events: [] }),
-    integrityDetection: LinearStageSchema.default({ status: 'pending', events: [] }),
-    resultsReview: ReviewStageSchema.default({ status: 'pending', events: [] }),
-    finalReport: ReviewStageSchema.default({ status: 'pending', events: [] }),
+    initialPost: LinearStageSchema,
+    subimageDetection: LinearStageSchema.optional(),
+    subimageSelection: LinearStageSchema.optional(),
+    integrityDetection: LinearStageSchema.optional(),
+    resultsReview: ReviewStageSchema.optional(),
   }),
 });
 
 export type ProofigStageStatus = z.infer<typeof LinearStageStatusSchema>;
 export type ProofigStage = z.infer<typeof LinearStageSchema>;
 export type ProofigReviewStage = z.infer<typeof ReviewStageSchema>;
+export type ProofigReviewStageStatus = z.infer<typeof ReviewStageStatusSchema>;
+export type ProofigOutcome = z.infer<typeof ReportReviewOutcomeSchema>;
 export type ProofigDataSchema = z.infer<typeof proofigDataSchema>;
+export type ProofigNotifyState = z.infer<typeof ProofigNotifyStateSchema>;
 
 export type ProofigStages = ProofigDataSchema['stages'];
 
+export const MINIMAL_PROOFIG_SERVICE_DATA: ProofigDataSchema = {
+  stages: {
+    initialPost: { status: 'pending', history: [], timestamp: new Date().toISOString() },
+  },
+};
+
 // Default stages structure (used defensively in UI)
-export const DEFAULT_STAGES: ProofigStages = {
-  initialPost: { status: 'pending', events: [] },
-  subimageDetection: { status: 'pending', events: [] },
-  subimageSelection: { status: 'pending', events: [] },
-  integrityDetection: { status: 'pending', events: [] },
-  resultsReview: { status: 'pending', events: [] },
-  finalReport: { status: 'pending', events: [] },
+export const ALL_PENDING_STAGES: ProofigStages = {
+  initialPost: { status: 'pending', history: [], timestamp: new Date().toISOString() },
+  subimageDetection: { status: 'pending', history: [], timestamp: new Date().toISOString() },
+  subimageSelection: { status: 'pending', history: [], timestamp: new Date().toISOString() },
+  integrityDetection: { status: 'pending', history: [], timestamp: new Date().toISOString() },
+  resultsReview: { status: 'pending', history: [], timestamp: new Date().toISOString() },
 };
 
 export const STAGE_ORDER: (keyof ProofigStages)[] = [
@@ -138,7 +167,6 @@ export const STAGE_ORDER: (keyof ProofigStages)[] = [
   'subimageSelection',
   'integrityDetection',
   'resultsReview',
-  'finalReport',
 ];
 
 export function getCurrentProofigStage(stages: ProofigStages) {
@@ -174,7 +202,7 @@ export function getCurrentProofigStage(stages: ProofigStages) {
       }
     } else {
       // Review/final stages: pending/not-completed/error are "active"
-      if (stageStatus === 'pending' || stageStatus === 'not-completed' || stageStatus === 'error') {
+      if (stageStatus === 'pending' || stageStatus === 'error') {
         currentStageIndex = i;
         currentStage = stage;
         currentStageData = stageData;
@@ -192,25 +220,4 @@ export function getCurrentProofigStage(stages: ProofigStages) {
   }
 
   return { currentStageIndex, currentStage, currentStageData };
-}
-
-/**
- * Initializes all Proofig stages with default 'pending' status if they don't exist.
- */
-export function ensureProofigStages(proofigStatus: ProofigDataSchema) {
-  if (!proofigStatus.stages) {
-    const now = new Date().toISOString();
-    return {
-      ...proofigStatus,
-      stages: {
-        initialPost: { status: 'pending', timestamp: now, events: [] },
-        subimageDetection: { status: 'pending', timestamp: now, events: [] },
-        subimageSelection: { status: 'pending', timestamp: now, events: [] },
-        integrityDetection: { status: 'pending', timestamp: now, events: [] },
-        resultsReview: { status: 'pending', timestamp: now, events: [] },
-        finalReport: { status: 'pending', timestamp: now, events: [] },
-      },
-    } satisfies ProofigDataSchema;
-  }
-  return proofigStatus;
 }

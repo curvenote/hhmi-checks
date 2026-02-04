@@ -1,45 +1,79 @@
-import { DEFAULT_STAGES, ensureProofigStages, type ProofigDataSchema, type ProofigNotifyPayload } from '../../schema.js';
-import type { ProofigStages } from '../../schema.js';
+import type {
+  ProofigStages,
+  ProofigDataSchema,
+  ProofigNotifyPayload,
+  ProofigStageStatus,
+  ProofigOutcome,
+  ProofigReviewStageStatus,
+} from '../../schema.js';
 
-function pushStageEvent<TStage extends { events?: any[] }>(
-  stage: TStage,
-  event: { receivedAt: string; payload: ProofigNotifyPayload },
-) {
-  const currentEvents = stage.events ?? [];
-  return {
-    ...stage,
-    events: [...currentEvents, event],
-  };
-}
+import { KNOWN_STATES, KnownState, MINIMAL_PROOFIG_SERVICE_DATA } from '../../schema.js';
+const HISTORY_LIMIT = 20;
 
 function setLinearStage(
   stages: ProofigStages,
   key: 'initialPost' | 'subimageDetection' | 'subimageSelection' | 'integrityDetection',
-  status: ProofigStages[typeof key]['status'],
-  timestamp: string,
+  status: ProofigStageStatus,
+  receivedAt: string,
 ) {
+  const prev = stages[key];
+  const prevStatus = prev?.status;
+  const prevTimestamp = prev?.timestamp;
+  const historyEntry =
+    prevStatus != null && prevTimestamp != null
+      ? { status: prevStatus, timestamp: prevTimestamp }
+      : null;
+  const history = [...(historyEntry ? [historyEntry] : []), ...(stages[key]?.history ?? [])].slice(
+    0,
+    HISTORY_LIMIT,
+  );
+
   return {
     ...stages,
     [key]: {
       ...(stages[key] as any),
       status,
-      timestamp,
+      timestamp: receivedAt,
+      history,
     },
   } as ProofigStages;
 }
 
 function setReviewStage(
   stages: ProofigStages,
-  key: 'resultsReview' | 'finalReport',
-  status: ProofigStages[typeof key]['status'],
-  timestamp: string,
+  key: 'resultsReview',
+  status: ProofigReviewStageStatus,
+  outcome: ProofigOutcome,
+  receivedAt: string,
 ) {
+  const prev = stages[key] as
+    | {
+        status?: ProofigReviewStageStatus;
+        outcome?: ProofigOutcome;
+        timestamp?: string;
+        history?: unknown[];
+      }
+    | undefined;
+  const prevStatus = prev?.status;
+  const prevOutcome = prev?.outcome ?? 'pending';
+  const prevTimestamp = prev?.timestamp;
+  const historyEntry =
+    prevStatus != null && prevTimestamp != null
+      ? { status: prevStatus, outcome: prevOutcome, timestamp: prevTimestamp }
+      : null;
+  const history = [...(historyEntry ? [historyEntry] : []), ...(stages[key]?.history ?? [])].slice(
+    0,
+    HISTORY_LIMIT,
+  );
+
   return {
     ...stages,
     [key]: {
       ...(stages[key] as any),
       status,
-      timestamp,
+      outcome,
+      timestamp: receivedAt,
+      history,
     },
   } as ProofigStages;
 }
@@ -48,20 +82,148 @@ function setReviewStage(
  * Pure transition function for mapping Proofig notify payloads onto our `serviceData`.
  * Exported for unit testing.
  */
-export function applyProofigNotifyToServiceData(
-  current: ProofigDataSchema | undefined,
+export function updateStagesAndServiceDataFromValidatedNotifyPayload(
+  current: ProofigDataSchema,
   payload: ProofigNotifyPayload,
   receivedAt: string = new Date().toISOString(),
-): ProofigDataSchema {
-  const base = current ? ensureProofigStages(current) : ensureProofigStages({ stages: DEFAULT_STAGES });
-  const event = { receivedAt, payload };
+): ProofigDataSchema | null {
+  // Ensure we have a full stage object for logic to work (defensive)
+  let { stages } = current;
+  if (!stages) {
+    current = MINIMAL_PROOFIG_SERVICE_DATA;
+    stages = current.stages;
+  }
+
+  const currentStatuses = {
+    initialPost: stages.initialPost?.status,
+    subimageDetection: stages.subimageDetection?.status,
+    subimageSelection: stages.subimageSelection?.status,
+    integrityDetection: stages.integrityDetection?.status,
+    resultsReview: stages.resultsReview?.status,
+  };
+
+  // defenively check for known states, and if we don't know the state, we ignore the notification.
+  if (!KNOWN_STATES.includes(payload.state)) {
+    console.warn(
+      `[checks-proofig] Unknown state received: ${payload.state}, ignoring notification.`,
+    );
+    return current;
+  }
+
+  if (payload.state === KnownState.Deleted) {
+    return {
+      ...current,
+      deleted: true,
+    };
+  }
+
+  let updateStages: ProofigStages | null = null;
+  switch (payload.state) {
+    case KnownState.Processing: {
+      // If we receive Processing before subimage detection is completed, we assume that it is subimage detection in progress.
+      // Else, if we receive Processing after subimage detection is completed, but before integrityDetection is completed, we assume that it is integrity detection in progress.
+      // Otherwise, we ignore the processing notification.
+      if (currentStatuses.subimageSelection === 'pending') {
+        updateStages = setLinearStage(stages, 'subimageSelection', 'completed', receivedAt);
+        updateStages = setLinearStage(updateStages, 'integrityDetection', 'processing', receivedAt);
+      } else if (
+        currentStatuses.initialPost === 'pending' ||
+        currentStatuses.initialPost === 'completed'
+      ) {
+        updateStages = setLinearStage(stages, 'initialPost', 'completed', receivedAt);
+        updateStages = setLinearStage(updateStages, 'subimageDetection', 'processing', receivedAt);
+      } else {
+        console.warn(
+          `[checks-proofig] Processing state received when not expected, ignoring notification.`,
+        );
+      }
+      break;
+    }
+
+    case KnownState.AwaitingSubImageApproval: {
+      // Sub-image detection is finished; awaiting user selection/approval.
+      if (currentStatuses.subimageDetection === 'processing') {
+        updateStages = setLinearStage(stages, 'subimageDetection', 'completed', receivedAt);
+        updateStages = setLinearStage(updateStages, 'subimageSelection', 'pending', receivedAt);
+      } else {
+        console.warn(
+          `[checks-proofig] Awaiting: Sub-Image Approval state received when not expected, ignoring notification.`,
+        );
+      }
+      break;
+    }
+
+    case KnownState.AwaitingReview: {
+      // Integrity detection has finished; awaiting results review.
+      if (currentStatuses.integrityDetection === 'processing') {
+        updateStages = setLinearStage(stages, 'integrityDetection', 'completed', receivedAt);
+        updateStages = setReviewStage(
+          updateStages,
+          'resultsReview',
+          'requested',
+          'pending',
+          receivedAt,
+        );
+      } else {
+        console.warn(
+          `[checks-proofig] Awaiting: Review state received when not expected, ignoring notification.`,
+        );
+      }
+      break;
+    }
+
+    case KnownState.ReportClean: {
+      // We transitioned here from Processing, meaning the detection algorihtm did not flag any issues.
+      if (currentStatuses.integrityDetection === 'processing') {
+        updateStages = setLinearStage(stages, 'integrityDetection', 'completed', receivedAt);
+        updateStages = setReviewStage(
+          updateStages,
+          'resultsReview',
+          'not-requested',
+          'clean',
+          receivedAt,
+        );
+      } else if (currentStatuses.integrityDetection === 'completed') {
+        updateStages = setReviewStage(stages, 'resultsReview', 'completed', 'clean', receivedAt);
+      } else {
+        console.warn(
+          `[checks-proofig] Report: Clean state received when not expected, ignoring notification.`,
+        );
+        console.warn(JSON.stringify(current, null, 2));
+      }
+      break;
+    }
+
+    case KnownState.ReportFlagged: {
+      if (currentStatuses.integrityDetection === 'processing') {
+        // transitioning from this state is unexpected, but we will handle it
+        updateStages = setReviewStage(
+          stages,
+          'resultsReview',
+          'not-requested',
+          'flagged',
+          receivedAt,
+        );
+      } else if (currentStatuses.integrityDetection === 'completed') {
+        updateStages = setReviewStage(stages, 'resultsReview', 'completed', 'flagged', receivedAt);
+      } else {
+        console.warn(
+          `[checks-proofig] Report: Flagged state received when not expected, ignoring notification.`,
+        );
+        console.warn(JSON.stringify(current, null, 2));
+      }
+      break;
+    }
+  }
+
+  if (!updateStages) return null;
 
   // Update summary/top-level fields
   const next: ProofigDataSchema = {
-    ...base,
+    ...current,
+    stages: updateStages,
     reportId: payload.report_id,
     reportUrl: payload.report_url,
-    deleted: payload.state === 'Deleted' ? true : base.deleted,
     summary: {
       state: payload.state,
       subimagesTotal: payload.subimages_total,
@@ -76,103 +238,5 @@ export function applyProofigNotifyToServiceData(
     },
   };
 
-  // Ensure we have a full stage object (defensive)
-  let stages: ProofigStages = {
-    ...DEFAULT_STAGES,
-    ...(next.stages as any),
-  } as ProofigStages;
-
-  const currentLinear = {
-    initialPost: stages.initialPost.status,
-    subimageDetection: stages.subimageDetection.status,
-    subimageSelection: stages.subimageSelection.status,
-    integrityDetection: stages.integrityDetection.status,
-  };
-
-  switch (payload.state) {
-    case 'Processing': {
-      // If we've already moved past subimage selection, "Processing" should map to integrity detection.
-      // Otherwise, once the initial post is completed, processing indicates subimage detection.
-      const shouldBeIntegrity =
-        currentLinear.integrityDetection !== 'completed' && currentLinear.subimageSelection === 'completed';
-
-      if (shouldBeIntegrity) {
-        stages = setLinearStage(stages, 'integrityDetection', 'processing', receivedAt);
-        stages.integrityDetection = pushStageEvent(stages.integrityDetection as any, event) as any;
-      } else if (currentLinear.initialPost === 'completed') {
-        stages = setLinearStage(stages, 'subimageDetection', 'processing', receivedAt);
-        stages.subimageDetection = pushStageEvent(stages.subimageDetection as any, event) as any;
-      } else {
-        stages = setLinearStage(stages, 'initialPost', 'processing', receivedAt);
-        stages.initialPost = pushStageEvent(stages.initialPost as any, event) as any;
-      }
-      break;
-    }
-
-    case 'Awaiting: Sub-Image Approval': {
-      // Sub-image detection is finished; awaiting user selection/approval.
-      stages = setLinearStage(stages, 'subimageDetection', 'completed', receivedAt);
-      stages = setLinearStage(stages, 'subimageSelection', 'pending', receivedAt);
-      stages.subimageSelection = pushStageEvent(stages.subimageSelection as any, event) as any;
-      break;
-    }
-
-    case 'Awaiting: Review': {
-      // Integrity detection has finished; awaiting results review.
-      const integrityWasCompleted = stages.integrityDetection.status === 'completed';
-      stages = setLinearStage(stages, 'integrityDetection', 'completed', receivedAt);
-
-      const rrStatus = stages.resultsReview.status;
-      let nextRRStatus: typeof rrStatus;
-
-      if (!integrityWasCompleted) {
-        // First time we reach review: mark as pending.
-        nextRRStatus = 'pending' as any;
-      } else if (rrStatus === 'pending') {
-        // If we receive Awaiting: Review again while pending, move to not-completed.
-        nextRRStatus = 'not-completed' as any;
-      } else if (rrStatus === 'completed' || rrStatus === 'clean' || rrStatus === 'flagged') {
-        // Re-review: always ensure we're back in a non-completed state.
-        nextRRStatus = 'not-completed' as any;
-      } else {
-        nextRRStatus = rrStatus;
-      }
-
-      stages = setReviewStage(stages, 'resultsReview', nextRRStatus as any, receivedAt);
-
-      // Re-review implies final report is no longer final.
-      if (stages.finalReport.status === 'clean' || stages.finalReport.status === 'flagged') {
-        stages = setReviewStage(stages, 'finalReport', 'pending', receivedAt);
-      }
-
-      stages.resultsReview = pushStageEvent(stages.resultsReview as any, event) as any;
-      break;
-    }
-
-    case 'Report: Clean': {
-      stages = setReviewStage(stages, 'resultsReview', 'completed', receivedAt);
-      stages = setReviewStage(stages, 'finalReport', 'clean', receivedAt);
-      stages.finalReport = pushStageEvent(stages.finalReport as any, event) as any;
-      break;
-    }
-
-    case 'Report: Flagged': {
-      stages = setReviewStage(stages, 'resultsReview', 'completed', receivedAt);
-      stages = setReviewStage(stages, 'finalReport', 'flagged', receivedAt);
-      stages.finalReport = pushStageEvent(stages.finalReport as any, event) as any;
-      break;
-    }
-
-    case 'Deleted': {
-      // Mark deleted; keep stages as-is but record the event on the final stage for history.
-      stages.finalReport = pushStageEvent(stages.finalReport as any, event) as any;
-      break;
-    }
-  }
-
-  return {
-    ...next,
-    stages,
-  };
+  return next;
 }
-

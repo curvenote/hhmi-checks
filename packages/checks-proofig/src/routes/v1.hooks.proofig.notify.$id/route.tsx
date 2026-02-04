@@ -1,9 +1,21 @@
 import type { ActionFunctionArgs } from 'react-router';
 import { error405, httpError } from '@curvenote/scms-core';
-import { safeCheckServiceRunDataUpdate } from '@curvenote/scms-server';
+import {
+  createMessageRecord,
+  safeCheckServiceRunDataUpdate,
+  updateMessageStatus,
+} from '@curvenote/scms-server';
 import type { Prisma } from '@curvenote/scms-db';
-import { ProofigNotifyPayloadSchema, proofigDataSchema } from '../../schema.js';
-import { applyProofigNotifyToServiceData } from './utils.server.js';
+import {
+  MINIMAL_PROOFIG_SERVICE_DATA,
+  ProofigNotifyPayloadSchema,
+  proofigDataSchema,
+} from '../../schema.js';
+import { updateStagesAndServiceData } from './utils.server.js';
+import {
+  PROOFIG_NOTIFY_PAYLOAD_JSON_SCHEMA,
+  PROOFIG_NOTIFY_RESULTS_JSON_SCHEMA,
+} from './message-schema.server.js';
 
 export function loader() {
   throw error405();
@@ -18,26 +30,46 @@ export async function action(args: ActionFunctionArgs) {
   // TODO(auth): Proofig notifies should include the access token in headers.
   // We haven't implemented the full auth/verification cycle yet.
 
-  let json: unknown;
+  const receivedAt = new Date().toISOString();
+
+  // Read the request body once; we always create a pending message record for every webhook.
+  let rawBody = '';
   try {
-    json = await args.request.json();
+    rawBody = await args.request.text();
   } catch (err) {
-    throw httpError(400, 'Invalid JSON payload', {
+    throw httpError(400, 'Unable to read request body', {
       message: err instanceof Error ? err.message : 'Unknown error',
     });
   }
 
+  let json: unknown;
+  try {
+    json = rawBody ? JSON.parse(rawBody) : null;
+  } catch {
+    json = null;
+  }
+
+  const messageId = await createMessageRecord({
+    module: '@hhmi/checks-proofig',
+    type: 'proofingNotify',
+    status: 'PENDING',
+    payload: (json ?? { rawBody }) as any,
+    payloadSchema: PROOFIG_NOTIFY_PAYLOAD_JSON_SCHEMA,
+    results: { checkServiceRunId: id, receivedAt } as any,
+    resultsSchema: PROOFIG_NOTIFY_RESULTS_JSON_SCHEMA,
+  });
+
   const parsed = ProofigNotifyPayloadSchema.safeParse(json);
   if (!parsed.success) {
+    await updateMessageStatus(messageId, 'ERROR', {
+      processedAt: new Date().toISOString(),
+      issues: parsed.error.issues,
+    } as any);
     return Response.json(
       { ok: false, error: 'Invalid payload', issues: parsed.error.issues },
       { status: 400 },
     );
   }
-
-  const receivedAt = new Date().toISOString();
-
-  // store as an inbound message in the Messages table
 
   try {
     await safeCheckServiceRunDataUpdate(id, (data?: Prisma.JsonValue) => {
@@ -49,8 +81,8 @@ export async function action(args: ActionFunctionArgs) {
         ? existingServiceDataResult.data
         : undefined;
 
-      const nextServiceData = applyProofigNotifyToServiceData(
-        existingServiceData,
+      const nextServiceData = updateStagesAndServiceData(
+        existingServiceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
         parsed.data,
         receivedAt,
       );
@@ -63,6 +95,10 @@ export async function action(args: ActionFunctionArgs) {
       } as Prisma.JsonObject;
     });
   } catch (err) {
+    await updateMessageStatus(messageId, 'ERROR', {
+      processedAt: new Date().toISOString(),
+      error: err instanceof Error ? err.message : 'Unknown error',
+    } as any);
     // Keep behavior simple per requirement: 200 if expected, otherwise 400.
     return Response.json(
       {
@@ -73,6 +109,10 @@ export async function action(args: ActionFunctionArgs) {
       { status: 400 },
     );
   }
+
+  await updateMessageStatus(messageId, 'ACCEPTED', {
+    processedAt: new Date().toISOString(),
+  } as any);
 
   // Per spec, return a 200 with no required response body.
   return new Response(null, { status: 200 });

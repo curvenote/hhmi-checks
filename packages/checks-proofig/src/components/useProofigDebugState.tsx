@@ -62,63 +62,79 @@ export function useProofigDebugState(initialData?: ProofigDataSchema) {
       switch (preset) {
         case 'all-pending':
           STAGE_ORDER.forEach((stage: keyof ProofigDataSchema['stages']) => {
-            newState.stages[stage] = { status: 'pending', timestamp: new Date().toISOString() };
+            newState.stages[stage] = {
+              status: 'pending',
+              history: [],
+              timestamp: new Date().toISOString(),
+            };
           });
           break;
 
         case 'all-completed':
           STAGE_ORDER.forEach((stage: keyof ProofigDataSchema['stages']) => {
-            newState.stages[stage] = { status: 'completed', timestamp: new Date().toISOString() };
+            newState.stages[stage] = {
+              status: 'completed',
+              history: [],
+              timestamp: new Date().toISOString(),
+            };
           });
           break;
 
         case 'mid-processing':
           newState.stages.initialPost = {
             status: 'completed',
+            history: [],
             timestamp: new Date().toISOString(),
           };
           newState.stages.subimageDetection = {
             status: 'completed',
+            history: [],
             timestamp: new Date().toISOString(),
           };
           newState.stages.subimageSelection = {
             status: 'processing',
+            history: [],
             timestamp: new Date().toISOString(),
           };
           newState.stages.integrityDetection = {
             status: 'pending',
+            history: [],
             timestamp: new Date().toISOString(),
           };
           newState.stages.resultsReview = {
             status: 'pending',
+            history: [],
             timestamp: new Date().toISOString(),
           };
-          newState.stages.finalReport = { status: 'pending', timestamp: new Date().toISOString() };
           break;
 
         case 'failed-at-3':
           newState.stages.initialPost = {
             status: 'completed',
+            history: [],
             timestamp: new Date().toISOString(),
           };
           newState.stages.subimageDetection = {
             status: 'completed',
+            history: [],
             timestamp: new Date().toISOString(),
           };
           newState.stages.subimageSelection = {
             status: 'failed',
-            timestamp: new Date().toISOString(),
+            history: [],
             error: 'Connection timeout',
+            timestamp: new Date().toISOString(),
           };
           newState.stages.integrityDetection = {
             status: 'pending',
+            history: [],
             timestamp: new Date().toISOString(),
           };
           newState.stages.resultsReview = {
             status: 'pending',
+            history: [],
             timestamp: new Date().toISOString(),
           };
-          newState.stages.finalReport = { status: 'pending', timestamp: new Date().toISOString() };
           break;
       }
 

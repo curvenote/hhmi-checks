@@ -20,7 +20,6 @@ const STATUS_OPTIONS: ProofigStageStatus[] = [
   'processing',
   'completed',
   'failed',
-  'skipped',
   'error',
 ];
 
@@ -30,7 +29,6 @@ const STAGE_LABELS: Record<keyof ProofigDataSchema['stages'], string> = {
   subimageSelection: 'Subimage Selection',
   integrityDetection: 'Integrity Detection',
   resultsReview: 'Results Review',
-  finalReport: 'Final Report',
 };
 
 const STATUS_COLORS: Record<ProofigStageStatus, string> = {
@@ -38,7 +36,6 @@ const STATUS_COLORS: Record<ProofigStageStatus, string> = {
   processing: 'bg-blue-200 hover:bg-blue-300 text-blue-800',
   completed: 'bg-green-200 hover:bg-green-300 text-green-800',
   failed: 'bg-red-200 hover:bg-red-300 text-red-800',
-  skipped: 'bg-yellow-200 hover:bg-yellow-300 text-yellow-800',
   error: 'bg-red-200 hover:bg-red-300 text-red-800',
 };
 
