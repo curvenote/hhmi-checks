@@ -1,5 +1,5 @@
 import { useFetcher } from 'react-router';
-import { SectionWithHeading, primitives, ui } from '@curvenote/scms-core';
+import { SectionWithHeading, primitives, ui, useRevalidateOnInterval } from '@curvenote/scms-core';
 import { ScanSearch } from 'lucide-react';
 import { Logos } from '../client.js';
 import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
@@ -19,9 +19,14 @@ export function ImageIntegrityChecksSection({ metadata }: ImageIntegrityChecksSe
 
   // Check if we need to dispatch the initial POST
   // If proofig is enabled and has a status object, show progress
-  const showProgress = !!metadata;
+  const checkedAvailableOrInProgress = !!metadata;
 
-  const heading = showProgress ? (
+  useRevalidateOnInterval({
+    enabled: checkedAvailableOrInProgress,
+    interval: 3000,
+  });
+
+  const heading = checkedAvailableOrInProgress ? (
     <div className="flex gap-2 justify-between items-center">
       <div>Image Integrity Checks</div>
       <Logos.ProofigLogo className="h-8" />
@@ -32,7 +37,7 @@ export function ImageIntegrityChecksSection({ metadata }: ImageIntegrityChecksSe
   return (
     <SectionWithHeading heading={heading} icon={ScanSearch}>
       <primitives.Card lift className="p-6">
-        {showProgress ? (
+        {checkedAvailableOrInProgress ? (
           <ProofigProgressComponent
             proofigData={metadata}
             isSubmitting={fetcher.state !== 'idle'}

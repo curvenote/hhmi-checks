@@ -179,9 +179,7 @@ export function updateStagesAndServiceDataFromValidatedNotifyPayload(
 
     case KnownState.ReportClean: {
       // We transitioned here from Processing, meaning the detection algorihtm did not flag any issues.
-      if (stages.resultsReview?.outcome === 'clean') {
-        break;
-      } else if (currentStatuses.integrityDetection === 'processing') {
+      if (currentStatuses.integrityDetection === 'processing') {
         updateStages = setLinearStage(stages, 'integrityDetection', 'completed', receivedAt);
         updateStages = setReviewStage(
           updateStages,
