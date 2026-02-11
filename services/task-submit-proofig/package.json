@@ -1,0 +1,18 @@
+{
+  "name": "@hhmi/task-submit-proofig-cloudrun",
+  "description": "Cloud Run deployment for task-submit-proofig service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node ./dist/index.js",
+    "build:service": "bash -c 'cd ../../packages/task-submit-proofig && npm install && npm run build && rm -rf ../../services/task-submit-proofig/dist && cp -r dist ../../services/task-submit-proofig/'",
+    "build": "npm run build:service && ./build.sh",
+    "deploy": "./deploy.sh",
+    "build:local": "npm run build:service && docker build -t task-submit-proofig-local .",
+    "dev": "npm run build:local && ./run.sh"
+  },
+  "dependencies": {
+    "express": "^4.18.1"
+  }
+}
