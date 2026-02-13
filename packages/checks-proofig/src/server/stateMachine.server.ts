@@ -117,6 +117,24 @@ export function markInitialPostError(
 }
 
 /**
+ * Helper used when the initial POST to Proofig completes successfully (e.g. stream submit done).
+ * Transitions initialPost to completed and sets the next linear stage (subimageDetection) to pending.
+ */
+export function completeInitialPostAndSetSubimageDetectionPending(
+  current?: ProofigDataSchema,
+  receivedAt: string = new Date().toISOString(),
+): ProofigDataSchema {
+  const base = current ?? MINIMAL_PROOFIG_SERVICE_DATA;
+  const stages = base.stages ?? MINIMAL_PROOFIG_SERVICE_DATA.stages;
+  let updatedStages = setLinearStage(stages, 'initialPost', 'completed', receivedAt);
+  updatedStages = setLinearStage(updatedStages, 'subimageDetection', 'pending', receivedAt);
+  return {
+    ...base,
+    stages: updatedStages,
+  };
+}
+
+/**
  * Pure transition function for mapping Proofig notify payloads onto our `serviceData`.
  * Exported for unit testing and reuse.
  */
@@ -185,7 +203,10 @@ export function updateStagesAndServiceDataFromValidatedNotifyPayload(
 
     case KnownState.AwaitingSubImageApproval: {
       // Sub-image detection is finished; awaiting user selection/approval.
-      if (currentStatuses.subimageDetection === 'processing') {
+      if (
+        currentStatuses.subimageDetection === 'pending' ||
+        currentStatuses.subimageDetection === 'processing'
+      ) {
         updateStages = setLinearStage(stages, 'subimageDetection', 'completed', receivedAt);
         updateStages = setLinearStage(updateStages, 'subimageSelection', 'pending', receivedAt);
       } else {

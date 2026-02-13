@@ -7,16 +7,53 @@ import {
   safeCheckServiceRunDataUpdate,
 } from '@curvenote/scms-server';
 import type { Context as ServerContext } from '@curvenote/scms-server';
-import type {
-  CheckServiceRunData,
-  ExtensionCheckHandleActionArgs,
-  ExtensionCheckStatusArgs,
+import {
+  buildFollowOnEnvelope,
+  type CheckServiceRunData,
+  type ExtensionCheckHandleActionArgs,
+  type ExtensionCheckStatusArgs,
+  KnownJobTypes,
 } from '@curvenote/scms-core';
 import type { Prisma } from '@curvenote/scms-db';
 import { MINIMAL_PROOFIG_SERVICE_DATA, type ProofigDataSchema } from '../schema.js';
 import { markInitialPostError, startInitialPostProcessing } from './stateMachine.server.js';
 import { PROOFIG_SUBMIT_STREAM } from './jobs/proofig-submit-stream.server.js';
 import { PROOFIG_SUBMIT } from './jobs/proofig-submit-service.server.js';
+
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+type FileEntryLike = { type?: string; name?: string; path?: string };
+
+function hasPdfInMetadata(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== 'object') return false;
+  const meta = metadata as Record<string, unknown>;
+  const files = meta.files;
+  if (!files || typeof files !== 'object') return false;
+  const entries = Object.values(files) as FileEntryLike[];
+  return entries.some((f) => {
+    if (!f || typeof f !== 'object') return false;
+    const type = f.type?.toLowerCase?.();
+    const name = (f.name ?? f.path ?? '')?.toString?.().toLowerCase?.() ?? '';
+    return (
+      type === 'application/pdf' ||
+      (name.endsWith('.pdf') || name === 'pdf')
+    );
+  });
+}
+
+function hasDocxInMetadata(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== 'object') return false;
+  const meta = metadata as Record<string, unknown>;
+  const files = meta.files;
+  if (!files || typeof files !== 'object') return false;
+  const entries = Object.values(files) as FileEntryLike[];
+  return entries.some(
+    (f) =>
+      f?.type === DOCX_MIME ||
+      (typeof f?.name === 'string' && f.name.toLowerCase().endsWith('.docx')) ||
+      (typeof f?.path === 'string' && f.path.toLowerCase().endsWith('.docx')),
+  );
+}
 
 // Define the checks metadata section type (matches app schema)
 export interface ChecksMetadataSection {
@@ -53,9 +90,34 @@ export async function handleProofigAction(args: ExtensionCheckHandleActionArgs):
     }
 
     const prisma = await getPrismaClient();
-    const timestamp = new Date().toISOString();
+    const workVersion = await prisma.workVersion.findUnique({
+      where: { id: workVersionId },
+    });
+    if (!workVersion) {
+      return data(
+        { error: { type: 'general', message: 'Work version not found' } },
+        { status: 404 },
+      ) as unknown as Response;
+    }
 
-    // Create a new checkServiceRun row for this execution.
+    const metadata = workVersion.metadata != null && typeof workVersion.metadata === 'object'
+      ? workVersion.metadata
+      : null;
+    const hasPdf = hasPdfInMetadata(metadata);
+    const hasDocx = hasDocxInMetadata(metadata);
+    if (!hasPdf && !hasDocx) {
+      return data(
+        {
+          error: {
+            type: 'general',
+            message: 'Proofig requires a PDF or a Word document (.docx) on this version.',
+          },
+        },
+        { status: 400 },
+      ) as unknown as Response;
+    }
+
+    const timestamp = new Date().toISOString();
     const run = await prisma.checkServiceRun.create({
       data: {
         id: uuid(),
@@ -71,12 +133,10 @@ export async function handleProofigAction(args: ExtensionCheckHandleActionArgs):
       },
     });
     const checkRunId = run.id;
-    // Determine submit mode: explicit override on args, then extension config, defaulting to 'service'.
     const extConfig = ctx.$config.app?.extensions?.['checks-proofig'] as
       | { proofigSubmitMode?: 'service' | 'stream' }
       | undefined;
     const submitMode =
-      // Allow callers to explicitly override per-request if they add this field.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ((args as any).submitMode as 'service' | 'stream' | undefined) ??
       extConfig?.proofigSubmitMode ??
@@ -95,24 +155,50 @@ export async function handleProofigAction(args: ExtensionCheckHandleActionArgs):
       } satisfies CheckServiceRunData<ProofigDataSchema>;
     });
 
+    const extensionJobs = registerExtensionJobs(serverExtensions ?? []);
     try {
-      const jobId = uuid();
-      // Allow platform to pass through the full list of server extensions; fall back to empty list.
-
-      await jobs.invoke(
-        ctx as ServerContext,
-        {
-          id: jobId,
+      if (hasPdf) {
+        await jobs.invoke(
+          ctx as ServerContext,
+          {
+            id: uuid(),
+            job_type: jobType,
+            payload: {
+              work_version_id: workVersionId,
+              proofig_run_id: checkRunId,
+            },
+          },
+          extensionJobs,
+        );
+      } else {
+        const exportJobId = uuid();
+        const proofigJobId = uuid();
+        const followOnSpec = {
+          id: proofigJobId,
           job_type: jobType,
           payload: {
             work_version_id: workVersionId,
             proofig_run_id: checkRunId,
           },
-        },
-        registerExtensionJobs(serverExtensions ?? []),
-      );
+        };
+        await jobs.invoke(
+          ctx as ServerContext,
+          {
+            id: exportJobId,
+            job_type: KnownJobTypes.EXPORT_TO_PDF,
+            payload: {
+              work_version_id: workVersionId,
+              target: 'pdf',
+              conversion_type: 'docx-pandoc-myst-pdf',
+            },
+            follow_on: buildFollowOnEnvelope(followOnSpec),
+          },
+          extensionJobs,
+        );
+      }
     } catch (err: any) {
-      console.error(`${jobType} job create failed`, err);
+      const jobLabel = hasPdf ? jobType : KnownJobTypes.EXPORT_TO_PDF;
+      console.error(`${jobLabel} job create failed`, err);
       await safeCheckServiceRunDataUpdate(checkRunId, (runData?: Prisma.JsonValue) => {
         const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
         const nextServiceData = markInitialPostError(

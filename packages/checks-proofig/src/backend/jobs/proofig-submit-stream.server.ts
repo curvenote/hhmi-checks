@@ -1,18 +1,11 @@
 import type { CreateJob } from '@curvenote/scms-core';
-import type { CheckServiceRunData } from '@curvenote/scms-core';
 import type { Context } from '@curvenote/scms-server';
 import { JobStatus } from '@curvenote/scms-db';
-import type { Prisma } from '@curvenote/scms-db';
 import { httpError } from '@curvenote/scms-core';
 import type { WorkVersionMetadataPayload } from '@curvenote/common';
 import { z } from 'zod';
 import { uuidv7 } from 'uuidv7';
-import {
-  getPrismaClient,
-  signFilesInMetadata,
-  jobs,
-  safeCheckServiceRunDataUpdate,
-} from '@curvenote/scms-server';
+import { getPrismaClient, signFilesInMetadata, jobs } from '@curvenote/scms-server';
 import {
   buildProofigSubmitParams,
   getPdfFileFromMetadata,
@@ -20,8 +13,6 @@ import {
   rollingLogEntry,
   workVersionToPayload,
 } from './proofig-submit.utils.js';
-import { MINIMAL_PROOFIG_SERVICE_DATA, type ProofigDataSchema } from '../../schema.js';
-import { completeInitialPostAndSetSubimageDetectionPending } from '../stateMachine.server.js';
 
 /** Job type for Proofig submit via in-process streaming HTTP call. */
 export const PROOFIG_SUBMIT_STREAM = 'PROOFIG_SUBMIT_STREAM';
@@ -143,21 +134,6 @@ export async function proofigSubmitStreamHandler(
 
     rollingLog.push(rollingLogEntry('submitting to Proofig via streaming HTTP POST', {}));
     const result = await postToProofigStream(proofigApiBaseUrl, params, pdfResponse, filename);
-
-    // Transition run stages: initialPost completed, subimageDetection pending
-    const receivedAt = new Date().toISOString();
-    await safeCheckServiceRunDataUpdate(payload.proofig_run_id, (runData?: Prisma.JsonValue) => {
-      const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
-      const nextServiceData = completeInitialPostAndSetSubimageDetectionPending(
-        current.serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
-        receivedAt,
-      );
-      return {
-        ...current,
-        status: 'healthy',
-        serviceData: nextServiceData,
-      } satisfies CheckServiceRunData<ProofigDataSchema>;
-    });
 
     const completed = await jobs.dbUpdateJob(job.id, {
       status: JobStatus.COMPLETED,

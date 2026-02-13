@@ -20,13 +20,9 @@ export const STAGE_LABELS = {
 
 interface ProofigProgressComponentProps {
   proofigData: ProofigDataSchema | undefined;
-  isSubmitting?: boolean;
 }
 
-export function ProofigProgressComponent({
-  proofigData,
-  isSubmitting,
-}: ProofigProgressComponentProps) {
+export function ProofigProgressComponent({ proofigData }: ProofigProgressComponentProps) {
   // Defensive: provide defaults if proofigStatus or stages don't exist
   const stages = { ...ALL_PENDING_STAGES, ...proofigData?.stages };
 

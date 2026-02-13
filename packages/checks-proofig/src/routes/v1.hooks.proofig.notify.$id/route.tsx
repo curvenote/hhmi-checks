@@ -6,6 +6,7 @@ import {
   updateMessageStatus,
 } from '@curvenote/scms-server';
 import type { Prisma } from '@curvenote/scms-db';
+import type { ProofigDataSchema } from '../../schema.js';
 import {
   MINIMAL_PROOFIG_SERVICE_DATA,
   ProofigNotifyPayloadSchema,
@@ -77,7 +78,7 @@ export async function action(args: ActionFunctionArgs) {
       const currentServiceData = current.serviceData as unknown;
 
       const existingServiceDataResult = proofigDataSchema.safeParse(currentServiceData);
-      const existingServiceData = existingServiceDataResult.success
+      const existingServiceData: ProofigDataSchema | undefined = existingServiceDataResult.success
         ? existingServiceDataResult.data
         : undefined;
 

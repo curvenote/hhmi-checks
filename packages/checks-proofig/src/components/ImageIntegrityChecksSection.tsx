@@ -1,4 +1,5 @@
 import { useFetcher } from 'react-router';
+import { useEffect } from 'react';
 import { SectionWithHeading, primitives, ui, useRevalidateOnInterval } from '@curvenote/scms-core';
 import { ScanSearch } from 'lucide-react';
 import { Logos } from '../client.js';
@@ -20,11 +21,20 @@ export function ImageIntegrityChecksSection({ metadata }: ImageIntegrityChecksSe
   // Check if we need to dispatch the initial POST
   // If proofig is enabled and has a status object, show progress
   const checkedAvailableOrInProgress = !!metadata;
+  const isSubmitting = fetcher.state === 'submitting';
 
+  // Poll when we have check data, or while waiting for first response after submit
   useRevalidateOnInterval({
-    enabled: checkedAvailableOrInProgress,
-    interval: 3000,
+    enabled: checkedAvailableOrInProgress || isSubmitting,
+    interval: isSubmitting && !checkedAvailableOrInProgress ? 1000 : 3000,
   });
+
+  // Show toast on initial fetcher error when still on CTA (no check data yet)
+  useEffect(() => {
+    if (fetcher.state !== 'idle' || checkedAvailableOrInProgress || !fetcher.data) return;
+    const err = (fetcher.data as { error?: { message?: string } }).error;
+    if (err?.message) ui.toastError(err.message);
+  }, [fetcher.state, fetcher.data, checkedAvailableOrInProgress]);
 
   const heading = checkedAvailableOrInProgress ? (
     <div className="flex gap-2 justify-between items-center">
@@ -38,10 +48,7 @@ export function ImageIntegrityChecksSection({ metadata }: ImageIntegrityChecksSe
     <SectionWithHeading heading={heading} icon={ScanSearch}>
       <primitives.Card lift className="p-6">
         {checkedAvailableOrInProgress ? (
-          <ProofigProgressComponent
-            proofigData={metadata}
-            isSubmitting={fetcher.state !== 'idle'}
-          />
+          <ProofigProgressComponent proofigData={metadata} />
         ) : (
           <CTAPlaceholderPanel
             logo={<Logos.ProofigLogo className="mb-4 h-16" />}
@@ -49,9 +56,15 @@ export function ImageIntegrityChecksSection({ metadata }: ImageIntegrityChecksSe
             description="Run image integrity checks to detect potential issues with images in your work."
             action={
               <fetcher.Form method="post">
-                <ui.Button type="submit" variant="default" name="intent" value="proofig:execute">
+                <ui.StatefulButton
+                  type="submit"
+                  variant="default"
+                  name="intent"
+                  value="proofig:execute"
+                  busy={isSubmitting}
+                >
                   Run checks now
-                </ui.Button>
+                </ui.StatefulButton>
               </fetcher.Form>
             }
           />

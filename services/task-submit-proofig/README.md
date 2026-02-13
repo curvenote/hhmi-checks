@@ -18,27 +18,28 @@ cp .env.sample .env
 
 ## Scripts
 
-| Script        | Description                                                                     |
-| ------------- | ------------------------------------------------------------------------------- |
-| `./local.sh`  | Build package, copy dist here, build Docker image, then run container.           |
-| `./build.sh`  | Remote Docker build on GCP (run `npm run build:service` first).                 |
-| `./deploy.sh` | Deploy current image to Cloud Run.                                             |
-| `./run.sh`    | Run the local image `task-submit-proofig-local` (port 8080).                     |
+| Script        | Description                                                            |
+| ------------- | ---------------------------------------------------------------------- |
+| `./local.sh`  | Build package, copy dist here, build Docker image, then run container. |
+| `./build.sh`  | Remote Docker build on GCP (run `npm run build:service` first).        |
+| `./deploy.sh` | Deploy current image to Cloud Run.                                     |
+| `./run.sh`    | Run the local image `task-submit-proofig-local` (port 8080).           |
 
 ## npm scripts (run from this directory)
 
-| Command                 | Description                                              |
-| ----------------------- | -------------------------------------------------------- |
-| `npm run build:service` | Build package and copy `dist/` here.                     |
-| `npm run build`         | `build:service` then `./build.sh`.                        |
-| `npm run deploy`        | `./deploy.sh`                                            |
+| Command                 | Description                                                        |
+| ----------------------- | ------------------------------------------------------------------ |
+| `npm run build:service` | Build package and copy `dist/` here.                               |
+| `npm run build`         | `build:service` then `./build.sh`.                                 |
+| `npm run deploy`        | `./deploy.sh`                                                      |
 | `npm run build:local`   | `build:service` then `docker build -t task-submit-proofig-local .` |
-| `npm run dev`           | `build:local` then `./run.sh`                             |
+| `npm run dev`           | `build:local` then `./run.sh`                                      |
 
 ## Environment variables
 
-| Variable      | Description             | Default       |
-| ------------- | ----------------------- | ------------- |
-| `GCP_PROJECT` | Google Cloud project ID | (required)    |
-| `GCP_REGION`  | Cloud Run region        | us-central1   |
-| `PORT`        | Local dev port          | 8080          |
+| Variable               | Description                                                                                                            | Default               |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `GCP_PROJECT`          | Google Cloud project ID                                                                                                | (required)            |
+| `GCP_REGION`           | Cloud Run region                                                                                                       | us-central1           |
+| `PORT`                 | Local dev port                                                                                                         | 8080                  |
+| `PROOFIG_API_BASE_URL` | Proofig API base URL (e.g. `https://api.proofig.com`, no trailing slash). Submit URL is `{base}/Curvenote/api/submit`. | (required at runtime) |

@@ -195,19 +195,15 @@ export async function postToProofigStream(
   const base = baseUrl.replace(/\/$/, '');
   const url = `${base}/Curvenote/api/submit`;
 
-  // duplex: 'half' is required by Node/undici for streaming request bodies. It is correctly typed in
-  // undici-types (and thus in @types/node when Node wins), but our tsconfig loads vite + vitest
-  // types, so global RequestInit can be the DOM one (no duplex). We widen so this file type-checks.
-  const init: RequestInit & { duplex?: 'half' } = {
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': `multipart/form-data; boundary=${boundary}`,
       // No Content-Length: rely on chunked transfer encoding
     },
-    duplex: 'half',
+    // Node fetch accepts a Node.js Readable as body
     body: bodyStream as unknown as BodyInit,
-  };
-  const response = await fetch(url, init);
+  });
 
   const text = await response.text();
   let json: ProofigSubmitResponse;

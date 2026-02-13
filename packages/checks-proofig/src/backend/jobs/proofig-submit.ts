@@ -9,9 +9,9 @@ import {
   getPrismaClient,
   signFilesInMetadata,
   createHandshakeToken,
-  publishProofigSubmitMessage,
   jobs,
 } from '@curvenote/scms-server';
+import { publishProofigSubmitMessage } from '../publishProofigSubmit.server.js';
 import { Readable } from 'node:stream';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 
