@@ -1,5 +1,4 @@
-import type { CreateJob } from '@curvenote/scms-core';
-import type { CheckServiceRunData } from '@curvenote/scms-core';
+import type { CreateJob, CheckServiceRunData } from '@curvenote/scms-core';
 import type { Context } from '@curvenote/scms-server';
 import { JobStatus } from '@curvenote/scms-db';
 import type { Prisma } from '@curvenote/scms-db';

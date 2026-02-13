@@ -34,10 +34,7 @@ function hasPdfInMetadata(metadata: unknown): boolean {
     if (!f || typeof f !== 'object') return false;
     const type = f.type?.toLowerCase?.();
     const name = (f.name ?? f.path ?? '')?.toString?.().toLowerCase?.() ?? '';
-    return (
-      type === 'application/pdf' ||
-      (name.endsWith('.pdf') || name === 'pdf')
-    );
+    return type === 'application/pdf' || name.endsWith('.pdf') || name === 'pdf';
   });
 }
 
@@ -100,9 +97,10 @@ export async function handleProofigAction(args: ExtensionCheckHandleActionArgs):
       ) as unknown as Response;
     }
 
-    const metadata = workVersion.metadata != null && typeof workVersion.metadata === 'object'
-      ? workVersion.metadata
-      : null;
+    const metadata =
+      workVersion.metadata != null && typeof workVersion.metadata === 'object'
+        ? workVersion.metadata
+        : null;
     const hasPdf = hasPdfInMetadata(metadata);
     const hasDocx = hasDocxInMetadata(metadata);
     if (!hasPdf && !hasDocx) {
@@ -189,7 +187,8 @@ export async function handleProofigAction(args: ExtensionCheckHandleActionArgs):
             payload: {
               work_version_id: workVersionId,
               target: 'pdf',
-              conversion_type: 'docx-pandoc-myst-pdf',
+              // conversion_type: 'docx-pandoc-myst-pdf',
+              conversion_type: 'docx-lowriter-pdf',
             },
             follow_on: buildFollowOnEnvelope(followOnSpec),
           },

@@ -127,6 +127,22 @@ export function SubimageDetectionProgressArea({ data }: { data: ProofigStage }) 
     return (
       <SimpleErrorArea step={2} numSteps={4} message="Subimage detection failed." data={data} />
     );
+  if (data.status === 'pending') {
+    return (
+      <div className="flex flex-col gap-6">
+        <ui.SimpleAlert
+          type="info"
+          message={
+            <div>
+              <span className="font-bold">Subimage detection is pending...</span> waiting for
+              confirmation that processing has started.
+            </div>
+          }
+        />
+        <StageProgressArea step={1} numSteps={4} message="Upload completed. Waiting..." />
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-6">
       <ui.SimpleAlert
