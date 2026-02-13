@@ -1,7 +1,7 @@
 import { createService } from './service.js';
 
-export type { StubPayload } from './payload.js';
-export { validatePayload } from './payload.js';
+export type { ProofigSubmitPayload } from './payload.js';
+export { validatePayload, getPdfFile } from './payload.js';
 
 const service = createService();
 

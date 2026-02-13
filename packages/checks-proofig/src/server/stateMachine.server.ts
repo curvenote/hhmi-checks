@@ -5,9 +5,10 @@ import type {
   ProofigStageStatus,
   ProofigOutcome,
   ProofigReviewStageStatus,
-} from '../../schema.js';
+} from '../schema.js';
 
-import { KNOWN_STATES, KnownState, MINIMAL_PROOFIG_SERVICE_DATA } from '../../schema.js';
+import { KNOWN_STATES, KnownState, MINIMAL_PROOFIG_SERVICE_DATA } from '../schema.js';
+
 const HISTORY_LIMIT = 20;
 
 function setLinearStage(
@@ -15,6 +16,7 @@ function setLinearStage(
   key: 'initialPost' | 'subimageDetection' | 'subimageSelection' | 'integrityDetection',
   status: ProofigStageStatus,
   receivedAt: string,
+  error?: string,
 ) {
   const prev = stages[key];
   const prevStatus = prev?.status;
@@ -35,6 +37,7 @@ function setLinearStage(
       status,
       timestamp: receivedAt,
       history,
+      ...(error ? { error } : {}),
     },
   } as ProofigStages;
 }
@@ -79,8 +82,43 @@ function setReviewStage(
 }
 
 /**
+ * Helper used when we initially enqueue a Proofig run.
+ * Ensures `initialPost` is marked as `processing` and history is updated correctly.
+ */
+export function startInitialPostProcessing(
+  current?: ProofigDataSchema,
+  receivedAt: string = new Date().toISOString(),
+): ProofigDataSchema {
+  const base = current ?? MINIMAL_PROOFIG_SERVICE_DATA;
+  const stages = base.stages ?? MINIMAL_PROOFIG_SERVICE_DATA.stages;
+  const updatedStages = setLinearStage(stages, 'initialPost', 'processing', receivedAt);
+  return {
+    ...base,
+    stages: updatedStages,
+  };
+}
+
+/**
+ * Helper used when initial job creation fails.
+ * Marks `initialPost` as `error`, preserves history, and stores an error message.
+ */
+export function markInitialPostError(
+  current?: ProofigDataSchema,
+  message?: string,
+  receivedAt: string = new Date().toISOString(),
+): ProofigDataSchema {
+  const base = current ?? MINIMAL_PROOFIG_SERVICE_DATA;
+  const stages = base.stages ?? MINIMAL_PROOFIG_SERVICE_DATA.stages;
+  const updatedStages = setLinearStage(stages, 'initialPost', 'error', receivedAt, message);
+  return {
+    ...base,
+    stages: updatedStages,
+  };
+}
+
+/**
  * Pure transition function for mapping Proofig notify payloads onto our `serviceData`.
- * Exported for unit testing.
+ * Exported for unit testing and reuse.
  */
 export function updateStagesAndServiceDataFromValidatedNotifyPayload(
   current: ProofigDataSchema,
@@ -102,7 +140,7 @@ export function updateStagesAndServiceDataFromValidatedNotifyPayload(
     resultsReview: stages.resultsReview?.status,
   };
 
-  // defenively check for known states, and if we don't know the state, we ignore the notification.
+  // defensively check for known states, and if we don't know the state, we ignore the notification.
   if (!KNOWN_STATES.includes(payload.state)) {
     console.warn(
       `[checks-proofig] Unknown state received: ${payload.state}, ignoring notification.`,
@@ -178,7 +216,7 @@ export function updateStagesAndServiceDataFromValidatedNotifyPayload(
     }
 
     case KnownState.ReportClean: {
-      // We transitioned here from Processing, meaning the detection algorihtm did not flag any issues.
+      // We transitioned here from Processing, meaning the detection algorithm did not flag any issues.
       if (currentStatuses.integrityDetection === 'processing') {
         updateStages = setLinearStage(stages, 'integrityDetection', 'completed', receivedAt);
         updateStages = setReviewStage(

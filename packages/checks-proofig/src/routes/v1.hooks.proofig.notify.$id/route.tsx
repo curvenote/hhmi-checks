@@ -11,7 +11,7 @@ import {
   ProofigNotifyPayloadSchema,
   proofigDataSchema,
 } from '../../schema.js';
-import { updateStagesAndServiceDataFromValidatedNotifyPayload } from './utils.server.js';
+import { updateStagesAndServiceDataFromValidatedNotifyPayload } from '../../server/stateMachine.server.js';
 import {
   PROOFIG_NOTIFY_PAYLOAD_JSON_SCHEMA,
   PROOFIG_NOTIFY_RESULTS_JSON_SCHEMA,

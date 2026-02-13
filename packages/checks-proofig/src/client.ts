@@ -4,7 +4,7 @@
 
 import type {
   ClientExtension,
-  ExtensionCheckService,
+  ClientExtensionCheckService,
   ExtensionIcon,
   ExtensionTask,
   NavigationRegistration,
@@ -55,7 +55,7 @@ export function getIcons(): ExtensionIcon[] {
   ];
 }
 
-export function getChecks(): ExtensionCheckService[] {
+export function getChecks(): ClientExtensionCheckService[] {
   return [
     {
       id: 'proofig',

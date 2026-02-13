@@ -1,12 +1,12 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { describe, expect, it } from 'vitest';
-import { updateStagesAndServiceDataFromValidatedNotifyPayload } from './utils.server.js';
+import { updateStagesAndServiceDataFromValidatedNotifyPayload } from './stateMachine.server.js';
 import {
   type ProofigNotifyState,
   type ProofigDataSchema,
   type ProofigNotifyPayload,
   KnownState,
-} from '../../schema.js';
+} from '../schema.js';
 import { uuidv7 as uuid } from 'uuidv7';
 
 function makeProofigNotifyPayload(): ProofigNotifyPayload {

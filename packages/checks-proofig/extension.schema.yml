@@ -15,3 +15,22 @@ properties:
     type: boolean
     description: This extension will register one or more routes
     default: true
+  proofigSubmitTopic:
+    type: string
+    description: Full Pub/Sub topic for Proofig submit job (e.g. projects/PROJECT_ID/topics/proofig-submit). When set, PROOFIG_SUBMIT jobs publish here.
+  proofigNotifyBaseUrl:
+    type: string
+    description: Base URL for Proofig webhook notifications (e.g. https://host/v1/hooks/proofig/notify). Used to build notify_url in submit payload.
+  proofigApiBaseUrl:
+    type: string
+    description: Base URL for the Proofig API when using stream mode (e.g. https://proofig.example.com). When set, PROOFIG_SUBMIT_STREAM jobs post directly to this API.
+  proofigSubmitMode:
+    type: string
+    description: >
+      Submit mode for Proofig initial post. 'service' uses the external container
+      service via Pub/Sub (PROOFIG_SUBMIT). 'stream' runs a synchronous streaming
+      job inside the main app (PROOFIG_SUBMIT_STREAM) that posts directly to the
+      Proofig API.
+    enum:
+      - service
+      - stream

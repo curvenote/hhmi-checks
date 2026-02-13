@@ -48,9 +48,11 @@ export function ImageIntegrityChecksSection({ metadata }: ImageIntegrityChecksSe
             title="No image integrity checks run yet"
             description="Run image integrity checks to detect potential issues with images in your work."
             action={
-              <ui.Button variant="default" disabled>
-                Run checks now
-              </ui.Button>
+              <fetcher.Form method="post">
+                <ui.Button type="submit" variant="default" name="intent" value="proofig:execute">
+                  Run checks now
+                </ui.Button>
+              </fetcher.Form>
             }
           />
         )}
