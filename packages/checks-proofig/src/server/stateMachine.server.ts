@@ -248,7 +248,12 @@ export function updateStagesAndServiceDataFromValidatedNotifyPayload(
           receivedAt,
         );
       } else if (currentStatuses.integrityDetection === 'completed') {
-        updateStages = setReviewStage(stages, 'resultsReview', 'completed', 'clean', receivedAt);
+        const review = stages.resultsReview;
+        if (review?.status === 'completed' && review?.outcome === 'clean') {
+          // Already in Report: Clean → no-op
+        } else {
+          updateStages = setReviewStage(stages, 'resultsReview', 'completed', 'clean', receivedAt);
+        }
       } else {
         console.warn(
           `[checks-proofig] Report: Clean state received when not expected, ignoring notification.`,
