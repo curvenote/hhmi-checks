@@ -13,6 +13,7 @@ import { ImageIntegrityIcon, ProofigLogoMono, ProofigLogo } from './icons.js';
 import { ImageIntegrityTaskCard } from './ImageIntegrityTaskCard.js';
 import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSection.js';
 import { ImageIntegritySectionHeader } from './components/ImageIntegritySectionHeader.js';
+import { ProofigSummaryBadge } from './components/ProofigSummaryBadge.js';
 import ExtensionAdminCard from './components/ExtensionAdminCard.js';
 
 export const id = 'checks-proofig';
@@ -65,6 +66,7 @@ export function getChecks(): ClientExtensionCheckService[] {
       description: 'Detect potential issues with images in your work.',
       sectionHeaderComponent: ImageIntegritySectionHeader,
       sectionActivityComponent: ImageIntegrityChecksSection,
+      sectionSummaryBadgeComponent: ProofigSummaryBadge,
     },
   ];
 }

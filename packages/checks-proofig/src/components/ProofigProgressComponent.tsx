@@ -11,7 +11,7 @@ import { ResultsSummaryArea } from './ResultsSummaryArea.js';
 
 export const STAGE_LABELS = {
   initialPost: 'Uploading to Proofig',
-  subimageDetection: 'AI detecting sub-images',
+  subimageDetection: 'Sub-image detection',
   subimageSelection: 'Ready for sub-image review',
   integrityDetection: 'Running integrity detection',
   resultsReview: 'Ready for results review',

@@ -165,6 +165,7 @@ export async function handleProofigAction(
               work_version_id: workVersionId,
               proofig_run_id: checkRunId,
             },
+            invoked_by_id: ctx.user?.id,
             activity_type: 'CHECK_STARTED',
             activity_data: { check: { kind: 'proofig' } },
           },
@@ -180,6 +181,7 @@ export async function handleProofigAction(
             work_version_id: workVersionId,
             proofig_run_id: checkRunId,
           },
+          invoked_by_id: ctx.user?.id,
           activity_type: 'CHECK_STARTED' as const,
           activity_data: { check: { kind: 'proofig' as const } },
         };
@@ -187,7 +189,7 @@ export async function handleProofigAction(
           ctx as ServerContext,
           {
             id: exportJobId,
-            job_type: KnownJobTypes.EXPORT_TO_PDF,
+            job_type: KnownJobTypes.CONVERTER_TASK,
             payload: {
               work_version_id: workVersionId,
               target: 'pdf',
@@ -195,6 +197,7 @@ export async function handleProofigAction(
               conversion_type: 'docx-lowriter-pdf',
             },
             follow_on: buildFollowOnEnvelope(followOnSpec),
+            invoked_by_id: ctx.user?.id,
             activity_type: 'CONVERTER_TASK_STARTED',
             activity_data: { converter: { target: 'pdf', type: 'docx-lowriter-pdf' } },
           },
@@ -202,7 +205,7 @@ export async function handleProofigAction(
         );
       }
     } catch (err: any) {
-      const jobLabel = hasPdf ? jobType : KnownJobTypes.EXPORT_TO_PDF;
+      const jobLabel = hasPdf ? jobType : KnownJobTypes.CONVERTER_TASK;
       console.error(`${jobLabel} job create failed`, err);
       await safeCheckServiceRunDataUpdate(checkRunId, (runData?: Prisma.JsonValue) => {
         const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
