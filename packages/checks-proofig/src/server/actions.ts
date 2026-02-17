@@ -132,12 +132,12 @@ export async function handleProofigAction(
     });
     const checkRunId = run.id;
     const extConfig = ctx.$config.app?.extensions?.['checks-proofig'] as
-      | { proofigSubmitMode?: 'service' | 'stream' }
+      | { submitMode?: 'service' | 'stream' }
       | undefined;
     const submitMode =
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ((args as any).submitMode as 'service' | 'stream' | undefined) ??
-      extConfig?.proofigSubmitMode ??
+      extConfig?.submitMode ??
       'stream';
     const jobType = submitMode === 'stream' ? PROOFIG_SUBMIT_STREAM : PROOFIG_SUBMIT;
     await safeCheckServiceRunDataUpdate(checkRunId, (runData?: Prisma.JsonValue) => {

@@ -1,10 +1,11 @@
 import type { ExtensionAdminCardProps } from '@curvenote/scms-core';
 
 function ExtensionAdminCard({ config, extensionName, ExtensionIcon }: ExtensionAdminCardProps) {
-  const proofigSubmitMode = config.proofigSubmitMode as string | undefined;
-  const proofigApiBaseUrl = config.proofigApiBaseUrl as string | undefined;
-  const proofigNotifyBaseUrl = config.proofigNotifyBaseUrl as string | undefined;
-  const proofigSubmitTopic = config.proofigSubmitTopic as string | undefined;
+  const submitMode = config.submitMode as string | undefined;
+  const apiBaseUrl = config.apiBaseUrl as string | undefined;
+  const notifyBaseUrl = config.notifyBaseUrl as string | undefined;
+  const submitTopic = config.submitTopic as string | undefined;
+  const clientId = config.clientId as string | undefined;
 
   return (
     <div className="grid grid-cols-1 gap-4 min-w-0 md:grid-cols-2 md:items-start md:gap-2">
@@ -13,28 +14,34 @@ function ExtensionAdminCard({ config, extensionName, ExtensionIcon }: ExtensionA
         <h2 className="text-xl font-semibold capitalize">{extensionName}</h2>
       </div>
       <div className="space-y-4">
-        {proofigSubmitMode && (
+        {submitMode && (
           <div className="space-y-1">
             <p className="text-sm font-medium text-muted-foreground">Submit mode</p>
-            <p className="text-sm">{proofigSubmitMode}</p>
+            <p className="text-sm">{submitMode}</p>
           </div>
         )}
-        {proofigApiBaseUrl && (
+        {apiBaseUrl && (
           <div className="space-y-1">
             <p className="text-sm font-medium text-muted-foreground">API base URL</p>
-            <p className="text-sm break-all">{proofigApiBaseUrl}</p>
+            <p className="text-sm break-all">{apiBaseUrl}</p>
           </div>
         )}
-        {proofigNotifyBaseUrl && (
+        {notifyBaseUrl && (
           <div className="space-y-1">
             <p className="text-sm font-medium text-muted-foreground">Notify base URL</p>
-            <p className="text-sm break-all">{proofigNotifyBaseUrl}</p>
+            <p className="text-sm break-all">{notifyBaseUrl}</p>
           </div>
         )}
-        {proofigSubmitTopic && (
+        {submitTopic && (
           <div className="space-y-1">
             <p className="text-sm font-medium text-muted-foreground">Submit topic</p>
-            <p className="text-sm">{proofigSubmitTopic}</p>
+            <p className="text-sm">{submitTopic}</p>
+          </div>
+        )}
+        {clientId && (
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-muted-foreground">Client ID</p>
+            <p className="text-sm break-all">{clientId}</p>
           </div>
         )}
       </div>

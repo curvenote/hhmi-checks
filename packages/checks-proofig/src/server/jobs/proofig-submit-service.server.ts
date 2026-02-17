@@ -41,13 +41,13 @@ export async function proofigSubmitHandler(
   const rollingLog: { message: string; data: unknown }[] = [];
 
   const extConfig = ctx.$config.app?.extensions?.['checks-proofig'] as
-    | { proofigSubmitTopic?: string; proofigNotifyBaseUrl?: string }
+    | { submitTopic?: string; notifyBaseUrl?: string }
     | undefined;
-  const proofigSubmitTopic = extConfig?.proofigSubmitTopic;
-  if (!proofigSubmitTopic) {
+  const submitTopic = extConfig?.submitTopic;
+  if (!submitTopic) {
     throw httpError(
       503,
-      'checks-proofig extension config missing proofigSubmitTopic; cannot run PROOFIG_SUBMIT job',
+      'checks-proofig extension config missing submitTopic; cannot run PROOFIG_SUBMIT job',
     );
   }
 
@@ -95,10 +95,10 @@ export async function proofigSubmitHandler(
     workVersionPayload.metadata = signedMetadata as WorkVersionMetadataPayload;
   }
 
-  const proofigNotifyBaseUrl =
-    extConfig.proofigNotifyBaseUrl?.replace(/\/$/, '') ??
+  const notifyBaseUrl =
+    extConfig.notifyBaseUrl?.replace(/\/$/, '') ??
     new URL(ctx.request.url).origin + '/v1/hooks/proofig/notify';
-  const notify_url = `${proofigNotifyBaseUrl}/${payload.proofig_run_id}`;
+  const notify_url = `${notifyBaseUrl}/${payload.proofig_run_id}`;
 
   const pubsubPayload = {
     taskId: job.id,
@@ -127,7 +127,7 @@ export async function proofigSubmitHandler(
   const messageId = await publishProofigSubmitMessage(
     attributes,
     pubsubPayload as Record<string, unknown>,
-    { topic: proofigSubmitTopic },
+    { topic: submitTopic },
   );
   rollingLog.push(rollingLogEntry('Message published to Proofig submit Pub/Sub', { messageId }));
 

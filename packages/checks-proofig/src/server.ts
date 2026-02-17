@@ -3,10 +3,12 @@ import { extension as clientExtension } from './client.js';
 
 function getSafeAdminConfig(config: Record<string, unknown>): Record<string, unknown> {
   return {
-    proofigSubmitMode: config.proofigSubmitMode,
-    proofigApiBaseUrl: config.proofigApiBaseUrl,
-    proofigNotifyBaseUrl: config.proofigNotifyBaseUrl,
-    proofigSubmitTopic: config.proofigSubmitTopic,
+    submitMode: config.submitMode,
+    apiBaseUrl: config.apiBaseUrl,
+    notifyBaseUrl: config.notifyBaseUrl,
+    submitTopic: config.submitTopic,
+    clientId: config.clientId,
+    // clientSecret is never exposed to the client
   };
 }
 import { handleProofigAction, proofigStatus } from './server/actions.js';

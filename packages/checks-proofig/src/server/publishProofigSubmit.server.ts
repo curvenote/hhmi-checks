@@ -30,10 +30,10 @@ export async function publishProofigSubmitMessage(
   const { topic: topicName } = options;
   if (!topicName) {
     if (process.env.NODE_ENV === 'development') {
-      console.warn('proofigSubmitTopic not set; skipping Proofig submit publish in development');
+      console.warn('submitTopic not set; skipping Proofig submit publish in development');
       return 'testPubSubId';
     }
-    throw new Error('proofigSubmitTopic (options.topic) is required for PROOFIG_SUBMIT job');
+    throw new Error('submitTopic (options.topic) is required for PROOFIG_SUBMIT job');
   }
   const dataBase64 = Buffer.from(JSON.stringify(data), 'utf-8').toString('base64');
   if (process.env.NODE_ENV === 'development') {
@@ -53,7 +53,7 @@ export async function publishProofigSubmitMessage(
   const projectIdMatch = topicName.match(/^projects\/([^/]+)\//);
   if (!projectIdMatch) {
     throw new Error(
-      'proofigSubmitTopic must be full resource name (projects/PROJECT_ID/topics/TOPIC_NAME)',
+      'submitTopic must be full resource name (projects/PROJECT_ID/topics/TOPIC_NAME)',
     );
   }
   const config = await getConfig();

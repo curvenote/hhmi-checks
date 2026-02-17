@@ -98,24 +98,22 @@ export async function proofigSubmitStreamHandler(
       : (pdfFile.name ?? pdfFile.path ?? 'manuscript.pdf')
   ) as string;
 
-  const proofigApiBaseUrl =
-    (ctx.$config.app?.extensions?.['checks-proofig'] as { proofigApiBaseUrl?: string } | undefined)
-      ?.proofigApiBaseUrl ?? process.env.PROOFIG_API_BASE_URL;
-  if (!proofigApiBaseUrl?.trim()) {
+  const apiBaseUrl =
+    (ctx.$config.app?.extensions?.['checks-proofig'] as { apiBaseUrl?: string } | undefined)
+      ?.apiBaseUrl ?? process.env.PROOFIG_API_BASE_URL;
+  if (!apiBaseUrl?.trim()) {
     throw httpError(
       503,
-      'checks-proofig extension config missing proofigApiBaseUrl; cannot run PROOFIG_SUBMIT_STREAM job',
+      'checks-proofig extension config missing apiBaseUrl; cannot run PROOFIG_SUBMIT_STREAM job',
     );
   }
 
-  const proofigNotifyBaseUrl =
+  const notifyBaseUrl =
     (
-      ctx.$config.app?.extensions?.['checks-proofig'] as
-        | { proofigNotifyBaseUrl?: string }
-        | undefined
-    )?.proofigNotifyBaseUrl?.replace(/\/$/, '') ??
+      ctx.$config.app?.extensions?.['checks-proofig'] as { notifyBaseUrl?: string } | undefined
+    )?.notifyBaseUrl?.replace(/\/$/, '') ??
     new URL(ctx.request.url).origin + '/v1/hooks/proofig/notify';
-  const notify_url = `${proofigNotifyBaseUrl}/${payload.proofig_run_id}`;
+  const notify_url = `${notifyBaseUrl}/${payload.proofig_run_id}`;
 
   const submitPayload = {
     submit_req_id: payload.proofig_run_id,
@@ -141,7 +139,7 @@ export async function proofigSubmitStreamHandler(
     }
 
     rollingLog.push(rollingLogEntry('submitting to Proofig via streaming HTTP POST', {}));
-    const result = await postToProofigStream(proofigApiBaseUrl, params, pdfResponse, filename);
+    const result = await postToProofigStream(apiBaseUrl, params, pdfResponse, filename);
 
     // Transition run stages: initialPost completed, subimageDetection pending
     const receivedAt = new Date().toISOString();
