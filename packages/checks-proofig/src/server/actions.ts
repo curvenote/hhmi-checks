@@ -1,4 +1,3 @@
-import { data } from 'react-router';
 import { uuidv7 as uuid } from 'uuidv7';
 import {
   getPrismaClient,
@@ -11,6 +10,7 @@ import {
   buildFollowOnEnvelope,
   type CheckServiceRunData,
   type ExtensionCheckHandleActionArgs,
+  type ExtensionCheckHandleActionResult,
   type ExtensionCheckStatusArgs,
   KnownJobTypes,
 } from '@curvenote/scms-core';
@@ -73,17 +73,22 @@ export interface ChecksMetadataSection {
  * Both upload flow and checks page use the same intent, 'execute', to enqueue
  * the Proofig submit job.
  */
-export async function handleProofigAction(args: ExtensionCheckHandleActionArgs): Promise<Response> {
+export async function handleProofigAction(
+  args: ExtensionCheckHandleActionArgs,
+): Promise<ExtensionCheckHandleActionResult> {
   const { intent: rawIntent, workVersionId, ctx, serverExtensions } = args;
   const intent = rawIntent.startsWith('proofig:') ? rawIntent.split(':', 2)[1] : rawIntent;
 
   // ----- Execute path: upload flow or checks page with job creation -----
   if (intent === 'execute' && ctx) {
     if (!workVersionId) {
-      return data(
-        { error: { type: 'general', message: 'Work version ID is required for Proofig execute' } },
-        { status: 400 },
-      ) as unknown as Response;
+      return {
+        error: {
+          type: 'general',
+          message: 'Work version ID is required for Proofig execute',
+        },
+        status: 400,
+      };
     }
 
     const prisma = await getPrismaClient();
@@ -91,10 +96,7 @@ export async function handleProofigAction(args: ExtensionCheckHandleActionArgs):
       where: { id: workVersionId },
     });
     if (!workVersion) {
-      return data(
-        { error: { type: 'general', message: 'Work version not found' } },
-        { status: 404 },
-      ) as unknown as Response;
+      return { error: { type: 'general', message: 'Work version not found', status: 404 } };
     }
 
     const metadata =
@@ -104,15 +106,13 @@ export async function handleProofigAction(args: ExtensionCheckHandleActionArgs):
     const hasPdf = hasPdfInMetadata(metadata);
     const hasDocx = hasDocxInMetadata(metadata);
     if (!hasPdf && !hasDocx) {
-      return data(
-        {
-          error: {
-            type: 'general',
-            message: 'Proofig requires a PDF or a Word document (.docx) on this version.',
-          },
+      return {
+        error: {
+          type: 'general',
+          message: 'Proofig requires a PDF or a Word document (.docx) on this version.',
         },
-        { status: 400 },
-      ) as unknown as Response;
+        status: 400,
+      };
     }
 
     const timestamp = new Date().toISOString();
@@ -165,6 +165,8 @@ export async function handleProofigAction(args: ExtensionCheckHandleActionArgs):
               work_version_id: workVersionId,
               proofig_run_id: checkRunId,
             },
+            activity_type: 'CHECK_STARTED',
+            activity_data: { check: { kind: 'proofig' } },
           },
           extensionJobs,
         );
@@ -178,6 +180,8 @@ export async function handleProofigAction(args: ExtensionCheckHandleActionArgs):
             work_version_id: workVersionId,
             proofig_run_id: checkRunId,
           },
+          activity_type: 'CHECK_STARTED' as const,
+          activity_data: { check: { kind: 'proofig' as const } },
         };
         await jobs.invoke(
           ctx as ServerContext,
@@ -191,6 +195,8 @@ export async function handleProofigAction(args: ExtensionCheckHandleActionArgs):
               conversion_type: 'docx-lowriter-pdf',
             },
             follow_on: buildFollowOnEnvelope(followOnSpec),
+            activity_type: 'CONVERTER_TASK_STARTED',
+            activity_data: { converter: { target: 'pdf', type: 'docx-lowriter-pdf' } },
           },
           extensionJobs,
         );
@@ -211,32 +217,33 @@ export async function handleProofigAction(args: ExtensionCheckHandleActionArgs):
           serviceData: nextServiceData,
         } satisfies CheckServiceRunData<ProofigDataSchema>;
       });
-      return data(
-        {
-          error: {
-            type: 'general',
-            message: err instanceof Error ? err.message : 'Proofig submit job failed',
-          },
+      return {
+        error: {
+          type: 'general',
+          message: err instanceof Error ? err.message : 'Proofig submit job failed',
         },
-        { status: 500 },
-      ) as unknown as Response;
+        status: 500,
+      };
     }
 
-    return data({ success: true }) as unknown as Response;
+    return { success: true };
   }
 
   // Any other intent is unknown
   if (intent !== 'execute') {
-    return data(
-      { error: { type: 'general', message: 'Unknown intent' } },
-      { status: 400 },
-    ) as unknown as Response;
+    return {
+      error: { type: 'general', message: 'Unknown intent' },
+      status: 400,
+    };
   }
   // If we got here with a recognised intent but without ctx/createJob, we can't execute.
-  return data(
-    { error: { type: 'general', message: 'Proofig execute requires context and job creator' } },
-    { status: 400 },
-  ) as unknown as Response;
+  return {
+    error: {
+      type: 'general',
+      message: 'Proofig execute requires context and job creator',
+    },
+    status: 400,
+  };
 }
 
 /**

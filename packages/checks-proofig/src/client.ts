@@ -12,6 +12,8 @@ import type {
 import { ImageIntegrityIcon, ProofigLogoMono, ProofigLogo } from './icons.js';
 import { ImageIntegrityTaskCard } from './ImageIntegrityTaskCard.js';
 import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSection.js';
+import { ImageIntegritySectionHeader } from './components/ImageIntegritySectionHeader.js';
+import ExtensionAdminCard from './components/ExtensionAdminCard.js';
 
 export const id = 'checks-proofig';
 export const name = 'Image Integrity Checks';
@@ -61,13 +63,18 @@ export function getChecks(): ClientExtensionCheckService[] {
       id: 'proofig',
       name: 'Image Integrity',
       description: 'Detect potential issues with images in your work.',
-      checksSectionComponent: ImageIntegrityChecksSection,
+      sectionHeaderComponent: ImageIntegritySectionHeader,
+      sectionActivityComponent: ImageIntegrityChecksSection,
     },
   ];
 }
 
 export function registerNavigation(): NavigationRegistration[] {
   return [];
+}
+
+export function getExtensionAdminCard() {
+  return ExtensionAdminCard;
 }
 
 export const extension: ClientExtension = {
@@ -78,4 +85,5 @@ export const extension: ClientExtension = {
   getIcons,
   getChecks,
   registerNavigation,
+  getExtensionAdminCard,
 } as const;

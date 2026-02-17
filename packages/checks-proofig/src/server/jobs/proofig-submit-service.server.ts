@@ -10,7 +10,7 @@ import {
   createHandshakeToken,
   jobs,
 } from '@curvenote/scms-server';
-import { publishProofigSubmitMessage } from '../../backend/publishProofigSubmit.server.js';
+import { publishProofigSubmitMessage } from '../publishProofigSubmit.server.js';
 import type { WorkVersionMetadataPayload } from '@curvenote/common';
 import { rollingLogEntry, workVersionToPayload } from './proofig-submit.utils.js';
 

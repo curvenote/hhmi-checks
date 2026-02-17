@@ -1,7 +1,6 @@
 import { useFetcher } from 'react-router';
 import { useEffect } from 'react';
-import { SectionWithHeading, primitives, ui, useRevalidateOnInterval } from '@curvenote/scms-core';
-import { ScanSearch } from 'lucide-react';
+import { ui, useRevalidateOnInterval } from '@curvenote/scms-core';
 import { Logos } from '../client.js';
 import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
 import { ProofigProgressComponent } from './ProofigProgressComponent.js';
@@ -36,40 +35,30 @@ export function ImageIntegrityChecksSection({ metadata }: ImageIntegrityChecksSe
     if (err?.message) ui.toastError(err.message);
   }, [fetcher.state, fetcher.data, checkedAvailableOrInProgress]);
 
-  const heading = checkedAvailableOrInProgress ? (
-    <div className="flex gap-2 justify-between items-center">
-      <div>Image Integrity Checks</div>
-      <Logos.ProofigLogo className="h-8" />
-    </div>
-  ) : (
-    <div>Image Integrity Checks</div>
-  );
   return (
-    <SectionWithHeading heading={heading} icon={ScanSearch}>
-      <primitives.Card lift className="p-6">
-        {checkedAvailableOrInProgress ? (
-          <ProofigProgressComponent proofigData={metadata} />
-        ) : (
-          <CTAPlaceholderPanel
-            logo={<Logos.ProofigLogo className="mb-4 h-16" />}
-            title="No image integrity checks run yet"
-            description="Run image integrity checks to detect potential issues with images in your work."
-            action={
-              <fetcher.Form method="post">
-                <ui.StatefulButton
-                  type="submit"
-                  variant="default"
-                  name="intent"
-                  value="proofig:execute"
-                  busy={isSubmitting}
-                >
-                  Run checks now
-                </ui.StatefulButton>
-              </fetcher.Form>
-            }
-          />
-        )}
-      </primitives.Card>
-    </SectionWithHeading>
+    <div>
+      {checkedAvailableOrInProgress ? (
+        <ProofigProgressComponent proofigData={metadata} />
+      ) : (
+        <CTAPlaceholderPanel
+          logo={<Logos.ProofigLogo className="mb-4 h-16" />}
+          title="No image integrity checks run yet"
+          description="Run image integrity checks to detect potential issues with images in your work."
+          action={
+            <fetcher.Form method="post">
+              <ui.StatefulButton
+                type="submit"
+                variant="default"
+                name="intent"
+                value="proofig:execute"
+                busy={isSubmitting}
+              >
+                Run checks now
+              </ui.StatefulButton>
+            </fetcher.Form>
+          }
+        />
+      )}
+    </div>
   );
 }

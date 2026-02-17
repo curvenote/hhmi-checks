@@ -1,5 +1,14 @@
 import type { ServerExtension, ExtensionCheckService, JobRegistration } from '@curvenote/scms-core';
 import { extension as clientExtension } from './client.js';
+
+function getSafeAdminConfig(config: Record<string, unknown>): Record<string, unknown> {
+  return {
+    proofigSubmitMode: config.proofigSubmitMode,
+    proofigApiBaseUrl: config.proofigApiBaseUrl,
+    proofigNotifyBaseUrl: config.proofigNotifyBaseUrl,
+    proofigSubmitTopic: config.proofigSubmitTopic,
+  };
+}
 import { handleProofigAction, proofigStatus } from './server/actions.js';
 import {
   PROOFIG_SUBMIT,
@@ -12,18 +21,21 @@ import {
 } from './server/jobs/proofig-submit-stream.server.js';
 import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSection.js';
 import { registerRoutes } from './routes.js';
+import { ImageIntegritySectionHeader } from './components/ImageIntegritySectionHeader.js';
 
 export { PROOFIG_SUBMIT, PROOFIG_SUBMIT_SERVICE, PROOFIG_SUBMIT_STREAM };
 
 export const extension: ServerExtension = {
   ...clientExtension,
+  getSafeAdminConfig,
   getChecks: (): ExtensionCheckService[] => {
     return [
       {
         id: 'proofig',
         name: 'Image Integrity',
         description: 'Detect potential issues with images in your work.',
-        checksSectionComponent: ImageIntegrityChecksSection,
+        sectionHeaderComponent: ImageIntegritySectionHeader,
+        sectionActivityComponent: ImageIntegrityChecksSection,
         handleAction: handleProofigAction,
         handleStatus: proofigStatus,
       },
