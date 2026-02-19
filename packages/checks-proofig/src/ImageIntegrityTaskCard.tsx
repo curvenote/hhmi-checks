@@ -6,7 +6,7 @@ export function ImageIntegrityTaskCard() {
   const navigate = useNavigate();
 
   const handleClick = () => {
-    navigate('/app/works');
+    navigate('/app/works/new');
   };
 
   return (
