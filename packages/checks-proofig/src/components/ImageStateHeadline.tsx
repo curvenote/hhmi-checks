@@ -1,3 +1,5 @@
+import { plural } from '@curvenote/scms-core';
+
 interface ImageStateHeadlineProps {
   /**
    * Total number of images
@@ -27,11 +29,7 @@ export function ImageStateHeadline({ total, bad, waiting, good }: ImageStateHead
     return (
       <div className="space-y-1">
         <div className="text-3xl font-medium text-[#1B8364]">All Clear</div>
-        <div className="text-base font-bold">
-          {good > 0
-            ? `${good}/${total} figures were flagged as suspicious, but approved by you`
-            : 'No issues detected with your figures'}
-        </div>
+        <div className="text-base font-bold">No issues flagged with your figures</div>
       </div>
     );
   }
@@ -40,18 +38,15 @@ export function ImageStateHeadline({ total, bad, waiting, good }: ImageStateHead
   if (hasOnlyConfirmedProblems) {
     return (
       <div className="space-y-1">
-        <div className="text-3xl font-medium text-[#9B1E1E]">
-          {bad} {bad === 1 ? 'Problem' : 'Problems'}
-        </div>
+        <div className="text-3xl font-medium text-[#9B1E1E]">{plural('%s Problem(s)', bad)}</div>
         <div className="text-base font-bold">
-          {bad} {bad === 1 ? 'figure' : 'figures'} were confirmed as problematic
+          {plural('%s figure(s)', bad)} were confirmed as problematic
         </div>
       </div>
     );
   }
 
   // State 3: Ratio (otherwise - has waiting items)
-  const flagged = waiting + good;
   return (
     <div className="space-y-1">
       <div className="text-3xl font-medium text-gray-900 dark:text-gray-100">
@@ -61,23 +56,18 @@ export function ImageStateHeadline({ total, bad, waiting, good }: ImageStateHead
       <div className="text-base font-bold">
         {bad > 0 && waiting > 0 && (
           <>
-            {bad} {bad === 1 ? 'figure' : 'figures'} marked problematic, {waiting}{' '}
-            {good > 0 ? 'still ' : ''}waiting on review
+            {plural('%s figure(s)', bad)} marked problematic, {waiting} {good > 0 ? 'still ' : ''}
+            waiting on review
           </>
         )}
         {bad === 0 && waiting > 0 && (
           <>
-            {flagged} {flagged === 1 ? 'figure was' : 'figures were'} flagged as suspicious
-            {good > 0
-              ? `, ${waiting} ${good > 0 ? 'still ' : ''}waiting on review`
-              : ' and waiting on review'}
+            {plural('%s figure(s)', waiting)} {plural('(is|are)', waiting)}{' '}
+            {good > 0 ? 'still ' : ''}
+            waiting on review
           </>
         )}
-        {bad > 0 && waiting === 0 && (
-          <>
-            {bad} {bad === 1 ? 'figure' : 'figures'} marked problematic
-          </>
-        )}
+        {bad > 0 && waiting === 0 && <>{plural('%s figure(s)', bad)} marked problematic</>}
       </div>
     </div>
   );

@@ -23,4 +23,3 @@ export async function registerRoutes(_appConfig: Config): Promise<RouteRegistrat
     },
   ];
 }
-

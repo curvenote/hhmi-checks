@@ -1,4 +1,3 @@
-import { useFetcher } from 'react-router';
 import { Logos } from '../client.js';
 import { MissingReportUrlIcon } from './MissingReportUrlIcon.js';
 import { SegmentedProgressBar } from './SegmentedProgressBar.js';
@@ -210,19 +209,12 @@ export function IntegrityDetectionProgressArea({ data }: { data: ProofigStage })
         message={
           <div>
             <span className="font-bold">Running image integrity checks...</span> Proofig is checking
-            the integrity of your sub-images. This may take some time, you can leave this page and
-            come back later to see the results.
+            the integrity of your sub-images. This may take several minutes, you can leave this page
+            and come back later to see the results.
           </div>
         }
       />
-      <StageProgressArea
-        step={4}
-        numSteps={4}
-        message="This can take from a few minutes to an hour..."
-      />
-      <div className="flex justify-end">
-        <EmailNotificationCheckbox />
-      </div>
+      <StageProgressArea step={4} numSteps={4} message="This may take several minutes..." />
     </div>
   );
 }
@@ -253,30 +245,5 @@ export function StageProgressArea({
         <div className="text-xs text-left text-muted-foreground">{message}</div>
       </div>
     </div>
-  );
-}
-
-export function EmailNotificationCheckbox() {
-  const fetcher = useFetcher();
-
-  return (
-    <fetcher.Form method="POST" className="flex gap-2 items-center">
-      <input type="hidden" name="intent" value="email-on-detection-complete" />
-      <ui.Checkbox
-        name="emailOnComplete"
-        value="true"
-        defaultChecked={true}
-        onChange={(e) => {
-          // Auto-submit on change
-          const formData = new FormData();
-          formData.append('intent', 'email-on-detection-complete');
-          // formData.append('emailOnComplete', e.target.checked ? 'true' : 'false');
-          fetcher.submit(formData, { method: 'POST' });
-        }}
-      />
-      <label htmlFor="emailOnComplete" className="text-sm cursor-pointer text-muted-foreground">
-        Email me when done
-      </label>
-    </fetcher.Form>
   );
 }

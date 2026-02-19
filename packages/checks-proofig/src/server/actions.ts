@@ -123,6 +123,7 @@ export async function handleProofigAction(
         date_modified: timestamp,
         kind: 'proofig',
         work_version_id: workVersionId,
+        created_by_id: ctx.user?.id ?? undefined,
         data: {
           status: 'healthy',
           serviceDataSchema: {},

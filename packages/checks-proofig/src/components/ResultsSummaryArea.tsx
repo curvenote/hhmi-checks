@@ -14,8 +14,7 @@ export function ResultsSummaryArea({
 }) {
   const { total, waiting, bad, good } = getProofigSummaryCounts(proofigData);
   const reportUrl = proofigData?.reportUrl;
-  const outcome = proofigData?.stages?.resultsReview?.outcome;
-  const showViewReportButton = reportUrl && outcome !== 'clean';
+  const showViewReportButton = !!reportUrl;
 
   return (
     <div className="flex flex-col gap-6">
