@@ -8,6 +8,7 @@ import { resolveRoutePath } from '@curvenote/scms-server';
  * Registers routes for the Proofig checks extension.
  *
  * Webhook routes are mounted under `/v1/api/hooks/*` via `attachTo: 'v1/hooks'`.
+ * App route for manuscript checks is mounted at `/app/manuscript-checks` via `attachTo: 'app'`.
  */
 export async function registerRoutes(_appConfig: Config): Promise<RouteRegistration[]> {
   return [
@@ -18,6 +19,16 @@ export async function registerRoutes(_appConfig: Config): Promise<RouteRegistrat
           route(
             'proofig/notify/:id',
             resolveRoutePath(import.meta.url, 'routes/v1.hooks.proofig.notify.$id/route.tsx'),
+          ),
+        ] satisfies RouteConfigEntry[],
+    },
+    {
+      attachTo: 'app',
+      register: () =>
+        [
+          route(
+            'manuscript-checks',
+            resolveRoutePath(import.meta.url, 'routes/manuscript-checks/route.tsx'),
           ),
         ] satisfies RouteConfigEntry[],
     },
