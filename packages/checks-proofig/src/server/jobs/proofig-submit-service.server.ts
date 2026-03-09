@@ -10,6 +10,7 @@ import {
   createHandshakeToken,
   jobs,
 } from '@curvenote/scms-server';
+import { getProofigConfigWithOverrides } from '../config.server.js';
 import { publishProofigSubmitMessage } from '../publishProofigSubmit.server.js';
 import type { WorkVersionMetadataPayload } from '@curvenote/common';
 import { rollingLogEntry, workVersionToPayload } from './proofig-submit.utils.js';
@@ -40,17 +41,6 @@ export async function proofigSubmitHandler(
 ) {
   const rollingLog: { message: string; data: unknown }[] = [];
 
-  const extConfig = ctx.$config.app?.extensions?.['checks-proofig'] as
-    | { submitTopic?: string; notifyBaseUrl?: string }
-    | undefined;
-  const submitTopic = extConfig?.submitTopic;
-  if (!submitTopic) {
-    throw httpError(
-      503,
-      'checks-proofig extension config missing submitTopic; cannot run PROOFIG_SUBMIT job',
-    );
-  }
-
   const parseResult = CreateProofigSubmitJobPayloadSchema.safeParse(data.payload);
   if (!parseResult.success) {
     const msg = parseResult.error.issues.map((e: { message: string }) => e.message).join('; ');
@@ -65,6 +55,17 @@ export async function proofigSubmitHandler(
   );
 
   const prisma = await getPrismaClient();
+  const baseConfig =
+    (ctx.$config.app?.extensions?.['checks-proofig'] as Record<string, unknown>) ?? {};
+  const extConfig = await getProofigConfigWithOverrides(baseConfig, prisma);
+  const submitTopic = extConfig.submitTopic as string | undefined;
+  if (!submitTopic) {
+    throw httpError(
+      503,
+      'checks-proofig extension config missing submitTopic; cannot run PROOFIG_SUBMIT job',
+    );
+  }
+
   const workVersionRow = await prisma.workVersion.findUnique({
     where: { id: payload.work_version_id },
   });
@@ -96,7 +97,7 @@ export async function proofigSubmitHandler(
   }
 
   const notifyBaseUrl =
-    extConfig.notifyBaseUrl?.replace(/\/$/, '') ??
+    (extConfig.notifyBaseUrl as string | undefined)?.replace(/\/$/, '') ??
     new URL(ctx.request.url).origin + '/v1/hooks/proofig/notify';
   const notify_url = `${notifyBaseUrl}/${payload.proofig_run_id}`;
 

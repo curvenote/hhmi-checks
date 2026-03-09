@@ -19,7 +19,7 @@
     "lint:format": "npx prettier --check \"src/**/*.ts\""
   },
   "dependencies": {
-    "@curvenote/scms-tasks": "^0.14.3",
+    "@curvenote/scms-tasks": "*",
     "express": "^4.18.1"
   },
   "devDependencies": {

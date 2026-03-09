@@ -21,7 +21,7 @@ export function ImageIntegrityTaskCard() {
       >
         <div className="flex gap-2 items-center mx-2 h-full">
           <div className="flex flex-shrink-0 justify-center items-center w-20 h-20">
-            <FileCheck className="w-16 h-16 text-blue-600" strokeWidth={1.5} />
+            <FileCheck className="w-16 h-16 text-green-700" strokeWidth={1.25} />
           </div>
           <div className="flex-1 text-left">
             <h3 className="text-lg font-normal">Run Image Integrity Checks</h3>

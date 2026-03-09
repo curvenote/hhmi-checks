@@ -14,7 +14,7 @@ import { ImageIntegrityTaskCard } from './ImageIntegrityTaskCard.js';
 import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSection.js';
 import { ImageIntegritySectionHeader } from './components/ImageIntegritySectionHeader.js';
 import { ProofigSummaryBadge } from './components/ProofigSummaryBadge.js';
-import ExtensionAdminCard from './components/ExtensionAdminCard.js';
+import ExtensionAdminCard from './admin/ExtensionAdminCard.js';
 
 export const id = 'checks-proofig';
 export const name = 'Image Integrity Checks';

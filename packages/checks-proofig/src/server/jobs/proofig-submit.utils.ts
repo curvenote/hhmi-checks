@@ -193,7 +193,7 @@ export async function postToProofigStream(
   );
 
   const base = baseUrl.replace(/\/$/, '');
-  const url = `${base}/Curvenote/api/submit`;
+  const url = `${base}/api/submit`;
 
   // duplex: 'half' is required by Node/undici for streaming request bodies. It is correctly typed in
   // undici-types (and thus in @types/node when Node wins), but our tsconfig loads vite + vitest

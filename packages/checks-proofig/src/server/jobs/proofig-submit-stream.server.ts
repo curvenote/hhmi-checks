@@ -12,6 +12,7 @@ import {
   jobs,
   safeCheckServiceRunDataUpdate,
 } from '@curvenote/scms-server';
+import { getProofigConfigWithOverrides } from '../config.server.js';
 import {
   buildProofigSubmitParams,
   getPdfFileFromMetadata,
@@ -98,9 +99,11 @@ export async function proofigSubmitStreamHandler(
       : (pdfFile.name ?? pdfFile.path ?? 'manuscript.pdf')
   ) as string;
 
+  const baseConfig =
+    (ctx.$config.app?.extensions?.['checks-proofig'] as Record<string, unknown>) ?? {};
+  const mergedConfig = await getProofigConfigWithOverrides(baseConfig, prisma);
   const apiBaseUrl =
-    (ctx.$config.app?.extensions?.['checks-proofig'] as { apiBaseUrl?: string } | undefined)
-      ?.apiBaseUrl ?? process.env.PROOFIG_API_BASE_URL;
+    (mergedConfig.apiBaseUrl as string | undefined) ?? process.env.PROOFIG_API_BASE_URL;
   if (!apiBaseUrl?.trim()) {
     throw httpError(
       503,
@@ -109,9 +112,7 @@ export async function proofigSubmitStreamHandler(
   }
 
   const notifyBaseUrl =
-    (
-      ctx.$config.app?.extensions?.['checks-proofig'] as { notifyBaseUrl?: string } | undefined
-    )?.notifyBaseUrl?.replace(/\/$/, '') ??
+    (mergedConfig.notifyBaseUrl as string | undefined)?.replace(/\/$/, '') ??
     new URL(ctx.request.url).origin + '/v1/hooks/proofig/notify';
   const notify_url = `${notifyBaseUrl}/${payload.proofig_run_id}`;
 
