@@ -13,6 +13,7 @@ import {
   safeCheckServiceRunDataUpdate,
 } from '@curvenote/scms-server';
 import { getProofigConfigWithOverrides } from '../config.server.js';
+import { getProofigToken } from '../proofigAuth.server.js';
 import {
   buildProofigSubmitParams,
   getPdfFileFromMetadata,
@@ -111,6 +112,9 @@ export async function proofigSubmitStreamHandler(
     );
   }
 
+  // Carry out Proofig auth handshake and get token (cached in Object table when fresh)
+  const token = await getProofigToken(apiBaseUrl, mergedConfig, prisma);
+
   const notifyBaseUrl =
     (mergedConfig.notifyBaseUrl as string | undefined)?.replace(/\/$/, '') ??
     new URL(ctx.request.url).origin + '/v1/hooks/proofig/notify';
@@ -121,7 +125,7 @@ export async function proofigSubmitStreamHandler(
     notify_url,
     workVersion: workVersionPayload,
   };
-  const params = buildProofigSubmitParams(submitPayload, filename);
+  const submitParams = buildProofigSubmitParams(submitPayload, filename);
 
   const runningJob = await jobs.dbUpdateJob(job.id, {
     status: JobStatus.RUNNING,
@@ -140,7 +144,13 @@ export async function proofigSubmitStreamHandler(
     }
 
     rollingLog.push(rollingLogEntry('submitting to Proofig via streaming HTTP POST', {}));
-    const result = await postToProofigStream(apiBaseUrl, params, pdfResponse, filename);
+    const result = await postToProofigStream(
+      apiBaseUrl,
+      submitParams,
+      pdfResponse,
+      filename,
+      token,
+    );
 
     // Transition run stages: initialPost completed, subimageDetection pending
     const receivedAt = new Date().toISOString();

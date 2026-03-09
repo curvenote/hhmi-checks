@@ -11,6 +11,7 @@ import {
   jobs,
 } from '@curvenote/scms-server';
 import { getProofigConfigWithOverrides } from '../config.server.js';
+import { getProofigToken } from '../proofigAuth.server.js';
 import { publishProofigSubmitMessage } from '../publishProofigSubmit.server.js';
 import type { WorkVersionMetadataPayload } from '@curvenote/common';
 import { rollingLogEntry, workVersionToPayload } from './proofig-submit.utils.js';
@@ -65,6 +66,16 @@ export async function proofigSubmitHandler(
       'checks-proofig extension config missing submitTopic; cannot run PROOFIG_SUBMIT job',
     );
   }
+  const apiBaseUrl =
+    (extConfig.apiBaseUrl as string | undefined) ?? process.env.PROOFIG_API_BASE_URL;
+  if (!apiBaseUrl?.trim()) {
+    throw httpError(
+      503,
+      'checks-proofig extension config missing apiBaseUrl; required for Proofig auth in PROOFIG_SUBMIT job',
+    );
+  }
+
+  const token = await getProofigToken(apiBaseUrl, extConfig as Record<string, unknown>, prisma);
 
   const workVersionRow = await prisma.workVersion.findUnique({
     where: { id: payload.work_version_id },
@@ -106,6 +117,7 @@ export async function proofigSubmitHandler(
     workVersion: workVersionPayload,
     submit_req_id: payload.proofig_run_id,
     notify_url,
+    access_token: token,
   };
   rollingLog.push(rollingLogEntry('proofig submit payload built', { taskId: job.id }));
 

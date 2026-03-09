@@ -146,6 +146,7 @@ export async function postToProofigStream(
   params: ProofigSubmitParams,
   pdfResponse: Response,
   pdfFilename: string,
+  accessToken: string,
 ): Promise<ProofigSubmitResponse> {
   const boundary = '----ProofigSubmitBoundary' + Math.random().toString(36).slice(2);
   const crlf = '\r\n';
@@ -198,12 +199,14 @@ export async function postToProofigStream(
   // duplex: 'half' is required by Node/undici for streaming request bodies. It is correctly typed in
   // undici-types (and thus in @types/node when Node wins), but our tsconfig loads vite + vitest
   // types, so global RequestInit can be the DOM one (no duplex). We widen so this file type-checks.
+  const headers: Record<string, string> = {
+    'Content-Type': `multipart/form-data; boundary=${boundary}`,
+    Authorization: `Bearer ${accessToken}`,
+    // No Content-Length: rely on chunked transfer encoding
+  };
   const init: RequestInit & { duplex?: 'half' } = {
     method: 'POST',
-    headers: {
-      'Content-Type': `multipart/form-data; boundary=${boundary}`,
-      // No Content-Length: rely on chunked transfer encoding
-    },
+    headers,
     duplex: 'half',
     body: bodyStream as unknown as BodyInit,
   };
