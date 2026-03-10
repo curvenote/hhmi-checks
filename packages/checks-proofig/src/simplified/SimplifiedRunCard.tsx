@@ -19,6 +19,11 @@ export function SimplifiedRunCard({ run }: { run: CheckServiceRunWithVersion }) 
       <div className="space-y-3">
         <div>
           <div className="text-3xl font-medium">{run.work_version.title || run.id}</div>
+          {run.work_version.authors?.length ? (
+            <div className="text-sm text-muted-foreground mt-0.5">
+              {run.work_version.authors.join(', ')}
+            </div>
+          ) : null}
           <div className="text-sm text-muted-foreground">
             Last modified: {formatDate(run.date_modified, 'MMM d, yyyy h:mm a')}
           </div>

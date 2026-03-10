@@ -1,5 +1,6 @@
 import { Logos } from '../client.js';
 import { MissingReportUrlIcon } from './MissingReportUrlIcon.js';
+import { ReportNoLongerAvailable } from './ReportNoLongerAvailable.js';
 import { SegmentedProgressBar } from './SegmentedProgressBar.js';
 import type { ProofigStage } from '../schema.js';
 import { ui } from '@curvenote/scms-core';
@@ -161,9 +162,11 @@ export function SubimageDetectionProgressArea({ data }: { data: ProofigStage }) 
 export function SubimageApprovalProgressArea({
   data,
   reportUrl,
+  deleted,
 }: {
   data: ProofigStage;
   reportUrl?: string;
+  deleted?: boolean;
 }) {
   if (data.status === 'error')
     return (
@@ -182,15 +185,21 @@ export function SubimageApprovalProgressArea({
       />
       <StageProgressArea step={3} numSteps={4} message="Awaiting your review of sub-images..." />
       <div className="flex gap-2 justify-end items-center">
-        {!reportUrl && <MissingReportUrlIcon />}
-        <ui.Button variant="default" asChild disabled={!reportUrl}>
-          <a href={reportUrl} target="_blank" rel="noopener noreferrer">
-            <div className="flex gap-1 items-center">
-              <div>Approve sub-images at</div>
-              <Logos.ProofigLogoMono className="h-7" />
-            </div>
-          </a>
-        </ui.Button>
+        {deleted ? (
+          <ReportNoLongerAvailable />
+        ) : (
+          <>
+            {!reportUrl && <MissingReportUrlIcon />}
+            <ui.Button variant="default" asChild disabled={!reportUrl}>
+              <a href={reportUrl} target="_blank" rel="noopener noreferrer">
+                <div className="flex gap-1 items-center">
+                  <div>Approve sub-images at</div>
+                  <Logos.ProofigLogoMono className="h-7" />
+                </div>
+              </a>
+            </ui.Button>
+          </>
+        )}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import type { ProofigDataSchema } from '../schema.js';
 import { getProofigSummaryCounts } from '../utils/proofigSummary.js';
 import { plural, ui } from '@curvenote/scms-core';
 import { ProofigLogoMono } from '../icons.js';
+import { ReportNoLongerAvailable } from '../components/ReportNoLongerAvailable.js';
 
 export function SimplifiedResultsSummary({
   proofigData,
@@ -29,7 +30,7 @@ export function SimplifiedResultsSummary({
       ) : hasOnlyConfirmedProblems ? (
         <div className="space-y-1">
           <div className="text-3xl font-medium text-[#9B1E1E]">{plural('%s Problem(s)', bad)}</div>
-          <div className="text-base font-bold">
+          <div className="text-base font-bold text-[#9B1E1E]">
             {plural('%s figure(s)', bad)} confirmed as problematic
           </div>
         </div>
@@ -42,8 +43,10 @@ export function SimplifiedResultsSummary({
           <div className="text-base font-bold">
             {bad > 0 && waiting > 0 && (
               <>
-                {plural('%s figure(s)', bad)} marked problematic, {waiting}{' '}
-                {good > 0 ? 'still ' : ''}waiting on review
+                <span className="text-[#9B1E1E]">
+                  {plural('%s figure(s)', bad)} marked problematic
+                </span>
+                , {waiting} {good > 0 ? 'still ' : ''}waiting on review
               </>
             )}
             {bad === 0 && waiting > 0 && (
@@ -59,16 +62,20 @@ export function SimplifiedResultsSummary({
       <div className="text-sm text-muted-foreground">
         Total: {total} · No issues: {good} · Awaiting review: {waiting} · Flagged: {bad}
       </div>
-      {reportUrl && (
-        <ui.Button variant="default" asChild>
-          <a href={reportUrl} target="_blank" rel="noopener noreferrer">
-            <span className="flex gap-2 items-center">
-              <span>Open report in</span>
-              <ProofigLogoMono className="h-7" />
-            </span>
-          </a>
-        </ui.Button>
-      )}
+      <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
+        {proofigData?.deleted ? (
+          <ReportNoLongerAvailable />
+        ) : reportUrl ? (
+          <ui.Button variant="default" asChild>
+            <a href={reportUrl} target="_blank" rel="noopener noreferrer">
+              <span className="flex gap-2 items-center">
+                <span>Open report in</span>
+                <ProofigLogoMono className="h-7" />
+              </span>
+            </a>
+          </ui.Button>
+        ) : null}
+      </div>
     </div>
   );
 }

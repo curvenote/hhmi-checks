@@ -40,6 +40,7 @@ export function ProofigProgressComponent({ proofigData }: ProofigProgressCompone
       <SubimageApprovalProgressArea
         data={stages.subimageSelection}
         reportUrl={proofigData?.reportUrl}
+        deleted={proofigData?.deleted}
       />
     );
   } else if (stages.integrityDetection && currentStage === 'integrityDetection') {

@@ -26,6 +26,7 @@ export function SimplifiedProgress({ proofigData }: SimplifiedProgressProps) {
       <SimplifiedSubimageApproval
         data={stages.subimageSelection}
         reportUrl={proofigData?.reportUrl}
+        deleted={proofigData?.deleted}
       />
     );
   }

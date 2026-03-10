@@ -15,6 +15,7 @@ export type CheckServiceRunWithVersion = {
     id: string;
     title: string;
     work_id: string;
+    authors?: string[];
     metadata?: unknown;
     work?: { cdn: string | null } | null;
   };

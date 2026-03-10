@@ -6,6 +6,7 @@ import { ImageStateSummary } from './ImageStateSummary.js';
 import { ImageStateLegend } from './ImageStateLegend.js';
 import { ImageStateHeadline } from './ImageStateHeadline.js';
 import { MissingReportUrlIcon } from './MissingReportUrlIcon.js';
+import { ReportNoLongerAvailable } from './ReportNoLongerAvailable.js';
 
 export function ResultsSummaryArea({
   proofigData,
@@ -14,7 +15,8 @@ export function ResultsSummaryArea({
 }) {
   const { total, waiting, bad, good } = getProofigSummaryCounts(proofigData);
   const reportUrl = proofigData?.reportUrl;
-  const showViewReportButton = !!reportUrl;
+  const deleted = proofigData?.deleted;
+  const showViewReportButton = !!reportUrl && !deleted;
 
   return (
     <div className="flex flex-col gap-6">
@@ -25,7 +27,9 @@ export function ResultsSummaryArea({
       </div>
 
       <div className="flex gap-2 justify-end items-center">
-        {showViewReportButton && (
+        {deleted ? (
+          <ReportNoLongerAvailable />
+        ) : showViewReportButton ? (
           <>
             {!proofigData?.reportUrl && <MissingReportUrlIcon />}
             <ui.Button variant="default" asChild disabled={!proofigData?.reportUrl}>
@@ -37,7 +41,7 @@ export function ResultsSummaryArea({
               </a>
             </ui.Button>
           </>
-        )}
+        ) : null}
       </div>
     </div>
   );

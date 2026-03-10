@@ -62,7 +62,9 @@ export async function getDraftForManuscriptChecks(ctx: SecureContext): Promise<G
       workId = existing.id;
       workVersionId = existing.versions[0].id;
     } else {
-      const newWork = await dbCreateDraftFileWork(ctx, 'manuscript-checks');
+      const displayName = ctx.user.display_name?.trim();
+      const initialAuthors = displayName ? [displayName] : [];
+      const newWork = await dbCreateDraftFileWork(ctx, 'manuscript-checks', initialAuthors);
       workId = newWork.id;
       workVersionId = newWork.versions[0].id;
     }
