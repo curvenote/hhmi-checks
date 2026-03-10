@@ -27,6 +27,41 @@ import {
   markInitialPostError,
 } from '../stateMachine.server.js';
 
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error
+    ? err.message
+    : ((err as { message?: string })?.message ?? String(err));
+}
+
+async function handleProofigSubmitJobFailure(
+  jobId: string,
+  proofigRunId: string,
+  errorMessage: string,
+  rollingLog: { message: string; data: unknown }[],
+): Promise<Awaited<ReturnType<typeof jobs.dbUpdateJob>>> {
+  const updatedJob = await jobs.dbUpdateJob(jobId, {
+    status: JobStatus.FAILED,
+    message: errorMessage,
+    results: {
+      rollingLog,
+    },
+  });
+  await safeCheckServiceRunDataUpdate(proofigRunId, (runData?: Prisma.JsonValue) => {
+    const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
+    const nextServiceData = markInitialPostError(
+      current.serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
+      errorMessage,
+      new Date().toISOString(),
+    );
+    return {
+      ...current,
+      status: 'error',
+      serviceData: nextServiceData,
+    } satisfies CheckServiceRunData<ProofigDataSchema>;
+  });
+  return updatedJob;
+}
+
 /** Job type for Proofig submit via in-process streaming HTTP call. */
 export const PROOFIG_SUBMIT_STREAM = 'PROOFIG_SUBMIT_STREAM';
 
@@ -120,30 +155,14 @@ export async function proofigSubmitStreamHandler(
   try {
     token = await getProofigToken(apiBaseUrl, mergedConfig, prisma);
   } catch (err) {
-    const errorMessage =
-      err instanceof Error ? err.message : ((err as { message?: string })?.message ?? String(err));
+    const errorMessage = getErrorMessage(err);
     console.error('[proofigSubmitStreamHandler] Failed to get Proofig token', err);
-    const failedAuthJob = await jobs.dbUpdateJob(job.id, {
-      status: JobStatus.FAILED,
-      message: errorMessage,
-      results: {
-        rollingLog,
-      },
-    });
-    // update the proofig run data: mark initialPost stage as error and set run status
-    await safeCheckServiceRunDataUpdate(payload.proofig_run_id, (runData?: Prisma.JsonValue) => {
-      const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
-      const nextServiceData = markInitialPostError(
-        current.serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
-        errorMessage,
-        new Date().toISOString(),
-      );
-      return {
-        ...current,
-        status: 'error',
-        serviceData: nextServiceData,
-      } satisfies CheckServiceRunData<ProofigDataSchema>;
-    });
+    const failedAuthJob = await handleProofigSubmitJobFailure(
+      job.id,
+      payload.proofig_run_id,
+      errorMessage,
+      rollingLog,
+    );
     return failedAuthJob;
   }
 
@@ -168,13 +187,13 @@ export async function proofigSubmitStreamHandler(
   });
   rollingLog.push(rollingLogEntry('job marked RUNNING', runningJob.id));
 
-  try {
-    rollingLog.push(rollingLogEntry('downloading PDF via signedUrl', { signedUrl }));
-    const pdfResponse = await fetch(signedUrl);
-    if (!pdfResponse.ok) {
-      throw new Error(`Failed to download PDF: ${pdfResponse.status} ${pdfResponse.statusText}`);
-    }
+  rollingLog.push(rollingLogEntry('downloading PDF via signedUrl', { signedUrl }));
+  const pdfResponse = await fetch(signedUrl);
+  if (!pdfResponse.ok) {
+    throw new Error(`Failed to download PDF: ${pdfResponse.status} ${pdfResponse.statusText}`);
+  }
 
+  try {
     rollingLog.push(rollingLogEntry('submitting to Proofig via streaming HTTP POST', {}));
     const result = await postToProofigStream(
       apiBaseUrl,
@@ -208,17 +227,18 @@ export async function proofigSubmitStreamHandler(
         proofigStatus: result.status,
       },
     });
+
     return completed;
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Proofig submit stream failed';
+    const message = getErrorMessage(err);
+    console.error('[proofigSubmitStreamHandler] Proofig submit stream failed', err);
     rollingLog.push(rollingLogEntry('Proofig submit stream failed', { error: message }));
-    await jobs.dbUpdateJob(job.id, {
-      status: JobStatus.FAILED,
+    const failedJob = await handleProofigSubmitJobFailure(
+      job.id,
+      payload.proofig_run_id,
       message,
-      results: {
-        rollingLog,
-      },
-    });
-    throw httpError(502, message);
+      rollingLog,
+    );
+    return failedJob;
   }
 }

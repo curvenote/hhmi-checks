@@ -60,14 +60,18 @@ export async function getProofigToken(
   try {
     json = text ? (JSON.parse(text) as ProofigAuthResponse) : ({} as ProofigAuthResponse);
   } catch {
-    throw new Error(`Proofig auth returned non-JSON (${response.status}): ${text.slice(0, 200)}`);
+    throw new Error(
+      `Proofig API returned non-JSON ${authUrl} - (${response.status}): ${text.slice(0, 200)}`,
+    );
   }
   if (!response.ok) {
     const msg = (json as { error_message?: string }).error_message ?? text ?? response.statusText;
-    throw new Error(`Proofig auth error ${response.status}: ${msg}`);
+    throw new Error(
+      `Proofig API error ${authUrl} - ${response.status} ${response.statusText}: ${msg}`,
+    );
   }
   if (!json.access_token) {
-    throw new Error('Proofig auth response missing access_token');
+    throw new Error(`Proofig API error ${authUrl} - Proofig auth response missing access_token`);
   }
 
   const cacheToken = false;

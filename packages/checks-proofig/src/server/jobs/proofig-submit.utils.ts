@@ -217,12 +217,14 @@ export async function postToProofigStream(
   try {
     json = text ? (JSON.parse(text) as ProofigSubmitResponse) : {};
   } catch {
-    throw new Error(`Proofig API returned non-JSON (${response.status}): ${text.slice(0, 200)}`);
+    throw new Error(
+      `Proofig API returned non-JSON ${url} - (${response.status}): ${text.slice(0, 200)}`,
+    );
   }
 
   if (!response.ok) {
     const msg = json.error_message ?? text ?? response.statusText;
-    throw new Error(`Proofig API error ${response.status}: ${msg}`);
+    throw new Error(`Proofig API error ${url} - ${response.status} ${response.statusText}: ${msg}`);
   }
 
   return json;
