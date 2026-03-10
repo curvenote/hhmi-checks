@@ -10,7 +10,7 @@ export function SimplifiedSubimageApproval({
   data: ProofigStage;
   reportUrl?: string;
 }) {
-  if (data.status === 'failed') {
+  if (data.status === 'error') {
     return <SimplifiedError data={data} message="Subimage selection failed" />;
   }
   return (

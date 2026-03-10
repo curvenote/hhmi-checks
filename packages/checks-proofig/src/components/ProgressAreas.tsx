@@ -36,7 +36,7 @@ export function SimpleErrorArea({
 }
 
 export function PendingProgressArea({ data }: { data: ProofigStage }) {
-  if (data.status === 'failed')
+  if (data.status === 'error')
     return <SimpleErrorArea step={0} numSteps={4} message="Failed to start check." data={data} />;
 
   return (
@@ -115,14 +115,13 @@ export function InitialPostProgressArea({ data }: { data: ProofigStage }) {
         </div>
       );
     case 'error':
-    case 'failed':
       return <SimpleErrorArea step={1} numSteps={4} message="Upload failed." data={data} />;
   }
   return <DefaultArea />;
 }
 
 export function SubimageDetectionProgressArea({ data }: { data: ProofigStage }) {
-  if (data.status === 'failed')
+  if (data.status === 'error')
     return (
       <SimpleErrorArea step={2} numSteps={4} message="Subimage detection failed." data={data} />
     );
@@ -166,7 +165,7 @@ export function SubimageApprovalProgressArea({
   data: ProofigStage;
   reportUrl?: string;
 }) {
-  if (data.status === 'failed')
+  if (data.status === 'error')
     return (
       <SimpleErrorArea step={3} numSteps={4} message="Subimage selection failed." data={data} />
     );
@@ -198,7 +197,7 @@ export function SubimageApprovalProgressArea({
 }
 
 export function IntegrityDetectionProgressArea({ data }: { data: ProofigStage }) {
-  if (data.status === 'failed')
+  if (data.status === 'error')
     return (
       <SimpleErrorArea step={4} numSteps={4} message="Integrity detection failed." data={data} />
     );

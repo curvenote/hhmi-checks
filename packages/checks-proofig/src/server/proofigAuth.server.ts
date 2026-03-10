@@ -1,5 +1,4 @@
 import type { PrismaClient, Prisma } from '@curvenote/scms-db';
-import { httpError } from '@curvenote/scms-core';
 
 /** Object table type for cached Proofig access token. */
 export const PROOFIG_TOKEN_OBJECT_TYPE = 'extension:proofig:token';
@@ -36,8 +35,7 @@ export async function getProofigToken(
   const clientId = mergedConfig.clientId as string | undefined;
   const clientSecret = mergedConfig.clientSecret as string | undefined;
   if (!clientId?.trim() || !clientSecret?.trim()) {
-    throw httpError(
-      503,
+    throw new Error(
       'checks-proofig extension config missing clientId or clientSecret; cannot authenticate with Proofig',
     );
   }
@@ -62,42 +60,42 @@ export async function getProofigToken(
   try {
     json = text ? (JSON.parse(text) as ProofigAuthResponse) : ({} as ProofigAuthResponse);
   } catch {
-    throw httpError(
-      502,
-      `Proofig auth returned non-JSON (${response.status}): ${text.slice(0, 200)}`,
-    );
+    throw new Error(`Proofig auth returned non-JSON (${response.status}): ${text.slice(0, 200)}`);
   }
   if (!response.ok) {
     const msg = (json as { error_message?: string }).error_message ?? text ?? response.statusText;
-    throw httpError(502, `Proofig auth error ${response.status}: ${msg}`);
+    throw new Error(`Proofig auth error ${response.status}: ${msg}`);
   }
   if (!json.access_token) {
-    throw httpError(502, 'Proofig auth response missing access_token');
+    throw new Error('Proofig auth response missing access_token');
   }
 
-  // created_at = when the call was made minus 1 minute (conservative for expiry)
-  const callTime = new Date();
-  const createdAt = new Date(callTime.getTime() - 60 * 1000).toISOString();
-  const cacheData: ProofigTokenCacheData = {
-    ...json,
-    created_at: createdAt,
-  };
-  const now = new Date().toISOString();
-  const dataJson = cacheData as unknown as Prisma.InputJsonValue;
-  await prisma.object.upsert({
-    where: { id: PROOFIG_TOKEN_OBJECT_ID },
-    create: {
-      id: PROOFIG_TOKEN_OBJECT_ID,
-      type: PROOFIG_TOKEN_OBJECT_TYPE,
-      date_created: now,
-      date_modified: now,
-      data: dataJson,
-    },
-    update: {
-      data: dataJson,
-      date_modified: now,
-    },
-  });
+  const cacheToken = false;
+  if (cacheToken) {
+    // created_at = when the call was made minus 1 minute (conservative for expiry)
+    const callTime = new Date();
+    const createdAt = new Date(callTime.getTime() - 60 * 1000).toISOString();
+    const cacheData: ProofigTokenCacheData = {
+      ...json,
+      created_at: createdAt,
+    };
+    const now = new Date().toISOString();
+    const dataJson = cacheData as unknown as Prisma.InputJsonValue;
+    await prisma.object.upsert({
+      where: { id: PROOFIG_TOKEN_OBJECT_ID },
+      create: {
+        id: PROOFIG_TOKEN_OBJECT_ID,
+        type: PROOFIG_TOKEN_OBJECT_TYPE,
+        date_created: now,
+        date_modified: now,
+        data: dataJson,
+      },
+      update: {
+        data: dataJson,
+        date_modified: now,
+      },
+    });
+  }
 
   return json.access_token;
 }

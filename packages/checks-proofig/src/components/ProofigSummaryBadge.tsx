@@ -19,12 +19,12 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
   const isAtResults = currentStage === 'resultsReview';
   const outcome = metadata?.stages?.resultsReview?.outcome;
 
-  // In progress: show current stage label with color by status (pending, processing, completed, failed)
+  // In progress: show current stage label with color by status (pending, processing, completed, error)
   if (!isAtResults || outcome === undefined) {
     const label = STAGE_LABELS[currentStage] ?? 'In progress';
     const status = (currentStageData as { status?: string } | undefined)?.status;
     const variant =
-      status === 'failed' || status === 'error'
+      status === 'error'
         ? ('destructive' as const)
         : status === 'completed'
           ? ('success' as const)

@@ -78,11 +78,15 @@ export function shouldRevalidate({
 
 const PROOFIG_CHECK_NAME = 'proofig';
 
+/** How long to keep polling after user starts a new check (to pick up the new run and its status). */
+const POLL_AFTER_SUBMIT_MS = 30_000;
+
 export default function ManuscriptChecksPage({ loaderData }: { loaderData: LoaderData }) {
   const { runs } = loaderData;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [runCheckLoading, setRunCheckLoading] = useState(false);
+  const [recentlySubmitted, setRecentlySubmitted] = useState(false);
   const submittedForOpen = useRef(false);
   const draftFetcher = useFetcher<DraftData>();
   const titleFetcher = useFetcher();
@@ -95,10 +99,23 @@ export default function ManuscriptChecksPage({ loaderData }: { loaderData: Loade
     } | null;
     if (!d?.serviceData?.stages) return true;
     const stages = d.serviceData.stages;
-    const terminal = ['completed', 'failed', 'error'];
+    const terminal = ['completed', 'error'];
     return Object.values(stages).some((s) => s && !terminal.includes(s.status ?? ''));
   });
-  useRevalidateOnInterval({ enabled: hasActiveRuns, interval: 3000 });
+
+  // Poll when any run is in progress, or for a short period after starting a new check
+  const shouldPoll = hasActiveRuns || recentlySubmitted;
+  useRevalidateOnInterval({
+    enabled: shouldPoll,
+    interval: recentlySubmitted ? 1000 : 3000,
+  });
+
+  // Clear "recently submitted" after a delay so we stop aggressive polling
+  useEffect(() => {
+    if (!recentlySubmitted) return;
+    const t = setTimeout(() => setRecentlySubmitted(false), POLL_AFTER_SUBMIT_MS);
+    return () => clearTimeout(t);
+  }, [recentlySubmitted]);
 
   const draftData = draftFetcher.data;
   const draftReady =
@@ -193,6 +210,7 @@ export default function ManuscriptChecksPage({ loaderData }: { loaderData: Loade
         return;
       }
       setDialogOpen(false);
+      setRecentlySubmitted(true);
       revalidator.revalidate();
     } finally {
       setRunCheckLoading(false);

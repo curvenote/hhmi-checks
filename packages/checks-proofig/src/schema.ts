@@ -52,7 +52,6 @@ export const LinearStageStatusSchema = z.enum([
   'pending', // Not started yet
   'processing', // Currently in progress
   'completed', // Successfully completed
-  'failed', // Failed with error
   'error', // Error occurred
 ]);
 
@@ -188,13 +187,6 @@ export function getCurrentProofigStage(stages: ProofigStages) {
 
     if (isLinearStage) {
       if (stageStatus === 'processing' || stageStatus === 'pending' || stageStatus === 'error') {
-        currentStageIndex = i;
-        currentStage = stage;
-        currentStageData = stageData;
-        break;
-      }
-
-      if (stageStatus === 'failed') {
         currentStageIndex = i;
         currentStage = stage;
         currentStageData = stageData;

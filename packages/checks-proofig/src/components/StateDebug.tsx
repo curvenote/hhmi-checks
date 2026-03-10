@@ -19,7 +19,6 @@ const STATUS_OPTIONS: ProofigStageStatus[] = [
   'pending',
   'processing',
   'completed',
-  'failed',
   'error',
 ];
 
@@ -35,7 +34,6 @@ const STATUS_COLORS: Record<ProofigStageStatus, string> = {
   pending: 'bg-gray-200 hover:bg-gray-300 text-gray-800',
   processing: 'bg-blue-200 hover:bg-blue-300 text-blue-800',
   completed: 'bg-green-200 hover:bg-green-300 text-green-800',
-  failed: 'bg-red-200 hover:bg-red-300 text-red-800',
   error: 'bg-red-200 hover:bg-red-300 text-red-800',
 };
 

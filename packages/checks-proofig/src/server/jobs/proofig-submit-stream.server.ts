@@ -22,7 +22,10 @@ import {
   workVersionToPayload,
 } from './proofig-submit.utils.js';
 import { MINIMAL_PROOFIG_SERVICE_DATA, type ProofigDataSchema } from '../../schema.js';
-import { completeInitialPostAndSetSubimageDetectionPending } from '../stateMachine.server.js';
+import {
+  completeInitialPostAndSetSubimageDetectionPending,
+  markInitialPostError,
+} from '../stateMachine.server.js';
 
 /** Job type for Proofig submit via in-process streaming HTTP call. */
 export const PROOFIG_SUBMIT_STREAM = 'PROOFIG_SUBMIT_STREAM';
@@ -113,7 +116,36 @@ export async function proofigSubmitStreamHandler(
   }
 
   // Carry out Proofig auth handshake and get token (cached in Object table when fresh)
-  const token = await getProofigToken(apiBaseUrl, mergedConfig, prisma);
+  let token: string;
+  try {
+    token = await getProofigToken(apiBaseUrl, mergedConfig, prisma);
+  } catch (err) {
+    const errorMessage =
+      err instanceof Error ? err.message : ((err as { message?: string })?.message ?? String(err));
+    console.error('[proofigSubmitStreamHandler] Failed to get Proofig token', err);
+    const failedAuthJob = await jobs.dbUpdateJob(job.id, {
+      status: JobStatus.FAILED,
+      message: errorMessage,
+      results: {
+        rollingLog,
+      },
+    });
+    // update the proofig run data: mark initialPost stage as error and set run status
+    await safeCheckServiceRunDataUpdate(payload.proofig_run_id, (runData?: Prisma.JsonValue) => {
+      const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
+      const nextServiceData = markInitialPostError(
+        current.serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
+        errorMessage,
+        new Date().toISOString(),
+      );
+      return {
+        ...current,
+        status: 'error',
+        serviceData: nextServiceData,
+      } satisfies CheckServiceRunData<ProofigDataSchema>;
+    });
+    return failedAuthJob;
+  }
 
   const notifyBaseUrl =
     (mergedConfig.notifyBaseUrl as string | undefined)?.replace(/\/$/, '') ??

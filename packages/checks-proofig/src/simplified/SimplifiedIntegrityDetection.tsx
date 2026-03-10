@@ -3,7 +3,7 @@ import { ui } from '@curvenote/scms-core';
 import { SimplifiedError } from './SimplifiedError.js';
 
 export function SimplifiedIntegrityDetection({ data }: { data: ProofigStage }) {
-  if (data.status === 'failed') {
+  if (data.status === 'error') {
     return <SimplifiedError data={data} message="Integrity detection failed" />;
   }
   return (
