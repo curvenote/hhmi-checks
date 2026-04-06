@@ -229,3 +229,8 @@ export async function postToProofigStream(
 
   return json;
 }
+
+/** Detects errors thrown by `postToProofigStream` for a given HTTP status (e.g. 401 retry). */
+export function proofigSubmitErrorHasStatus(err: unknown, status: number): boolean {
+  return err instanceof Error && err.message.includes(` - ${status} `);
+}

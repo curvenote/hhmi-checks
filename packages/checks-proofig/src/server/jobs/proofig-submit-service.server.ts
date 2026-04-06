@@ -11,7 +11,7 @@ import {
   jobs,
 } from '@curvenote/scms-server';
 import { getProofigConfigWithOverrides } from '../config.server.js';
-import { getProofigToken } from '../proofigAuth.server.js';
+import { getProofingToken } from '../proofigAuth.server.js';
 import { publishProofigSubmitMessage } from '../publishProofigSubmit.server.js';
 import type { WorkVersionMetadataPayload } from '@curvenote/common';
 import { rollingLogEntry, workVersionToPayload } from './proofig-submit.utils.js';
@@ -75,8 +75,6 @@ export async function proofigSubmitHandler(
     );
   }
 
-  const token = await getProofigToken(apiBaseUrl, extConfig as Record<string, unknown>, prisma);
-
   const workVersionRow = await prisma.workVersion.findUnique({
     where: { id: payload.work_version_id },
   });
@@ -111,6 +109,8 @@ export async function proofigSubmitHandler(
     (extConfig.notifyBaseUrl as string | undefined)?.replace(/\/$/, '') ??
     new URL(ctx.request.url).origin + '/v1/hooks/proofig/notify';
   const notify_url = `${notifyBaseUrl}/${payload.proofig_run_id}`;
+
+  const token = await getProofingToken(apiBaseUrl, extConfig as Record<string, unknown>);
 
   const pubsubPayload = {
     taskId: job.id,

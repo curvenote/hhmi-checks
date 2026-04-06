@@ -290,6 +290,102 @@ describe('Proofig Workflow', () => {
       expect(next?.stages.resultsReview?.outcome).toEqual('clean');
       expect(next?.stages.resultsReview?.history).toHaveLength(0);
     });
+    it('Awaiting: Review when subimage detection still pending (late notify; catch up all linear stages)', () => {
+      const timestamp = new Date().toISOString();
+      const initial: ProofigDataSchema = {
+        stages: {
+          initialPost: { status: 'completed', history: [], timestamp },
+          subimageDetection: { status: 'pending', history: [], timestamp },
+        },
+      };
+      const receivedAt = new Date().toISOString();
+      const next = updateStagesAndServiceDataFromValidatedNotifyPayload(
+        initial,
+        {
+          ...makeProofigNotifyPayload(),
+          state: KnownState.AwaitingReview,
+        },
+        receivedAt,
+      );
+      expect(next).not.toBeNull();
+      expect(next?.stages.subimageDetection?.status).toEqual('notify-skipped');
+      expect(next?.stages.subimageSelection?.status).toEqual('notify-skipped');
+      expect(next?.stages.integrityDetection?.status).toEqual('notify-skipped');
+      expect(next?.stages.resultsReview?.status).toEqual('requested');
+    });
+    it('Awaiting: Review when subimage selection still pending and integrity never started (skipped Processing notify)', () => {
+      const timestamp = new Date().toISOString();
+      const initial: ProofigDataSchema = {
+        stages: {
+          initialPost: { status: 'completed', history: [], timestamp },
+          subimageDetection: { status: 'completed', history: [], timestamp },
+          subimageSelection: { status: 'pending', history: [], timestamp },
+        },
+      };
+      const receivedAt = new Date().toISOString();
+      const next = updateStagesAndServiceDataFromValidatedNotifyPayload(
+        initial,
+        {
+          ...makeProofigNotifyPayload(),
+          state: KnownState.AwaitingReview,
+        },
+        receivedAt,
+      );
+      expect(next).not.toBeNull();
+      expect(next?.stages.subimageDetection?.status).toEqual('completed');
+      expect(next?.stages.subimageSelection?.status).toEqual('notify-skipped');
+      expect(next?.stages.integrityDetection?.status).toEqual('notify-skipped');
+      expect(next?.stages.resultsReview?.status).toEqual('requested');
+      expect(next?.stages.resultsReview?.outcome).toEqual('pending');
+    });
+    it('Report: Flagged when subimage selection still pending and integrity never started', () => {
+      const timestamp = new Date().toISOString();
+      const initial: ProofigDataSchema = {
+        stages: {
+          initialPost: { status: 'completed', history: [], timestamp },
+          subimageDetection: { status: 'completed', history: [], timestamp },
+          subimageSelection: { status: 'pending', history: [], timestamp },
+        },
+      };
+      const receivedAt = new Date().toISOString();
+      const next = updateStagesAndServiceDataFromValidatedNotifyPayload(
+        initial,
+        {
+          ...makeProofigNotifyPayload(),
+          state: KnownState.ReportFlagged,
+        },
+        receivedAt,
+      );
+      expect(next).not.toBeNull();
+      expect(next?.stages.subimageSelection?.status).toEqual('notify-skipped');
+      expect(next?.stages.integrityDetection?.status).toEqual('notify-skipped');
+      expect(next?.stages.resultsReview?.status).toEqual('completed');
+      expect(next?.stages.resultsReview?.outcome).toEqual('flagged');
+    });
+    it('Report: Clean when subimage selection still pending and integrity never started', () => {
+      const timestamp = new Date().toISOString();
+      const initial: ProofigDataSchema = {
+        stages: {
+          initialPost: { status: 'completed', history: [], timestamp },
+          subimageDetection: { status: 'completed', history: [], timestamp },
+          subimageSelection: { status: 'pending', history: [], timestamp },
+        },
+      };
+      const receivedAt = new Date().toISOString();
+      const next = updateStagesAndServiceDataFromValidatedNotifyPayload(
+        initial,
+        {
+          ...makeProofigNotifyPayload(),
+          state: KnownState.ReportClean,
+        },
+        receivedAt,
+      );
+      expect(next).not.toBeNull();
+      expect(next?.stages.subimageSelection?.status).toEqual('notify-skipped');
+      expect(next?.stages.integrityDetection?.status).toEqual('notify-skipped');
+      expect(next?.stages.resultsReview?.status).toEqual('not-requested');
+      expect(next?.stages.resultsReview?.outcome).toEqual('clean');
+    });
     it('Integrity Detection processing -> Results Review requested', () => {
       const timestamp = new Date().toISOString();
       const initial: ProofigDataSchema = {
@@ -555,6 +651,7 @@ describe('Proofig Workflow', () => {
         stages: {
           initialPost: { status: 'completed', history: [], timestamp },
           subimageDetection: { status: 'completed', history: [], timestamp },
+          subimageSelection: { status: 'pending', history: [], timestamp },
         },
       };
       const next = updateStagesAndServiceDataFromValidatedNotifyPayload(initial, {

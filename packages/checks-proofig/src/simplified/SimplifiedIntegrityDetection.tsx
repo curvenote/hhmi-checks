@@ -6,7 +6,6 @@ export function SimplifiedIntegrityDetection({ data }: { data: ProofigStage }) {
   if (data.status === 'error') {
     return <SimplifiedError data={data} message="Integrity detection failed" />;
   }
-  return (
-    <ui.SimpleAlert type="info" message="Running integrity checks…" />
-  );
+
+  return <ui.SimpleAlert type="info" message="Running integrity checks…" />;
 }

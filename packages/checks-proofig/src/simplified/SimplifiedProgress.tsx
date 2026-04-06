@@ -9,9 +9,17 @@ import { SimplifiedDefault } from './SimplifiedDefault.js';
 
 interface SimplifiedProgressProps {
   proofigData: ProofigDataSchema | undefined;
+  workVersionId?: string;
+  checkRunId?: string;
+  remoteStatusActionPath?: string;
 }
 
-export function SimplifiedProgress({ proofigData }: SimplifiedProgressProps) {
+export function SimplifiedProgress({
+  proofigData,
+  workVersionId,
+  checkRunId,
+  remoteStatusActionPath,
+}: SimplifiedProgressProps) {
   const stages = { ...ALL_PENDING_STAGES, ...proofigData?.stages };
   const { currentStage } = getCurrentProofigStage(stages);
 
@@ -27,6 +35,9 @@ export function SimplifiedProgress({ proofigData }: SimplifiedProgressProps) {
         data={stages.subimageSelection}
         reportUrl={proofigData?.reportUrl}
         deleted={proofigData?.deleted}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+        remoteStatusActionPath={remoteStatusActionPath}
       />
     );
   }
@@ -34,7 +45,14 @@ export function SimplifiedProgress({ proofigData }: SimplifiedProgressProps) {
     return <SimplifiedIntegrityDetection data={stages.integrityDetection} />;
   }
   if (stages.resultsReview && currentStage === 'resultsReview') {
-    return <SimplifiedResultsSummary proofigData={proofigData} />;
+    return (
+      <SimplifiedResultsSummary
+        proofigData={proofigData}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+        remoteStatusActionPath={remoteStatusActionPath}
+      />
+    );
   }
   return <SimplifiedDefault />;
 }

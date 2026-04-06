@@ -1,10 +1,9 @@
-import type { PrismaClient, Prisma } from '@curvenote/scms-db';
+import { createHash } from 'node:crypto';
+import type { Prisma } from '@curvenote/scms-db';
+import { getPrismaClient } from '@curvenote/scms-server';
 
-/** Object table type for cached Proofig access token. */
+/** Object.type for cached Proofig access token rows. */
 export const PROOFIG_TOKEN_OBJECT_TYPE = 'extension:proofig:token';
-
-/** Fixed id for the single token row; we upsert so only one entry exists. */
-const PROOFIG_TOKEN_OBJECT_ID = PROOFIG_TOKEN_OBJECT_TYPE;
 
 /** Response from POST <BaseURL>/auth/authenticate. */
 export interface ProofigAuthResponse {
@@ -13,37 +12,104 @@ export interface ProofigAuthResponse {
   expires_in: number;
 }
 
-/** Stored token record in Object.data (response + created_at). */
-export interface ProofigTokenCacheData extends ProofigAuthResponse {
-  created_at: string; // ISO timestamp of when the auth call was made minus 1 minute
+/** Stored token record in Object.data (JWT-derived expiry, not expires_in from the body). */
+export interface ProofigTokenCacheData {
+  access_token: string;
+  token_type: string;
+  /** ISO-8601; cache is valid until this instant (already shortened vs JWT exp). */
+  expiresAt: string;
+  /** Normalized Proofig API base (no trailing slash); mirrors the id hash input. */
+  apiBaseUrl: string;
+  clientId: string;
 }
 
 const AUTH_PATH = '/auth/authenticate';
 
+function normalizeApiBase(apiBaseUrl: string): string {
+  return apiBaseUrl.replace(/\/$/, '');
+}
+
+/** Stable `Object.id` for the Proofig token cache: `extension:proofig:token:` + first 32 hex chars of SHA-256(normalized base + NUL + clientId). */
+export function proofigTokenObjectId(apiBaseUrl: string, clientId: string): string {
+  const base = normalizeApiBase(apiBaseUrl);
+  const hash = createHash('sha256').update(`${base}\0${clientId}`).digest('hex').slice(0, 32);
+  return `${PROOFIG_TOKEN_OBJECT_TYPE}:${hash}`;
+}
+
 /**
- * Returns a valid Proofig access token, using cache when possible.
- * - Checks for a valid cached token (Object type extension:proofig:token).
- * - If none or expired, calls Proofig authenticate API, caches the response
- *   (with created_at = now minus 1 minute), and returns the new access_token.
- * - Token is sent as Bearer in the Authorization header on subsequent API calls.
+ * JWT `exp` is normally seconds since epoch. Values large enough to be ms are treated as ms.
  */
-export async function getProofigToken(
-  apiBaseUrl: string,
-  mergedConfig: Record<string, unknown>,
-  prisma: PrismaClient,
-): Promise<string> {
-  const clientId = mergedConfig.clientId as string | undefined;
-  const clientSecret = mergedConfig.clientSecret as string | undefined;
-  if (!clientId?.trim() || !clientSecret?.trim()) {
-    throw new Error(
-      'checks-proofig extension config missing clientId or clientSecret; cannot authenticate with Proofig',
-    );
+export function jwtExpToUnixMs(exp: number): number {
+  if (exp > 10_000_000_000) return exp;
+  return exp * 1000;
+}
+
+/**
+ * Soft expiry: JWT exp minus 10% of the remaining lifetime (from `now`), as ISO timestamp.
+ */
+export function computeCacheExpiresAtIso(expClaim: number, nowMs: number = Date.now()): string {
+  const expMs = jwtExpToUnixMs(expClaim);
+  const remaining = expMs - nowMs;
+  if (remaining <= 0) {
+    return new Date(nowMs).toISOString();
   }
+  const softMs = expMs - 0.1 * remaining;
+  return new Date(softMs).toISOString();
+}
 
-  const base = apiBaseUrl.replace(/\/$/, '');
-  const authUrl = `${base}${AUTH_PATH}`;
+export function parseJwtExp(accessToken: string): number {
+  const parts = accessToken.split('.');
+  if (parts.length < 2) {
+    throw new Error('Proofig access_token is not a JWT (cannot read exp)');
+  }
+  let json: unknown;
+  try {
+    const payload = parts[1];
+    json = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+  } catch {
+    throw new Error('Proofig access_token JWT payload is not valid JSON');
+  }
+  if (!json || typeof json !== 'object' || !('exp' in json)) {
+    throw new Error('Proofig access_token JWT missing exp claim');
+  }
+  const exp = (json as { exp: unknown }).exp;
+  if (typeof exp !== 'number' || !Number.isFinite(exp)) {
+    throw new Error('Proofig access_token JWT exp claim is not a finite number');
+  }
+  return exp;
+}
 
-  // Authenticate
+function readCachedToken(
+  data: unknown,
+  expectedBase: string,
+  expectedClientId: string,
+): { token: string } | null {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  const d = data as Record<string, unknown>;
+  const storedBase = d.apiBaseUrl;
+  const storedClientId = d.clientId;
+  if (typeof storedBase === 'string' && typeof storedClientId === 'string') {
+    if (normalizeApiBase(storedBase) !== expectedBase || storedClientId !== expectedClientId) {
+      return null;
+    }
+  }
+  const token = d.access_token;
+  const expiresAt = d.expiresAt;
+  if (typeof token !== 'string' || !token.trim()) return null;
+  if (typeof expiresAt !== 'string' || !expiresAt.trim()) return null;
+  const until = Date.parse(expiresAt);
+  if (Number.isNaN(until) || until <= Date.now()) return null;
+  return { token };
+}
+
+async function authenticateAndCache(
+  normalizedApiBase: string,
+  clientId: string,
+  clientSecret: string,
+  objectId: string,
+): Promise<string> {
+  const prisma = await getPrismaClient();
+  const authUrl = `${normalizedApiBase}${AUTH_PATH}`;
   const body = JSON.stringify({
     client_id: clientId,
     client_secret: clientSecret,
@@ -74,32 +140,92 @@ export async function getProofigToken(
     throw new Error(`Proofig API error ${authUrl} - Proofig auth response missing access_token`);
   }
 
-  const cacheToken = false;
-  if (cacheToken) {
-    // created_at = when the call was made minus 1 minute (conservative for expiry)
-    const callTime = new Date();
-    const createdAt = new Date(callTime.getTime() - 60 * 1000).toISOString();
-    const cacheData: ProofigTokenCacheData = {
-      ...json,
-      created_at: createdAt,
-    };
-    const now = new Date().toISOString();
-    const dataJson = cacheData as unknown as Prisma.InputJsonValue;
-    await prisma.object.upsert({
-      where: { id: PROOFIG_TOKEN_OBJECT_ID },
-      create: {
-        id: PROOFIG_TOKEN_OBJECT_ID,
-        type: PROOFIG_TOKEN_OBJECT_TYPE,
-        date_created: now,
-        date_modified: now,
-        data: dataJson,
-      },
-      update: {
-        data: dataJson,
-        date_modified: now,
-      },
-    });
-  }
+  const nowMs = Date.now();
+  const expClaim = parseJwtExp(json.access_token);
+  const expiresAt = computeCacheExpiresAtIso(expClaim, nowMs);
+
+  const cacheData: ProofigTokenCacheData = {
+    access_token: json.access_token,
+    token_type: json.token_type,
+    expiresAt,
+    apiBaseUrl: normalizedApiBase,
+    clientId,
+  };
+  const nowIso = new Date(nowMs).toISOString();
+  const dataJson = cacheData as unknown as Prisma.InputJsonValue;
+
+  await prisma.object.upsert({
+    where: { id: objectId },
+    create: {
+      id: objectId,
+      type: PROOFIG_TOKEN_OBJECT_TYPE,
+      date_created: nowIso,
+      date_modified: nowIso,
+      data: dataJson,
+    },
+    update: {
+      data: dataJson,
+      date_modified: nowIso,
+    },
+  });
 
   return json.access_token;
+}
+
+/**
+ * Returns a Proofig Bearer token, using a row in `Object` when still valid.
+ * On miss or expiry, calls `POST …/auth/authenticate`, caches `access_token` plus JWT-derived
+ * `expiresAt` (10% before JWT exp), then returns the token.
+ */
+export async function getProofingToken(
+  apiBaseUrl: string,
+  mergedConfig: Record<string, unknown>,
+): Promise<string> {
+  const clientId = mergedConfig.clientId as string | undefined;
+  const clientSecret = mergedConfig.clientSecret as string | undefined;
+  if (!clientId?.trim() || !clientSecret?.trim()) {
+    throw new Error(
+      'checks-proofig extension config missing clientId or clientSecret; cannot authenticate with Proofig',
+    );
+  }
+
+  const base = normalizeApiBase(apiBaseUrl);
+  const objectId = proofigTokenObjectId(apiBaseUrl, clientId.trim());
+  const trimmedClientId = clientId.trim();
+
+  const prisma = await getPrismaClient();
+  const row = await prisma.object.findUnique({ where: { id: objectId } });
+  const cached = row?.data ? readCachedToken(row.data, base, trimmedClientId) : null;
+  if (cached) return cached.token;
+
+  return authenticateAndCache(base, trimmedClientId, clientSecret.trim(), objectId);
+}
+
+/**
+ * Forces the next `getProofingToken` to re-authenticate by setting cached `expiresAt` to the past.
+ * Used when Proofig returns 401 while the cache still considers the token valid.
+ */
+export async function invalidateProofingTokenCache(
+  apiBaseUrl: string,
+  mergedConfig: Record<string, unknown>,
+): Promise<void> {
+  const clientId = mergedConfig.clientId as string | undefined;
+  if (!clientId?.trim()) return;
+
+  const objectId = proofigTokenObjectId(apiBaseUrl, clientId.trim());
+  const prisma = await getPrismaClient();
+  const row = await prisma.object.findUnique({ where: { id: objectId } });
+  if (!row?.data || typeof row.data !== 'object' || Array.isArray(row.data)) return;
+
+  const pastIso = new Date(Date.now() - 1000).toISOString();
+  const nextData = { ...(row.data as Record<string, unknown>), expiresAt: pastIso };
+  const nowIso = new Date().toISOString();
+
+  await prisma.object.update({
+    where: { id: objectId },
+    data: {
+      data: nextData as unknown as Prisma.InputJsonValue,
+      date_modified: nowIso,
+    },
+  });
 }

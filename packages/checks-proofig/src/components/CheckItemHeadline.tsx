@@ -1,0 +1,147 @@
+import { cn, plural } from '@curvenote/scms-core';
+
+export interface CheckItemHeadlineProps {
+  colors: {
+    problem: string;
+    clear: string;
+    review: string;
+  };
+  /** When true, show in-review messaging instead of count-derived “all clear” / problem headlines. */
+  awaitingHumanReview?: boolean;
+  total: number;
+  matchByAlgo: number;
+  matchesNotBad: number;
+  matchedProblems: number;
+  inspectedProblems: number;
+  /**
+   * Noun fragment for `plural()` count phrases, e.g. `figure(s)` → "1 figure", "2 figures".
+   * @default 'figure(s)'
+   */
+
+  countedItemPlural?: string;
+}
+
+export interface CheckItemHeadlineStats {
+  value: number;
+  label: string;
+  textColor: string;
+  borderColor: string;
+}
+
+function FractionalDisplay({
+  denominator,
+  numerator,
+  className,
+}: {
+  denominator: number;
+  numerator: number;
+  /** When set, replaces the default `text-3xl` wrapper classes (include size/color as needed). */
+  className?: string;
+}) {
+  return (
+    <div className={cn('text-3xl font-medium text-gray-900 dark:text-gray-100', className)}>
+      {numerator}
+      <span className={cn('font-extralight text-gray-500', className)}>/{denominator}</span>
+    </div>
+  );
+}
+
+export function CheckItemHeadline({
+  colors,
+  awaitingHumanReview = false,
+  total,
+  matchByAlgo,
+  matchesNotBad,
+  matchedProblems,
+  inspectedProblems,
+  countedItemPlural = 'panel(s)',
+}: CheckItemHeadlineProps) {
+  if (awaitingHumanReview) {
+    return (
+      <div className="space-y-1">
+        <div className="flex gap-2 items-center">
+          <FractionalDisplay
+            numerator={matchesNotBad}
+            denominator={total}
+            className={colors.review}
+          />
+          <div className={`text-3xl font-medium ${colors.review}`}>Awaiting review</div>
+        </div>
+        <div className="text-muted-foreground">
+          {`${plural('(An|Some) issue(s) (has|have) been flagged ', matchedProblems)}`}by Proofig,
+          these should be reviewed and any confirmed problems added to the report.
+        </div>
+      </div>
+    );
+  }
+
+  if (matchByAlgo === 0) {
+    return (
+      <div className="space-y-1">
+        <div className={`text-3xl font-medium ${colors.clear}`}>All Clear</div>
+        <div className="text-muted-foreground">
+          {plural(`No issues found with %s ${countedItemPlural}`, total, { 0: 'your' })}
+        </div>
+      </div>
+    );
+  }
+
+  if (matchByAlgo > 0 && inspectedProblems === 0 && matchedProblems === 0) {
+    return (
+      <div className="space-y-1">
+        <div className={`text-3xl font-medium ${colors.clear}`}>Confirmed All Clear</div>
+        <div className="text-muted-foreground">
+          Potential issues were flagged by Proofig but none were confirmed as problems during
+          review.
+        </div>
+      </div>
+    );
+  }
+
+  if (matchByAlgo === 0 && inspectedProblems > 0) {
+    return (
+      <div className="space-y-1">
+        <FractionalDisplay numerator={matchedProblems + inspectedProblems} denominator={total} />
+        <div className="text-muted-foreground">
+          {plural(
+            'No issues found by Proofig but %s problem(s) found by manual inspection',
+            matchedProblems,
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (matchedProblems > 0 && inspectedProblems === 0) {
+    return (
+      <div className="space-y-1">
+        <div className={`text-3xl font-medium ${colors.problem}`}>
+          {plural('%s Problem(s)', matchedProblems)}
+        </div>
+        <div className="text-muted-foreground">
+          {plural(
+            '%s issue(s) flagged by Proofig (was|were) confirmed as having (a|) problem(s)',
+            matchedProblems,
+          )}
+          .
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className={`text-3xl font-medium ${colors.problem}`}>
+        {plural('%s Problem(s)', matchedProblems + inspectedProblems)}
+      </div>
+      <div className="text-muted-foreground">
+        {plural(
+          '%s issues(s) flagged by Proofig (was|were) confirmed as having (a|) problem(s)',
+          matchedProblems,
+        )}
+        , {plural('%s additional sub-image(s) (has|have) problems', inspectedProblems)} found by
+        manual inspection.
+      </div>
+    </div>
+  );
+}

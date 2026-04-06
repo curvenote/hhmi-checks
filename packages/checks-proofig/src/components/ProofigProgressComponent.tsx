@@ -20,9 +20,17 @@ export const STAGE_LABELS = {
 
 interface ProofigProgressComponentProps {
   proofigData: ProofigDataSchema | undefined;
+  workVersionId?: string;
+  checkRunId?: string;
+  remoteStatusActionPath?: string;
 }
 
-export function ProofigProgressComponent({ proofigData }: ProofigProgressComponentProps) {
+export function ProofigProgressComponent({
+  proofigData,
+  workVersionId,
+  checkRunId,
+  remoteStatusActionPath,
+}: ProofigProgressComponentProps) {
   // Defensive: provide defaults if proofigStatus or stages don't exist
   const stages = { ...ALL_PENDING_STAGES, ...proofigData?.stages };
 
@@ -41,12 +49,22 @@ export function ProofigProgressComponent({ proofigData }: ProofigProgressCompone
         data={stages.subimageSelection}
         reportUrl={proofigData?.reportUrl}
         deleted={proofigData?.deleted}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+        remoteStatusActionPath={remoteStatusActionPath}
       />
     );
   } else if (stages.integrityDetection && currentStage === 'integrityDetection') {
     Component = <IntegrityDetectionProgressArea data={stages.integrityDetection} />;
   } else if (stages.resultsReview && currentStage === 'resultsReview') {
-    Component = <ResultsSummaryArea proofigData={proofigData} />;
+    Component = (
+      <ResultsSummaryArea
+        proofigData={proofigData}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+        remoteStatusActionPath={remoteStatusActionPath}
+      />
+    );
   }
   return (
     <>

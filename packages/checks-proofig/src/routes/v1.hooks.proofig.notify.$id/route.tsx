@@ -1,35 +1,74 @@
-import type { ActionFunctionArgs } from 'react-router';
+import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { error405, httpError } from '@curvenote/scms-core';
-import {
-  createMessageRecord,
-  safeCheckServiceRunDataUpdate,
-  updateMessageStatus,
-} from '@curvenote/scms-server';
-import type { Prisma } from '@curvenote/scms-db';
-import type { ProofigDataSchema } from '../../schema.js';
-import {
-  MINIMAL_PROOFIG_SERVICE_DATA,
-  ProofigNotifyPayloadSchema,
-  proofigDataSchema,
-} from '../../schema.js';
-import { updateStagesAndServiceDataFromValidatedNotifyPayload } from '../../server/stateMachine.server.js';
+import { createMessageRecord, updateMessageStatus } from '@curvenote/scms-server';
+import { ProofigNotifyPayloadSchema } from '../../schema.js';
+import { applyNotifyPayloadToCheckRun } from '../../server/applyNotifyPayloadToCheckRun.server.js';
+import { proofigCheckRunAlreadyMarkedDeleted } from '../../server/proofigNotifyWebhookGuards.server.js';
 import {
   PROOFIG_NOTIFY_PAYLOAD_JSON_SCHEMA,
   PROOFIG_NOTIFY_RESULTS_JSON_SCHEMA,
 } from './message-schema.server.js';
 
-export function loader() {
+const NOTIFY_LOG = '[proofig:notify]';
+
+function logNotify(requestId: string, phase: string, data: Record<string, unknown> = {}): void {
+  console.info(NOTIFY_LOG, phase, JSON.stringify({ requestId, ...data }));
+}
+
+/** Loader runs for document/GET-style hits; keeps the route non-open (405, no data). */
+export function loader(args: LoaderFunctionArgs) {
+  const id = args.params.id ?? null;
+  const requestId = crypto.randomUUID();
+  logNotify(requestId, 'endpoint_hit_loader', {
+    method: args.request.method,
+    url: args.request.url,
+    checkServiceRunId: id,
+    note: 'notify URL only accepts POST via action; returning 405',
+  });
   throw error405();
 }
 
 export async function action(args: ActionFunctionArgs) {
+  const requestId = crypto.randomUUID();
   const id = args.params.id;
   if (!id) {
+    logNotify(requestId, 'handler_return', {
+      outcome: 'error',
+      status: 400,
+      reason: 'missing_check_service_run_id',
+    });
     throw httpError(400, 'Missing check service run id');
   }
 
-  // TODO(auth): Proofig notifies should include the access token in headers.
-  // We haven't implemented the full auth/verification cycle yet.
+  logNotify(requestId, 'endpoint_hit_action', {
+    method: args.request.method,
+    url: args.request.url,
+    checkServiceRunId: id,
+  });
+
+  if (await proofigCheckRunAlreadyMarkedDeleted(id)) {
+    try {
+      await args.request.text();
+    } catch (err) {
+      logNotify(requestId, 'handler_return', {
+        outcome: 'error',
+        status: 400,
+        reason: 'unable_to_read_body',
+        checkServiceRunId: id,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+      throw httpError(400, 'Unable to read request body', {
+        message: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
+    logNotify(requestId, 'handler_return', {
+      outcome: 'ignored_already_deleted',
+      status: 200,
+      checkServiceRunId: id,
+      note: 'Check run already had Proofig deleted; no message or state update',
+    });
+    return new Response(null, { status: 200 });
+  }
 
   const receivedAt = new Date().toISOString();
 
@@ -38,17 +77,36 @@ export async function action(args: ActionFunctionArgs) {
   try {
     rawBody = await args.request.text();
   } catch (err) {
+    logNotify(requestId, 'handler_return', {
+      outcome: 'error',
+      status: 400,
+      reason: 'unable_to_read_body',
+      error: err instanceof Error ? err.message : 'Unknown error',
+    });
     throw httpError(400, 'Unable to read request body', {
       message: err instanceof Error ? err.message : 'Unknown error',
     });
   }
 
+  logNotify(requestId, 'payload_received', {
+    checkServiceRunId: id,
+    rawBodyLength: rawBody.length,
+  });
+
   let json: unknown;
+  let jsonParseError: string | undefined;
   try {
     json = rawBody ? JSON.parse(rawBody) : null;
-  } catch {
+  } catch (e) {
     json = null;
+    jsonParseError = e instanceof Error ? e.message : 'Unknown parse error';
   }
+
+  logNotify(requestId, 'json_payload', {
+    checkServiceRunId: id,
+    json,
+    jsonParseError: jsonParseError ?? null,
+  });
 
   const messageId = await createMessageRecord({
     module: '@hhmi/checks-proofig',
@@ -66,48 +124,42 @@ export async function action(args: ActionFunctionArgs) {
       processedAt: new Date().toISOString(),
       issues: parsed.error.issues,
     } as any);
+    logNotify(requestId, 'handler_return', {
+      outcome: 'invalid_payload',
+      status: 400,
+      messageId,
+      checkServiceRunId: id,
+      issues: parsed.error.issues,
+    });
     return Response.json(
       { ok: false, error: 'Invalid payload', issues: parsed.error.issues },
       { status: 400 },
     );
   }
 
-  try {
-    await safeCheckServiceRunDataUpdate(id, (data?: Prisma.JsonValue) => {
-      const current = (data as Record<string, any>) ?? {};
-      const currentServiceData = current.serviceData as unknown;
-
-      const existingServiceDataResult = proofigDataSchema.safeParse(currentServiceData);
-      const existingServiceData: ProofigDataSchema | undefined = existingServiceDataResult.success
-        ? existingServiceDataResult.data
-        : undefined;
-
-      const nextServiceData = updateStagesAndServiceDataFromValidatedNotifyPayload(
-        existingServiceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
-        parsed.data,
-        receivedAt,
-      );
-
-      if (nextServiceData == null) return null;
-
-      return {
-        ...current,
-        status: current.status ?? 'healthy',
-        serviceDataSchema: current.serviceDataSchema ?? {},
-        serviceData: nextServiceData,
-      } as Prisma.JsonObject;
-    });
-  } catch (err) {
+  const applyResult = await applyNotifyPayloadToCheckRun(id, parsed.data, receivedAt);
+  if (!applyResult.ok) {
+    const errMessage =
+      applyResult.kind === 'persist'
+        ? applyResult.message
+        : applyResult.issues.map((i) => i.message).join('; ');
     await updateMessageStatus(messageId, 'ERROR', {
       processedAt: new Date().toISOString(),
-      error: err instanceof Error ? err.message : 'Unknown error',
+      error: errMessage,
     } as any);
+    logNotify(requestId, 'handler_return', {
+      outcome: 'persist_failed',
+      status: 400,
+      messageId,
+      checkServiceRunId: id,
+      error: errMessage,
+    });
     // Keep behavior simple per requirement: 200 if expected, otherwise 400.
     return Response.json(
       {
         ok: false,
         error: 'Failed to persist webhook payload',
-        message: err instanceof Error ? err.message : 'Unknown error',
+        message: errMessage,
       },
       { status: 400 },
     );
@@ -116,6 +168,14 @@ export async function action(args: ActionFunctionArgs) {
   await updateMessageStatus(messageId, 'ACCEPTED', {
     processedAt: new Date().toISOString(),
   } as any);
+
+  logNotify(requestId, 'handler_return', {
+    outcome: 'accepted',
+    status: 200,
+    messageId,
+    checkServiceRunId: id,
+    note: 'empty body per spec',
+  });
 
   // Per spec, return a 200 with no required response body.
   return new Response(null, { status: 200 });

@@ -6,13 +6,12 @@ import type {
   ClientExtension,
   ClientExtensionCheckService,
   ExtensionIcon,
-  ExtensionTask,
   NavigationRegistration,
 } from '@curvenote/scms-core';
-import { ImageIntegrityIcon, ProofigLogoMono, ProofigLogo } from './icons.js';
-import { ImageIntegrityTaskCard } from './ImageIntegrityTaskCard.js';
+import { Icon, LogoMono, Logo, LogoThemed } from './icons.js';
 import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSection.js';
 import { ImageIntegritySectionHeader } from './components/ImageIntegritySectionHeader.js';
+import { ProofigCheckRunTimelineMount } from './components/ProofigCheckRunTimelineMount.js';
 import { ProofigSummaryBadge } from './components/ProofigSummaryBadge.js';
 import ExtensionAdminCard from './admin/ExtensionAdminCard.js';
 
@@ -20,39 +19,28 @@ export const id = 'checks-proofig';
 export const name = 'Image Integrity Checks';
 export const description = 'Image integrity checking service for works';
 
-// Temporary export of logos
 export const Logos = {
-  ImageIntegrityIcon,
-  ProofigLogoMono,
-  ProofigLogo,
+  Icon,
+  LogoMono,
+  Logo,
+  LogoThemed,
 };
-
-export function getTasks(): ExtensionTask[] {
-  return [
-    {
-      id: 'image-integrity-check',
-      name: 'Run Image Integrity Checks',
-      description: 'Check the integrity of images in your works.',
-      component: ImageIntegrityTaskCard,
-    },
-  ];
-}
 
 export function getIcons(): ExtensionIcon[] {
   return [
     {
       id: 'checks-proofig',
-      component: ImageIntegrityIcon,
+      component: Icon,
       tags: ['default', 'light'],
     },
     {
       id: 'proofig-logo-mono',
-      component: ProofigLogoMono,
+      component: LogoMono,
       tags: ['text', 'dark'],
     },
     {
       id: 'proofig-logo',
-      component: ProofigLogo,
+      component: Logo,
       tags: ['text', 'light'],
     },
   ];
@@ -67,6 +55,7 @@ export function getChecks(): ClientExtensionCheckService[] {
       sectionHeaderComponent: ImageIntegritySectionHeader,
       sectionActivityComponent: ImageIntegrityChecksSection,
       sectionSummaryBadgeComponent: ProofigSummaryBadge,
+      checkRunTimelineMountComponent: ProofigCheckRunTimelineMount,
     },
   ];
 }
@@ -83,7 +72,6 @@ export const extension: ClientExtension = {
   id,
   name,
   description,
-  getTasks,
   getIcons,
   getChecks,
   registerNavigation,

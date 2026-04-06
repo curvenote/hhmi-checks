@@ -1,5 +1,6 @@
 import { useFetcher } from 'react-router';
 import { useEffect } from 'react';
+import type { ExtensionCheckSectionActivityProps } from '@curvenote/scms-core';
 import { ui, useRevalidateOnInterval } from '@curvenote/scms-core';
 import { Logos } from '../client.js';
 import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
@@ -10,11 +11,16 @@ import type { ProofigDataSchema } from '../schema.js';
 // Note: ProofigDataSchema is exported from schema.js, so we don't re-export it here to avoid duplicates
 export type { ChecksMetadataSection } from './types.js';
 
-interface ImageIntegrityChecksSectionProps {
+type ImageIntegrityChecksSectionProps = ExtensionCheckSectionActivityProps & {
   metadata: ProofigDataSchema | undefined;
-}
+};
 
-export function ImageIntegrityChecksSection({ metadata }: ImageIntegrityChecksSectionProps) {
+export function ImageIntegrityChecksSection({
+  metadata,
+  workVersionId,
+  checkRunId,
+  remoteStatusActionPath,
+}: ImageIntegrityChecksSectionProps) {
   const fetcher = useFetcher();
 
   // Check if we need to dispatch the initial POST
@@ -38,10 +44,15 @@ export function ImageIntegrityChecksSection({ metadata }: ImageIntegrityChecksSe
   return (
     <div>
       {checkedAvailableOrInProgress ? (
-        <ProofigProgressComponent proofigData={metadata} />
+        <ProofigProgressComponent
+          proofigData={metadata}
+          workVersionId={workVersionId}
+          checkRunId={checkRunId}
+          remoteStatusActionPath={remoteStatusActionPath}
+        />
       ) : (
         <CTAPlaceholderPanel
-          logo={<Logos.ProofigLogo className="mb-4 h-16" />}
+          logo={<Logos.LogoThemed className="mb-4 h-16" />}
           title="No image integrity checks run yet"
           description="Run image integrity checks to detect potential issues with images in your work."
           action={

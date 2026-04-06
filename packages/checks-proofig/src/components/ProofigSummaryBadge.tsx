@@ -15,7 +15,7 @@ interface ProofigSummaryBadgeProps {
 export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
   const stages = { ...ALL_PENDING_STAGES, ...metadata?.stages };
   const { currentStage, currentStageData } = getCurrentProofigStage(stages);
-  const { bad, waiting } = getProofigSummaryCounts(metadata);
+  const { bad } = getProofigSummaryCounts(metadata);
   const isAtResults = currentStage === 'resultsReview';
   const outcome = metadata?.stages?.resultsReview?.outcome;
 
@@ -26,7 +26,7 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
     const variant =
       status === 'error'
         ? ('destructive' as const)
-        : status === 'completed'
+        : status === 'completed' || status === 'notify-skipped'
           ? ('success' as const)
           : status === 'processing'
             ? ('primary' as const)
@@ -39,7 +39,7 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
   }
 
   // Results: all clear
-  if (bad === 0 && waiting === 0) {
+  if (bad === 0) {
     return (
       <ui.Badge variant="success" size="xs" className="uppercase tracking-wide min-w-[80px]">
         All clear
@@ -48,7 +48,7 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
   }
 
   // Results: confirmed problems only
-  if (bad > 0 && waiting === 0) {
+  if (bad > 0) {
     return (
       <ui.Badge variant="destructive" size="xs" className="uppercase tracking-wide min-w-[80px]">
         {bad} {bad === 1 ? 'problem' : 'problems'} found

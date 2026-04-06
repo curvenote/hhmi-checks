@@ -7,7 +7,12 @@ import type {
   ProofigReviewStageStatus,
 } from '../schema.js';
 
-import { KNOWN_STATES, KnownState, MINIMAL_PROOFIG_SERVICE_DATA } from '../schema.js';
+import {
+  KNOWN_STATES,
+  KnownState,
+  linearStageIsDone,
+  MINIMAL_PROOFIG_SERVICE_DATA,
+} from '../schema.js';
 
 const HISTORY_LIMIT = 20;
 
@@ -79,6 +84,28 @@ function setReviewStage(
       history,
     },
   } as ProofigStages;
+}
+
+/**
+ * Proofig may omit notifies for intermediate steps. When a later payload arrives, align linear stages
+ * through integrity using `notify-skipped` so we can apply that payload while recording that we did
+ * not observe the usual progression.
+ */
+function catchUpStagesForLateProofigNotify(
+  stages: ProofigStages,
+  receivedAt: string,
+): ProofigStages {
+  let s = stages;
+  if (!linearStageIsDone(s.subimageDetection?.status)) {
+    s = setLinearStage(s, 'subimageDetection', 'notify-skipped', receivedAt);
+  }
+  if (!linearStageIsDone(s.subimageSelection?.status)) {
+    s = setLinearStage(s, 'subimageSelection', 'notify-skipped', receivedAt);
+  }
+  if (!linearStageIsDone(s.integrityDetection?.status)) {
+    s = setLinearStage(s, 'integrityDetection', 'notify-skipped', receivedAt);
+  }
+  return s;
 }
 
 /**
@@ -176,96 +203,114 @@ export function updateStagesAndServiceDataFromValidatedNotifyPayload(
   let updateStages: ProofigStages | null = null;
   switch (payload.state) {
     case KnownState.Processing: {
-      // If we receive Processing before subimage detection is completed, we assume that it is subimage detection in progress.
-      // Else, if we receive Processing after subimage detection is completed, but before integrityDetection is completed, we assume that it is integrity detection in progress.
-      // Otherwise, we ignore the processing notification.
       if (
         currentStatuses.subimageDetection === 'processing' ||
         currentStatuses.integrityDetection === 'processing'
       ) {
         break;
-      } else if (currentStatuses.subimageSelection === 'pending') {
-        updateStages = setLinearStage(stages, 'subimageSelection', 'completed', receivedAt);
-        updateStages = setLinearStage(updateStages, 'integrityDetection', 'processing', receivedAt);
-      } else if (
+      }
+      if (linearStageIsDone(currentStatuses.integrityDetection)) {
+        console.warn(
+          `[checks-proofig] Processing state received when not expected, ignoring notification.`,
+        );
+        break;
+      }
+      let s = stages;
+      if (
+        linearStageIsDone(currentStatuses.subimageDetection) &&
+        (currentStatuses.subimageSelection === 'pending' ||
+          currentStatuses.subimageSelection === 'completed' ||
+          currentStatuses.subimageSelection === 'notify-skipped')
+      ) {
+        if (currentStatuses.subimageSelection === 'pending') {
+          s = setLinearStage(s, 'subimageSelection', 'completed', receivedAt);
+        }
+        updateStages = setLinearStage(s, 'integrityDetection', 'processing', receivedAt);
+        break;
+      }
+      if (
         currentStatuses.initialPost === 'pending' ||
         currentStatuses.initialPost === 'completed'
       ) {
         updateStages = setLinearStage(stages, 'initialPost', 'completed', receivedAt);
         updateStages = setLinearStage(updateStages, 'subimageDetection', 'processing', receivedAt);
-      } else {
-        console.warn(
-          `[checks-proofig] Processing state received when not expected, ignoring notification.`,
-        );
+        break;
       }
+      console.warn(
+        `[checks-proofig] Processing state received when not expected, ignoring notification.`,
+      );
       break;
     }
 
     case KnownState.AwaitingSubImageApproval: {
-      // Sub-image detection is finished; awaiting user selection/approval.
       if (
-        currentStatuses.subimageDetection === 'pending' ||
-        currentStatuses.subimageDetection === 'processing'
+        linearStageIsDone(currentStatuses.subimageDetection) &&
+        currentStatuses.subimageSelection === 'pending'
       ) {
-        updateStages = setLinearStage(stages, 'subimageDetection', 'completed', receivedAt);
-        updateStages = setLinearStage(updateStages, 'subimageSelection', 'pending', receivedAt);
-      } else {
-        console.warn(
-          `[checks-proofig] Awaiting: Sub-Image Approval state received when not expected, ignoring notification.`,
-        );
+        break;
       }
+      let sAwait = stages;
+      if (!linearStageIsDone(currentStatuses.subimageDetection)) {
+        sAwait = setLinearStage(sAwait, 'subimageDetection', 'completed', receivedAt);
+      }
+      updateStages = setLinearStage(sAwait, 'subimageSelection', 'pending', receivedAt);
       break;
     }
 
     case KnownState.AwaitingReview: {
-      // Integrity detection has finished; awaiting results review.
-      if (currentStatuses.integrityDetection === 'processing') {
-        updateStages = setLinearStage(stages, 'integrityDetection', 'completed', receivedAt);
-        updateStages = setReviewStage(
-          updateStages,
-          'resultsReview',
-          'requested',
-          'pending',
-          receivedAt,
-        );
-      } else {
-        console.warn(
-          `[checks-proofig] Awaiting: Review state received when not expected, ignoring notification.`,
-        );
+      if (
+        linearStageIsDone(currentStatuses.integrityDetection) &&
+        stages.resultsReview?.status === 'requested'
+      ) {
+        break;
       }
+      let sRev = stages;
+      if (currentStatuses.integrityDetection === 'processing') {
+        sRev = setLinearStage(sRev, 'integrityDetection', 'completed', receivedAt);
+      } else {
+        sRev = catchUpStagesForLateProofigNotify(sRev, receivedAt);
+      }
+      updateStages = setReviewStage(sRev, 'resultsReview', 'requested', 'pending', receivedAt);
       break;
     }
 
     case KnownState.ReportClean: {
-      // We transitioned here from Processing, meaning the detection algorithm did not flag any issues.
-      if (currentStatuses.integrityDetection === 'processing') {
-        updateStages = setLinearStage(stages, 'integrityDetection', 'completed', receivedAt);
+      const review = stages.resultsReview;
+      if (review?.status === 'completed' && review?.outcome === 'clean') {
+        break;
+      }
+      const fromIntegrityProcessing = currentStatuses.integrityDetection === 'processing';
+      const integrityWasAlreadyDone = linearStageIsDone(currentStatuses.integrityDetection);
+      let sClean = stages;
+      if (fromIntegrityProcessing) {
+        sClean = setLinearStage(sClean, 'integrityDetection', 'completed', receivedAt);
+      } else {
+        sClean = catchUpStagesForLateProofigNotify(sClean, receivedAt);
+      }
+      if (fromIntegrityProcessing) {
         updateStages = setReviewStage(
-          updateStages,
+          sClean,
           'resultsReview',
           'not-requested',
           'clean',
           receivedAt,
         );
-      } else if (currentStatuses.integrityDetection === 'completed') {
-        const review = stages.resultsReview;
-        if (review?.status === 'completed' && review?.outcome === 'clean') {
-          // Already in Report: Clean → no-op
-        } else {
-          updateStages = setReviewStage(stages, 'resultsReview', 'completed', 'clean', receivedAt);
-        }
+      } else if (integrityWasAlreadyDone) {
+        updateStages = setReviewStage(sClean, 'resultsReview', 'completed', 'clean', receivedAt);
       } else {
-        console.warn(
-          `[checks-proofig] Report: Clean state received when not expected, ignoring notification.`,
+        updateStages = setReviewStage(
+          sClean,
+          'resultsReview',
+          'not-requested',
+          'clean',
+          receivedAt,
         );
-        console.warn(JSON.stringify(current, null, 2));
       }
       break;
     }
 
     case KnownState.ReportFlagged: {
       if (currentStatuses.integrityDetection === 'processing') {
-        // transitioning from this state is unexpected, but we will handle it
         updateStages = setReviewStage(
           stages,
           'resultsReview',
@@ -273,14 +318,10 @@ export function updateStagesAndServiceDataFromValidatedNotifyPayload(
           'flagged',
           receivedAt,
         );
-      } else if (currentStatuses.integrityDetection === 'completed') {
-        updateStages = setReviewStage(stages, 'resultsReview', 'completed', 'flagged', receivedAt);
-      } else {
-        console.warn(
-          `[checks-proofig] Report: Flagged state received when not expected, ignoring notification.`,
-        );
-        console.warn(JSON.stringify(current, null, 2));
+        break;
       }
+      const sFlag = catchUpStagesForLateProofigNotify(stages, receivedAt);
+      updateStages = setReviewStage(sFlag, 'resultsReview', 'completed', 'flagged', receivedAt);
       break;
     }
   }

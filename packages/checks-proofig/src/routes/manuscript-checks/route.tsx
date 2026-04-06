@@ -13,6 +13,7 @@ import {
 } from '@curvenote/scms-core';
 import { loadProofigCheckServiceRuns } from './loadRuns.server.js';
 import { getDraftForManuscriptChecks } from './getDraft.server.js';
+import { handleProofigAction } from '../../server/actions.js';
 import { MANUSCRIPT_UPLOAD_CONFIG } from './uploadConfig.js';
 import { SimplifiedRunCard } from '../../simplified/index.js';
 import type { CheckServiceRunWithVersion } from './loadRuns.server.js';
@@ -47,6 +48,26 @@ export async function action(args: Parameters<typeof withAppScopedContext>[0]) {
   const ctx = await withAppScopedContext(args, [scopes.app.works.upload]);
   const formData = await args.request.formData();
   const intent = formData.get('intent');
+  if (
+    intent === 'proofig:fetch-remote-status' ||
+    intent === 'proofig:apply-notify-payload' ||
+    intent === 'proofig:refresh-report-url'
+  ) {
+    const workVersionId = formData.get('workVersionId')?.toString();
+    if (!workVersionId) {
+      return {
+        error: { type: 'general', message: 'workVersionId is required' },
+        status: 400,
+      };
+    }
+    return handleProofigAction({
+      intent: intent as string,
+      workVersionId,
+      formData,
+      ctx,
+      serverExtensions: [],
+    });
+  }
   if (intent !== 'get-draft') {
     return { success: false, error: 'Invalid intent' };
   }
@@ -72,7 +93,13 @@ export function shouldRevalidate({
   defaultShouldRevalidate: boolean;
 }) {
   const intent = formData?.get('intent');
-  if (intent === 'get-draft') return false;
+  if (
+    intent === 'get-draft' ||
+    intent === 'proofig:fetch-remote-status' ||
+    intent === 'proofig:refresh-report-url'
+  ) {
+    return false;
+  }
   return defaultShouldRevalidate;
 }
 
@@ -292,7 +319,11 @@ export default function ManuscriptChecksPage({ loaderData }: { loaderData: Loade
               <p className="text-muted-foreground">No check runs yet.</p>
             ) : (
               runs.map((run: CheckServiceRunWithVersion) => (
-                <SimplifiedRunCard key={run.id} run={run} />
+                <SimplifiedRunCard
+                  key={run.id}
+                  run={run}
+                  remoteStatusActionPath="/app/manuscript-checks"
+                />
               ))
             )}
           </div>

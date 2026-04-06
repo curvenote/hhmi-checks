@@ -1,9 +1,11 @@
 import { Logos } from '../client.js';
 import { MissingReportUrlIcon } from './MissingReportUrlIcon.js';
 import { ReportNoLongerAvailable } from './ReportNoLongerAvailable.js';
-import { SegmentedProgressBar } from './SegmentedProgressBar.js';
 import type { ProofigStage } from '../schema.js';
 import { ui } from '@curvenote/scms-core';
+import { ProofigRefreshRemoteStatusButton } from './ProofigRefreshRemoteStatusButton.js';
+import { ProofigSubimageApprovalReportLink } from './ProofigSubimageApprovalReportLink.js';
+import { StageStartedRelative } from './StageStartedRelative.js';
 
 export function SimpleErrorArea({
   step,
@@ -51,7 +53,7 @@ export function PendingProgressArea({ data }: { data: ProofigStage }) {
           </div>
         }
       />
-      <StageProgressArea step={0} numSteps={4} message="Waiting to start check..." />
+      <StageProgressArea step={0} numSteps={4} stageStartedAt={data.timestamp} />
     </div>
   );
 }
@@ -70,11 +72,7 @@ export function InitialPostProgressArea({ data }: { data: ProofigStage }) {
               </div>
             }
           />
-          <StageProgressArea
-            step={1}
-            numSteps={4}
-            message="Usually takes less than 30 seconds..."
-          />
+          <StageProgressArea step={1} numSteps={4} stageStartedAt={data.timestamp} />
         </div>
       );
     case 'processing':
@@ -89,11 +87,7 @@ export function InitialPostProgressArea({ data }: { data: ProofigStage }) {
               </div>
             }
           />
-          <StageProgressArea
-            step={1}
-            numSteps={4}
-            message="Usually takes less than 30 seconds..."
-          />
+          <StageProgressArea step={1} numSteps={4} stageStartedAt={data.timestamp} />
         </div>
       );
     case 'completed':
@@ -108,11 +102,7 @@ export function InitialPostProgressArea({ data }: { data: ProofigStage }) {
               </div>
             }
           />
-          <StageProgressArea
-            step={1}
-            numSteps={4}
-            message="File received and queued for processing..."
-          />
+          <StageProgressArea step={1} numSteps={4} stageStartedAt={data.timestamp} />
         </div>
       );
     case 'error':
@@ -138,7 +128,34 @@ export function SubimageDetectionProgressArea({ data }: { data: ProofigStage }) 
             </div>
           }
         />
-        <StageProgressArea step={1} numSteps={4} message="Upload completed. Waiting..." />
+        <StageProgressArea
+          step={1}
+          numSteps={4}
+          stageStartedAt={data.timestamp}
+          label="Waiting for"
+          addSuffix={false}
+        />
+      </div>
+    );
+  }
+  if (data.status === 'notify-skipped') {
+    return (
+      <div className="flex flex-col gap-6">
+        <ui.SimpleAlert
+          type="warning"
+          message={
+            <div>
+              <span className="font-bold">Sub-image detection (notify-skipped).</span> This step was
+              marked complete when a later Proofig notify arrived without the usual progression.
+            </div>
+          }
+        />
+        <StageProgressArea
+          step={2}
+          numSteps={4}
+          stageStartedAt={data.timestamp}
+          label="Completed"
+        />
       </div>
     );
   }
@@ -148,13 +165,13 @@ export function SubimageDetectionProgressArea({ data }: { data: ProofigStage }) 
         type="info"
         message={
           <div>
-            <span className="font-bold">Identifying sub-images...</span> Proofig is scanning your
-            file to detect sub-images. When it is done, you will review the sub-images and confirm
-            or correct the detection prior to integrity checking.
+            <span className="font-bold">Identifying figure panels...</span> Proofig is scanning your
+            file to detect individual panels within your figures (sub-images). When it is done, you
+            will review the panels and confirm or correct the detection prior to integrity checking.
           </div>
         }
       />
-      <StageProgressArea step={2} numSteps={4} message="Usually takes less than 30 seconds..." />
+      <StageProgressArea step={2} numSteps={4} stageStartedAt={data.timestamp} />
     </div>
   );
 }
@@ -163,41 +180,79 @@ export function SubimageApprovalProgressArea({
   data,
   reportUrl,
   deleted,
+  workVersionId,
+  checkRunId,
+  remoteStatusActionPath,
 }: {
   data: ProofigStage;
   reportUrl?: string;
   deleted?: boolean;
+  workVersionId?: string;
+  checkRunId?: string;
+  remoteStatusActionPath?: string;
 }) {
   if (data.status === 'error')
     return (
       <SimpleErrorArea step={3} numSteps={4} message="Subimage selection failed." data={data} />
     );
+  if (data.status === 'notify-skipped') {
+    return (
+      <div className="flex flex-col gap-6">
+        <ui.SimpleAlert
+          type="warning"
+          message={
+            <div>
+              <span className="font-bold">Sub-image approval (notify-skipped).</span> Our timeline
+              was updated from a later Proofig state without the usual approval notification.
+            </div>
+          }
+        />
+        <StageProgressArea step={3} numSteps={4} stageStartedAt={data.timestamp} />
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-6">
       <ui.SimpleAlert
         type="warning"
         message={
           <div>
-            <span className="font-bold">Please approve sub-images.</span> Were all of your
-            sub-images detected correctly? Please visit Proofig to review and confirm.
+            <span className="font-bold">Please approve figure panels (sub-images).</span> Were all
+            of your figure panels detected correctly? Please visit Proofig to review and confirm.
           </div>
         }
       />
-      <StageProgressArea step={3} numSteps={4} message="Awaiting your review of sub-images..." />
-      <div className="flex gap-2 justify-end items-center">
+      <StageProgressArea step={3} numSteps={4} stageStartedAt={data.timestamp} label="Updated" />
+      <div className="flex flex-wrap gap-2 items-center w-full min-w-0">
         {deleted ? (
           <ReportNoLongerAvailable />
         ) : (
           <>
-            {!reportUrl && <MissingReportUrlIcon />}
-            <ui.Button variant="default" asChild disabled={!reportUrl}>
-              <a href={reportUrl} target="_blank" rel="noopener noreferrer">
+            <div className="flex flex-wrap gap-2 items-center min-w-0">
+              {!reportUrl && <MissingReportUrlIcon />}
+              <ProofigSubimageApprovalReportLink
+                reportUrl={reportUrl ?? ''}
+                actionPath={remoteStatusActionPath}
+                workVersionId={workVersionId}
+                checkRunId={checkRunId}
+                disabled={!reportUrl}
+              >
                 <div className="flex gap-1 items-center">
-                  <div>Approve sub-images at</div>
-                  <Logos.ProofigLogoMono className="h-7" />
+                  <div>Approve panels at</div>
+                  <Logos.LogoMono className="h-7" />
                 </div>
-              </a>
-            </ui.Button>
+              </ProofigSubimageApprovalReportLink>
+            </div>
+            <div className="flex-1 min-h-px min-w-4 basis-4" aria-hidden />
+            <div className="flex flex-wrap gap-2 justify-end items-center">
+              {remoteStatusActionPath && workVersionId ? (
+                <ProofigRefreshRemoteStatusButton
+                  actionPath={remoteStatusActionPath}
+                  workVersionId={workVersionId}
+                  checkRunId={checkRunId}
+                />
+              ) : null}
+            </div>
           </>
         )}
       </div>
@@ -210,6 +265,22 @@ export function IntegrityDetectionProgressArea({ data }: { data: ProofigStage })
     return (
       <SimpleErrorArea step={4} numSteps={4} message="Integrity detection failed." data={data} />
     );
+  if (data.status === 'notify-skipped') {
+    return (
+      <div className="flex flex-col gap-6">
+        <ui.SimpleAlert
+          type="warning"
+          message={
+            <div>
+              <span className="font-bold">Integrity checks (notify-skipped).</span> This step was
+              marked complete from a later Proofig notify without a local “processing” phase.
+            </div>
+          }
+        />
+        <StageProgressArea step={4} numSteps={4} stageStartedAt={data.timestamp} />
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-6">
       <ui.SimpleAlert
@@ -217,12 +288,12 @@ export function IntegrityDetectionProgressArea({ data }: { data: ProofigStage })
         message={
           <div>
             <span className="font-bold">Running image integrity checks...</span> Proofig is checking
-            the integrity of your sub-images. This may take several minutes, you can leave this page
+            the integrity of your figures. This may take several minutes, you can leave this page
             and come back later to see the results.
           </div>
         }
       />
-      <StageProgressArea step={4} numSteps={4} message="This may take several minutes..." />
+      <StageProgressArea step={4} numSteps={4} stageStartedAt={data.timestamp} />
     </div>
   );
 }
@@ -240,18 +311,34 @@ export function StageProgressArea({
   numSteps,
   state,
   message,
+  stageStartedAt,
+  label,
+  addSuffix,
 }: {
   step: number;
   numSteps: number;
   state?: 'default' | 'error' | 'success';
-  message: string;
+  message?: string;
+  /** When set, shows a live-updating “Started … ago” line instead of `message`. */
+  stageStartedAt?: string;
+  label?: string;
+  addSuffix?: boolean;
 }) {
+  const subline =
+    stageStartedAt != null && stageStartedAt !== '' ? (
+      <StageStartedRelative isoTimestamp={stageStartedAt} label={label} addSuffix={addSuffix} />
+    ) : (
+      (message ?? null)
+    );
+
   return (
     <div className="space-y-1 w-full">
-      <SegmentedProgressBar progress={step} numSteps={numSteps} state={state} />
-      <div>
-        <div className="text-xs text-left text-muted-foreground">{message}</div>
-      </div>
+      <ui.SegmentedProgressBar progress={step} numSteps={numSteps} state={state} />
+      {subline != null ? (
+        <div>
+          <div className="text-xs text-left text-muted-foreground">{subline}</div>
+        </div>
+      ) : null}
     </div>
   );
 }

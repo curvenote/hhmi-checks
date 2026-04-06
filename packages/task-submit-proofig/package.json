@@ -16,7 +16,8 @@
     "start": "node ./dist/index.js",
     "dev": "npm run clean && npm run build && NODE_ENV=development concurrently \"npm run build:watch\" \"nodemon\"",
     "lint": "npx eslint -c ../../.eslintrc.cjs \"src/**/*.ts\"",
-    "lint:format": "npx prettier --check \"src/**/*.ts\""
+    "lint:format": "npx prettier --check \"src/**/*.ts\"",
+    "lint:format:fix": "npx prettier --write \"src/**/*.ts\""
   },
   "dependencies": {
     "@curvenote/scms-tasks": "*",

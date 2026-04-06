@@ -1,15 +1,25 @@
 import type { ProofigDataSchema } from '../schema.js';
 import { getProofigSummaryCounts } from '../utils/proofigSummary.js';
 import { plural, ui } from '@curvenote/scms-core';
-import { ProofigLogoMono } from '../icons.js';
+import { LogoMono } from '../icons.js';
 import { ReportNoLongerAvailable } from '../components/ReportNoLongerAvailable.js';
+import { ProofigRefreshRemoteStatusButton } from '../components/ProofigRefreshRemoteStatusButton.js';
+import { ProofigOpenReportButton } from '../components/ProofigOpenReportButton.js';
 
 export function SimplifiedResultsSummary({
   proofigData,
+  workVersionId,
+  checkRunId,
+  remoteStatusActionPath,
 }: {
   proofigData: ProofigDataSchema | undefined;
+  workVersionId?: string;
+  checkRunId?: string;
+  remoteStatusActionPath?: string;
 }) {
-  const { total, waiting, bad, good } = getProofigSummaryCounts(proofigData);
+  const { total, matchesReview, bad } = getProofigSummaryCounts(proofigData);
+  const waiting = matchesReview;
+  const good = Math.max(0, total - matchesReview - bad);
   const reportUrl = proofigData?.reportUrl;
 
   const isAllClear = bad === 0 && waiting === 0;
@@ -65,16 +75,35 @@ export function SimplifiedResultsSummary({
       <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
         {proofigData?.deleted ? (
           <ReportNoLongerAvailable />
-        ) : reportUrl ? (
-          <ui.Button variant="default" asChild>
-            <a href={reportUrl} target="_blank" rel="noopener noreferrer">
-              <span className="flex gap-2 items-center">
-                <span>Open report in</span>
-                <ProofigLogoMono className="h-7" />
-              </span>
-            </a>
-          </ui.Button>
-        ) : null}
+        ) : (
+          <div className="flex flex-wrap gap-2 items-center w-full min-w-0">
+            <div className="flex flex-wrap gap-2 items-center min-w-0">
+              {reportUrl ? (
+                <ProofigOpenReportButton
+                  reportUrl={reportUrl}
+                  actionPath={remoteStatusActionPath}
+                  workVersionId={workVersionId}
+                  checkRunId={checkRunId}
+                >
+                  <span className="flex gap-2 items-center">
+                    <span>Open report in</span>
+                    <LogoMono className="h-7" />
+                  </span>
+                </ProofigOpenReportButton>
+              ) : null}
+            </div>
+            <div className="flex-1 min-h-px min-w-4 basis-4" aria-hidden />
+            <div className="flex flex-wrap gap-2 justify-end items-center">
+              {remoteStatusActionPath && workVersionId ? (
+                <ProofigRefreshRemoteStatusButton
+                  actionPath={remoteStatusActionPath}
+                  workVersionId={workVersionId}
+                  checkRunId={checkRunId}
+                />
+              ) : null}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

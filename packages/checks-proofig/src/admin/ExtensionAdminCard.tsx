@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useFetcher } from 'react-router';
 import type { ExtensionAdminCardProps } from '@curvenote/scms-core';
 import { ui } from '@curvenote/scms-core';
-import { ProofigLogo } from '../icons.js';
+import { Logo } from '../icons.js';
 
 const INTENT_BASE_URL = 'proofig-set-baseurl';
 const INTENT_CLIENT_ID = 'proofig-set-client-id';
@@ -107,7 +107,7 @@ function ExtensionAdminCard({ record }: ExtensionAdminCardProps) {
       <div className="flex gap-3 justify-between items-center min-w-0 md:justify-start md:col-span-2">
         <h2 className="text-xl font-semibold">Checks: Proofig</h2>
         <div className="flex gap-2 items-center grow"></div>
-        <ProofigLogo className="h-8 shrink-0" />
+        <Logo className="h-8 shrink-0" />
       </div>
 
       <div className="space-y-2 md:col-span-2">

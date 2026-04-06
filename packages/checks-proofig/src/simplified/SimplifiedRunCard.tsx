@@ -9,7 +9,13 @@ type RunData = {
   serviceData?: ProofigDataSchema;
 };
 
-export function SimplifiedRunCard({ run }: { run: CheckServiceRunWithVersion }) {
+export function SimplifiedRunCard({
+  run,
+  remoteStatusActionPath,
+}: {
+  run: CheckServiceRunWithVersion;
+  remoteStatusActionPath?: string;
+}) {
   const runData = run.data as RunData | null | undefined;
   const proofigData = runData?.serviceData;
   const signedFiles = run.signedFiles ?? [];
@@ -28,7 +34,7 @@ export function SimplifiedRunCard({ run }: { run: CheckServiceRunWithVersion }) 
             Last modified: {formatDate(run.date_modified, 'MMM d, yyyy h:mm a')}
           </div>
           {signedFiles.length > 0 && (
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+            <div className="flex flex-wrap gap-3 items-center mt-2 text-sm">
               {signedFiles.map((file) => (
                 <a
                   key={file.signedUrl}
@@ -38,7 +44,7 @@ export function SimplifiedRunCard({ run }: { run: CheckServiceRunWithVersion }) 
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-primary underline hover:no-underline"
                 >
-                  <FileDown className="h-4 w-4 shrink-0" />
+                  <FileDown className="w-4 h-4 shrink-0" />
                   Download {file.name}
                 </a>
               ))}
@@ -46,7 +52,12 @@ export function SimplifiedRunCard({ run }: { run: CheckServiceRunWithVersion }) 
           )}
         </div>
         <div className="pt-3 border-t">
-          <SimplifiedProgress proofigData={proofigData} />
+          <SimplifiedProgress
+            proofigData={proofigData}
+            workVersionId={run.work_version_id}
+            checkRunId={run.id}
+            remoteStatusActionPath={remoteStatusActionPath}
+          />
         </div>
       </div>
     </ui.Card>

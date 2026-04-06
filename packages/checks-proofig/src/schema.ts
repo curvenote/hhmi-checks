@@ -51,7 +51,8 @@ export const ProofigNotifyEventSchema = z.object({
 export const LinearStageStatusSchema = z.enum([
   'pending', // Not started yet
   'processing', // Currently in progress
-  'completed', // Successfully completed
+  'completed', // Successfully completed (we saw the expected Proofig progression / notifies)
+  'notify-skipped', // Advanced without the usual notifies (late payload catch-up)
   'error', // Error occurred
 ]);
 
@@ -145,6 +146,11 @@ export type ProofigNotifyState = z.infer<typeof ProofigNotifyStateSchema>;
 
 export type ProofigStages = ProofigDataSchema['stages'];
 
+/** Linear stage is past for pipeline purposes (real completion or catch-up). */
+export function linearStageIsDone(status: ProofigStageStatus | undefined): boolean {
+  return status === 'completed' || status === 'notify-skipped';
+}
+
 export const MINIMAL_PROOFIG_SERVICE_DATA: ProofigDataSchema = {
   stages: {
     initialPost: { status: 'pending', history: [], timestamp: new Date().toISOString() },
@@ -193,8 +199,8 @@ export function getCurrentProofigStage(stages: ProofigStages) {
         break;
       }
     } else {
-      // Review/final stages: pending/not-completed/error are "active"
-      if (stageStatus === 'pending' || stageStatus === 'error') {
+      // Review/final stages: in-flight human review (`requested`) or pending/error are "active"
+      if (stageStatus === 'pending' || stageStatus === 'error' || stageStatus === 'requested') {
         currentStageIndex = i;
         currentStage = stage;
         currentStageData = stageData;
@@ -212,4 +218,17 @@ export function getCurrentProofigStage(stages: ProofigStages) {
   }
 
   return { currentStageIndex, currentStage, currentStageData };
+}
+
+/**
+ * True when the UI shows “awaiting sub-image approval” (timeline/details subimageSelection step,
+ * excluding error and notify-skipped). Used for one-time status hydration on work details load.
+ */
+export function isProofigAwaitingSubimageApprovalInUi(stages: ProofigStages): boolean {
+  const merged = { ...ALL_PENDING_STAGES, ...stages };
+  const { currentStage } = getCurrentProofigStage(merged);
+  if (currentStage !== 'subimageSelection') return false;
+  const sel = merged.subimageSelection;
+  if (!sel) return false;
+  return sel.status !== 'error' && sel.status !== 'notify-skipped';
 }

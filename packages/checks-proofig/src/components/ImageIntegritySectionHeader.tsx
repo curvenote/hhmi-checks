@@ -8,7 +8,7 @@ export function ImageIntegritySectionHeader({ tag }: { tag: React.ReactNode }) {
         <div className="font-normal uppercase text-muted-foreground">Figure Integrity Checks</div>
         {tag}
         <div className="grow" />
-        <Logos.ProofigLogo className="self-end h-8" />
+        <Logos.LogoThemed className="self-end h-8" />
       </div>
     </div>
   );

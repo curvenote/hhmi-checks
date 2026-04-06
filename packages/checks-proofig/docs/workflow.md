@@ -1,5 +1,7 @@
 # Expected Workflow and Notification sequencing
 
+Once a **Deleted** notify has been stored on the check run (`serviceData.deleted` / summary state), the notify webhook returns **200** and does not apply further payloads for that run id (no message row, no state changes).
+
 The following represents the expected state transitions and notification sequencing that we should receive from Proofig.
 
 :::{mermaid}

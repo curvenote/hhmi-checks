@@ -15,10 +15,22 @@ import {
   KnownJobTypes,
 } from '@curvenote/scms-core';
 import type { Prisma } from '@curvenote/scms-db';
-import { MINIMAL_PROOFIG_SERVICE_DATA, type ProofigDataSchema } from '../schema.js';
+import {
+  ALL_PENDING_STAGES,
+  MINIMAL_PROOFIG_SERVICE_DATA,
+  proofigDataSchema,
+  isProofigAwaitingSubimageApprovalInUi,
+  type ProofigDataSchema,
+  type ProofigStages,
+} from '../schema.js';
 import { markInitialPostError, startInitialPostProcessing } from './stateMachine.server.js';
 import { PROOFIG_SUBMIT_STREAM } from './jobs/proofig-submit-stream.server.js';
 import { PROOFIG_SUBMIT } from './jobs/proofig-submit-service.server.js';
+import { getProofigConfigWithOverrides } from './config.server.js';
+import { postProofigRemoteStatus } from './proofigRemoteStatus.server.js';
+import { applyNotifyPayloadToCheckRun } from './applyNotifyPayloadToCheckRun.server.js';
+import { getProofingToken } from './proofigAuth.server.js';
+import { proofigReportUrlWithAccessToken } from './proofigReportUrl.server.js';
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -50,6 +62,129 @@ function hasDocxInMetadata(metadata: unknown): boolean {
       (typeof f?.name === 'string' && f.name.toLowerCase().endsWith('.docx')) ||
       (typeof f?.path === 'string' && f.path.toLowerCase().endsWith('.docx')),
   );
+}
+
+async function findProofigRunForWorkVersion(
+  workVersionId: string,
+  explicitCheckRunId: string | null | undefined,
+) {
+  const prisma = await getPrismaClient();
+  if (explicitCheckRunId?.trim()) {
+    return prisma.checkServiceRun.findFirst({
+      where: {
+        id: explicitCheckRunId.trim(),
+        work_version_id: workVersionId,
+        kind: 'proofig',
+      },
+    });
+  }
+  return prisma.checkServiceRun.findFirst({
+    where: { work_version_id: workVersionId, kind: 'proofig' },
+    orderBy: { date_modified: 'desc' },
+  });
+}
+
+function reportIdFromRunData(runData: unknown): string | undefined {
+  if (runData == null || typeof runData !== 'object') return undefined;
+  const serviceData = (runData as { serviceData?: unknown }).serviceData;
+  const parsed = proofigDataSchema.safeParse(serviceData);
+  return parsed.success ? parsed.data.reportId : undefined;
+}
+
+function proofigStagesFromRunRowData(runData: unknown): ProofigStages {
+  if (runData == null || typeof runData !== 'object') return ALL_PENDING_STAGES;
+  const serviceData = (runData as { serviceData?: unknown }).serviceData;
+  const parsed = proofigDataSchema.safeParse(serviceData);
+  if (!parsed.success) return ALL_PENDING_STAGES;
+  return { ...ALL_PENDING_STAGES, ...parsed.data.stages };
+}
+
+type ProofigRemoteStatusFetchResult =
+  | { ok: true; runId: string; body: unknown }
+  | { ok: false; result: ExtensionCheckHandleActionResult };
+
+/**
+ * Shared: find run, load config, POST Proofig /api/status with a fresh token.
+ */
+async function fetchProofigRemoteStatusPayload(
+  ctx: NonNullable<ExtensionCheckHandleActionArgs['ctx']>,
+  workVersionId: string,
+  checkRunIdField: string | undefined,
+): Promise<ProofigRemoteStatusFetchResult> {
+  const prisma = await getPrismaClient();
+  const run = await findProofigRunForWorkVersion(workVersionId, checkRunIdField);
+  if (!run) {
+    return {
+      ok: false,
+      result: {
+        error: { type: 'general', message: 'No Proofig check run found for this work version.' },
+        status: 404,
+      },
+    };
+  }
+  const reportId = reportIdFromRunData(run.data);
+  if (!reportId?.trim()) {
+    return {
+      ok: false,
+      result: {
+        error: {
+          type: 'general',
+          message:
+            'This run has no Proofig report_id yet. Wait until the submission to Proofig has completed.',
+        },
+        status: 400,
+      },
+    };
+  }
+  const base =
+    (ctx.$config.app?.extensions?.['checks-proofig'] as Record<string, unknown> | undefined) ?? {};
+  const mergedConfig = await getProofigConfigWithOverrides(base, prisma);
+  const apiBaseUrl =
+    (mergedConfig.apiBaseUrl as string | undefined)?.trim() ||
+    process.env.PROOFIG_API_BASE_URL?.trim();
+  if (!apiBaseUrl) {
+    return {
+      ok: false,
+      result: {
+        error: { type: 'general', message: 'checks-proofig apiBaseUrl is not configured.' },
+        status: 500,
+      },
+    };
+  }
+  const statusResult = await postProofigRemoteStatus(apiBaseUrl, mergedConfig, reportId.trim());
+  if (!statusResult.ok) {
+    return {
+      ok: false,
+      result: {
+        error: { type: 'general', message: statusResult.message },
+        status:
+          statusResult.statusCode && statusResult.statusCode >= 400 ? statusResult.statusCode : 502,
+      },
+    };
+  }
+  return { ok: true, runId: run.id, body: statusResult.body };
+}
+
+async function applyProofigRemoteStatusRefresh(
+  ctx: NonNullable<ExtensionCheckHandleActionArgs['ctx']>,
+  workVersionId: string,
+  checkRunIdField: string | undefined,
+): Promise<ExtensionCheckHandleActionResult> {
+  const fetched = await fetchProofigRemoteStatusPayload(ctx, workVersionId, checkRunIdField);
+  if (!fetched.ok) return fetched.result;
+  const receivedAt = new Date().toISOString();
+  const applyResult = await applyNotifyPayloadToCheckRun(fetched.runId, fetched.body, receivedAt);
+  if (!applyResult.ok) {
+    const msg =
+      applyResult.kind === 'persist'
+        ? applyResult.message
+        : applyResult.issues.map((i) => i.message).join('; ');
+    return {
+      error: { type: 'general', message: msg },
+      status: 400,
+    };
+  }
+  return { success: true };
 }
 
 // Define the checks metadata section type (matches app schema)
@@ -233,19 +368,261 @@ export async function handleProofigAction(
     return { success: true };
   }
 
-  // Any other intent is unknown
-  if (intent !== 'execute') {
+  // ----- POST /api/status at Proofig (manual refresh; same payload shape as notify) -----
+  if (intent === 'fetch-remote-status') {
+    if (!ctx) {
+      return {
+        error: {
+          type: 'general',
+          message: 'Proofig fetch-remote-status requires a signed-in context',
+        },
+        status: 401,
+      };
+    }
+    if (!workVersionId) {
+      return {
+        error: { type: 'general', message: 'Work version ID is required' },
+        status: 400,
+      };
+    }
+    const checkRunIdField = args.formData?.get('checkRunId')?.toString();
+    const fetched = await fetchProofigRemoteStatusPayload(ctx, workVersionId, checkRunIdField);
+    if (!fetched.ok) return fetched.result;
     return {
-      error: { type: 'general', message: 'Unknown intent' },
-      status: 400,
-    };
+      success: true,
+      proofigRemoteStatus: fetched.body,
+    } as ExtensionCheckHandleActionResult;
   }
-  // If we got here with a recognised intent but without ctx/createJob, we can't execute.
+
+  // ----- Fetch remote status and apply to check run immediately (no preview dialog) -----
+  if (intent === 'refresh-remote-status') {
+    if (!ctx) {
+      return {
+        error: {
+          type: 'general',
+          message: 'Proofig refresh-remote-status requires a signed-in context',
+        },
+        status: 401,
+      };
+    }
+    if (!workVersionId) {
+      return {
+        error: { type: 'general', message: 'Work version ID is required' },
+        status: 400,
+      };
+    }
+    const checkRunIdField = args.formData?.get('checkRunId')?.toString();
+    return applyProofigRemoteStatusRefresh(ctx, workVersionId, checkRunIdField);
+  }
+
+  // ----- Fresh access token for opening Proofig UI (read stored report_url; do not persist token) -----
+  if (intent === 'refresh-report-url') {
+    if (!ctx) {
+      return {
+        error: {
+          type: 'general',
+          message: 'Proofig refresh-report-url requires a signed-in context',
+        },
+        status: 401,
+      };
+    }
+    if (!workVersionId) {
+      return {
+        error: { type: 'general', message: 'Work version ID is required' },
+        status: 400,
+      };
+    }
+    const checkRunIdField = args.formData?.get('checkRunId')?.toString()?.trim();
+    if (!checkRunIdField) {
+      return {
+        error: { type: 'general', message: 'checkRunId is required' },
+        status: 400,
+      };
+    }
+
+    const prisma = await getPrismaClient();
+    const base =
+      (ctx.$config.app?.extensions?.['checks-proofig'] as Record<string, unknown> | undefined) ??
+      {};
+
+    const [run, mergedConfig] = await Promise.all([
+      prisma.checkServiceRun.findFirst({
+        where: {
+          id: checkRunIdField,
+          work_version_id: workVersionId,
+          kind: 'proofig',
+        },
+      }),
+      getProofigConfigWithOverrides(base, prisma),
+    ]);
+
+    if (!run) {
+      return {
+        error: { type: 'general', message: 'Proofig check run not found for this work version.' },
+        status: 404,
+      };
+    }
+
+    const rowData = run.data as { serviceData?: unknown } | null;
+    const parsed = proofigDataSchema.safeParse(rowData?.serviceData);
+    const serviceData = parsed.success ? parsed.data : null;
+    const storedReportUrl =
+      serviceData?.reportUrl?.trim() || serviceData?.summary?.reportUrl?.trim();
+    if (!storedReportUrl) {
+      return {
+        error: {
+          type: 'general',
+          message: 'No report URL is stored for this run yet.',
+        },
+        status: 400,
+      };
+    }
+    const apiBaseUrl =
+      (mergedConfig.apiBaseUrl as string | undefined)?.trim() ||
+      process.env.PROOFIG_API_BASE_URL?.trim();
+    if (!apiBaseUrl) {
+      return {
+        error: {
+          type: 'general',
+          message: 'checks-proofig apiBaseUrl is not configured.',
+        },
+        status: 500,
+      };
+    }
+
+    let token: string;
+    try {
+      token = await getProofingToken(apiBaseUrl, mergedConfig);
+    } catch (e) {
+      return {
+        error: {
+          type: 'general',
+          message: e instanceof Error ? e.message : 'Proofig authentication failed',
+        },
+        status: 502,
+      };
+    }
+
+    let freshUrl: string;
+    try {
+      freshUrl = proofigReportUrlWithAccessToken(storedReportUrl, token);
+    } catch (e) {
+      return {
+        error: {
+          type: 'general',
+          message: e instanceof Error ? e.message : 'Invalid stored report URL',
+        },
+        status: 400,
+      };
+    }
+
+    return {
+      success: true,
+      proofigReportOpenUrl: freshUrl,
+    } as ExtensionCheckHandleActionResult & { proofigReportOpenUrl: string };
+  }
+
+  /**
+   * Work-details load: sync from Proofig /api/status when this run is the latest Proofig run for
+   * the version and the pipeline UI is in sub-image approval. No-op otherwise (success).
+   */
+  if (intent === 'hydrate-subimage-approval-status') {
+    if (!ctx) {
+      return {
+        error: {
+          type: 'general',
+          message: 'Proofig hydrate-subimage-approval-status requires a signed-in context',
+        },
+        status: 401,
+      };
+    }
+    if (!workVersionId) {
+      return {
+        error: { type: 'general', message: 'Work version ID is required' },
+        status: 400,
+      };
+    }
+    const checkRunIdField = args.formData?.get('checkRunId')?.toString()?.trim();
+    if (!checkRunIdField) {
+      return {
+        error: { type: 'general', message: 'checkRunId is required' },
+        status: 400,
+      };
+    }
+    const prisma = await getPrismaClient();
+    const latest = await prisma.checkServiceRun.findFirst({
+      where: { work_version_id: workVersionId, kind: 'proofig' },
+      orderBy: { date_modified: 'desc' },
+      select: { id: true, data: true },
+    });
+    if (!latest || latest.id !== checkRunIdField) {
+      return { success: true };
+    }
+    const stages = proofigStagesFromRunRowData(latest.data);
+    if (!isProofigAwaitingSubimageApprovalInUi(stages)) {
+      return { success: true };
+    }
+    return applyProofigRemoteStatusRefresh(ctx, workVersionId, checkRunIdField);
+  }
+
+  // ----- Apply notify-shaped JSON to the check run (same persistence as webhook) -----
+  if (intent === 'apply-notify-payload') {
+    if (!ctx) {
+      return {
+        error: {
+          type: 'general',
+          message: 'Proofig apply-notify-payload requires a signed-in context',
+        },
+        status: 401,
+      };
+    }
+    if (!workVersionId) {
+      return {
+        error: { type: 'general', message: 'Work version ID is required' },
+        status: 400,
+      };
+    }
+    const rawJson = args.formData?.get('notifyPayloadJson')?.toString();
+    if (rawJson == null || !rawJson.trim()) {
+      return {
+        error: { type: 'general', message: 'notifyPayloadJson is required' },
+        status: 400,
+      };
+    }
+    let parsedBody: unknown;
+    try {
+      parsedBody = JSON.parse(rawJson) as unknown;
+    } catch {
+      return {
+        error: { type: 'general', message: 'notifyPayloadJson must be valid JSON' },
+        status: 400,
+      };
+    }
+    const checkRunIdField = args.formData?.get('checkRunId')?.toString();
+    const run = await findProofigRunForWorkVersion(workVersionId, checkRunIdField);
+    if (!run) {
+      return {
+        error: { type: 'general', message: 'No Proofig check run found for this work version.' },
+        status: 404,
+      };
+    }
+    const receivedAt = new Date().toISOString();
+    const applyResult = await applyNotifyPayloadToCheckRun(run.id, parsedBody, receivedAt);
+    if (!applyResult.ok) {
+      const msg =
+        applyResult.kind === 'persist'
+          ? applyResult.message
+          : applyResult.issues.map((i) => i.message).join('; ');
+      return {
+        error: { type: 'general', message: msg },
+        status: 400,
+      };
+    }
+    return { success: true };
+  }
+
   return {
-    error: {
-      type: 'general',
-      message: 'Proofig execute requires context and job creator',
-    },
+    error: { type: 'general', message: 'Unknown intent' },
     status: 400,
   };
 }

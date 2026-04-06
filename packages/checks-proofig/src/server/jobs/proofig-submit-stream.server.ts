@@ -13,11 +13,12 @@ import {
   safeCheckServiceRunDataUpdate,
 } from '@curvenote/scms-server';
 import { getProofigConfigWithOverrides } from '../config.server.js';
-import { getProofigToken } from '../proofigAuth.server.js';
+import { getProofingToken, invalidateProofingTokenCache } from '../proofigAuth.server.js';
 import {
   buildProofigSubmitParams,
   getPdfFileFromMetadata,
   postToProofigStream,
+  proofigSubmitErrorHasStatus,
   rollingLogEntry,
   workVersionToPayload,
 } from './proofig-submit.utils.js';
@@ -150,22 +151,6 @@ export async function proofigSubmitStreamHandler(
     );
   }
 
-  // Carry out Proofig auth handshake and get token (cached in Object table when fresh)
-  let token: string;
-  try {
-    token = await getProofigToken(apiBaseUrl, mergedConfig, prisma);
-  } catch (err) {
-    const errorMessage = getErrorMessage(err);
-    console.error('[proofigSubmitStreamHandler] Failed to get Proofig token', err);
-    const failedAuthJob = await handleProofigSubmitJobFailure(
-      job.id,
-      payload.proofig_run_id,
-      errorMessage,
-      rollingLog,
-    );
-    return failedAuthJob;
-  }
-
   const notifyBaseUrl =
     (mergedConfig.notifyBaseUrl as string | undefined)?.replace(/\/$/, '') ??
     new URL(ctx.request.url).origin + '/v1/hooks/proofig/notify';
@@ -187,21 +172,63 @@ export async function proofigSubmitStreamHandler(
   });
   rollingLog.push(rollingLogEntry('job marked RUNNING', runningJob.id));
 
-  rollingLog.push(rollingLogEntry('downloading PDF via signedUrl', { signedUrl }));
-  const pdfResponse = await fetch(signedUrl);
-  if (!pdfResponse.ok) {
-    throw new Error(`Failed to download PDF: ${pdfResponse.status} ${pdfResponse.statusText}`);
+  async function fetchPdfForSubmit(): Promise<Response> {
+    rollingLog.push(rollingLogEntry('downloading PDF via signedUrl', { signedUrl }));
+    const r = await fetch(signedUrl);
+    if (!r.ok) {
+      throw new Error(`Failed to download PDF: ${r.status} ${r.statusText}`);
+    }
+    return r;
+  }
+
+  let token: string;
+  try {
+    rollingLog.push(
+      rollingLogEntry('resolving Proofig token (cache or authenticate) before submit', {}),
+    );
+    token = await getProofingToken(apiBaseUrl, mergedConfig);
+  } catch (err) {
+    const errorMessage = getErrorMessage(err);
+    console.error('[proofigSubmitStreamHandler] Failed to get Proofig token', err);
+    const failedAuthJob = await handleProofigSubmitJobFailure(
+      job.id,
+      payload.proofig_run_id,
+      errorMessage,
+      rollingLog,
+    );
+    return failedAuthJob;
   }
 
   try {
     rollingLog.push(rollingLogEntry('submitting to Proofig via streaming HTTP POST', {}));
-    const result = await postToProofigStream(
-      apiBaseUrl,
-      submitParams,
-      pdfResponse,
-      filename,
-      token,
-    );
+
+    const streamSubmit = (pdf: Response, bearer: string) =>
+      postToProofigStream(apiBaseUrl, submitParams, pdf, filename, bearer);
+
+    const submitWith401Retry = async (): Promise<
+      Awaited<ReturnType<typeof postToProofigStream>>
+    > => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const pdfResponse = await fetchPdfForSubmit();
+        try {
+          return await streamSubmit(pdfResponse, token);
+        } catch (err) {
+          const is401 = proofigSubmitErrorHasStatus(err, 401);
+          if (!is401 || attempt > 0) throw err;
+          rollingLog.push(
+            rollingLogEntry(
+              'Proofig submit returned 401; invalidating token cache and retrying once',
+              {},
+            ),
+          );
+          await invalidateProofingTokenCache(apiBaseUrl, mergedConfig);
+          token = await getProofingToken(apiBaseUrl, mergedConfig);
+        }
+      }
+      throw new Error('Proofig submit: retry loop exited without result');
+    };
+
+    const result = await submitWith401Retry();
 
     // Transition run stages: initialPost completed, subimageDetection pending
     const receivedAt = new Date().toISOString();
