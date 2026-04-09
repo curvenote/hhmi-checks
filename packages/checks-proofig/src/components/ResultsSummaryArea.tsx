@@ -90,7 +90,7 @@ export function ResultsSummaryArea({
   ];
 
   const legend = [];
-  if (matchesReview > 0) {
+  if (matchesReview > 0 || matchedReport > 0 || inspectReport > 0) {
     legend.push({
       value: total,
       label: 'Number of figure panels',
@@ -126,7 +126,7 @@ export function ResultsSummaryArea({
     if (inspectReport > 0) {
       legend.push({
         value: inspectReport,
-        label: plural('Additional panel(s) manually marked as (a|) problem(s)', inspectReport),
+        label: plural('Panel(s) manually marked as (a|) problem(s)', inspectReport),
         textColor: COLORS.bad.text,
         borderColor: COLORS.bad.border,
       });
