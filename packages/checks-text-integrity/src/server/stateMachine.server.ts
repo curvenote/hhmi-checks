@@ -1,0 +1,266 @@
+import type {
+  TextIntegrityStages,
+  TextIntegrityDataSchema,
+  LinearStageStatus,
+  LinearStage,
+  WebhookBody,
+  StoredSimilarityReport,
+} from '../schema.js';
+
+import {
+  WebhookEvent,
+  WEBHOOK_EVENTS,
+  SimilarityReportPayloadSchema,
+  MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+  toStoredSimilarityReport,
+} from '../schema.js';
+
+const HISTORY_LIMIT = 20;
+const WEBHOOK_HISTORY_LIMIT = 50;
+
+// ---------------------------------------------------------------------------
+// Stage helpers (mirror proofig's setLinearStage)
+// ---------------------------------------------------------------------------
+
+function setLinearStage(
+  stages: TextIntegrityStages,
+  key: keyof TextIntegrityStages,
+  status: LinearStageStatus,
+  receivedAt: string,
+  error?: string,
+): TextIntegrityStages {
+  const prev = stages[key] as LinearStage | undefined;
+  const prevStatus = prev?.status;
+  const prevTimestamp = prev?.timestamp;
+  const historyEntry =
+    prevStatus != null && prevTimestamp != null
+      ? { status: prevStatus, timestamp: prevTimestamp }
+      : null;
+  const history = [...(historyEntry ? [historyEntry] : []), ...(prev?.history ?? [])].slice(
+    0,
+    HISTORY_LIMIT,
+  );
+
+  return {
+    ...stages,
+    [key]: {
+      ...(stages[key] as any),
+      status,
+      timestamp: receivedAt,
+      history,
+      ...(error ? { error } : {}),
+    },
+  } as TextIntegrityStages;
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle helpers (called from the submit job, not from webhooks)
+// ---------------------------------------------------------------------------
+
+/**
+ * Mark the submission stage as processing (called when the submit job starts).
+ */
+export function startSubmission(
+  current?: TextIntegrityDataSchema,
+  receivedAt: string = new Date().toISOString(),
+): TextIntegrityDataSchema {
+  const base = current ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+  const stages = base.stages ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA.stages;
+  const updatedStages = setLinearStage(stages, 'submission', 'processing', receivedAt);
+  return {
+    ...base,
+    stages: updatedStages,
+  };
+}
+
+/**
+ * Mark the submission as errored (called when the submit job fails).
+ */
+export function markSubmissionError(
+  current?: TextIntegrityDataSchema,
+  message?: string,
+  receivedAt: string = new Date().toISOString(),
+): TextIntegrityDataSchema {
+  const base = current ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+  const stages = base.stages ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA.stages;
+  const updatedStages = setLinearStage(stages, 'submission', 'error', receivedAt, message);
+  return {
+    ...base,
+    stages: updatedStages,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Main state machine transition
+// ---------------------------------------------------------------------------
+
+/**
+ * Pure transition function for mapping TCA webhook events onto `serviceData`.
+ * Returns the next state, or `null` if the event is a no-op (duplicate/already in that state).
+ */
+export function applyWebhookEvent(
+  current: TextIntegrityDataSchema,
+  webhook: WebhookBody,
+  receivedAt: string = new Date().toISOString(),
+): TextIntegrityDataSchema | null {
+  if (!WEBHOOK_EVENTS.includes(webhook.event)) {
+    console.warn(`[checks-text-integrity] Unknown webhook event: ${webhook.event}, ignoring.`);
+    return current;
+  }
+
+  const stages = current.stages ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA.stages;
+  let updatedStages: TextIntegrityStages | null = null;
+  let summaryReport: StoredSimilarityReport | undefined = current.summaryReport;
+  let reportPdfId: string | undefined = current.reportPdfId;
+  let errorMessage: string | undefined;
+
+  switch (webhook.event) {
+    case WebhookEvent.SubmissionComplete: {
+      if (stages.submission.status === 'completed') break;
+      let s = setLinearStage(stages, 'submission', 'completed', receivedAt);
+      s = setLinearStage(s, 'processing', 'pending', receivedAt);
+      updatedStages = s;
+      break;
+    }
+
+    case WebhookEvent.SubmissionFailed: {
+      if (stages.submission.status === 'error') break;
+      errorMessage =
+        typeof webhook.payload?.error_message === 'string'
+          ? webhook.payload.error_message
+          : 'Submission failed';
+      updatedStages = setLinearStage(stages, 'submission', 'error', receivedAt, errorMessage);
+      break;
+    }
+
+    case WebhookEvent.ProcessingPhaseStarted: {
+      if (stages.processing?.status === 'processing') break;
+      let s = stages;
+      if (s.submission.status !== 'completed' && s.submission.status !== 'notify-skipped') {
+        s = setLinearStage(s, 'submission', 'notify-skipped', receivedAt);
+      }
+      updatedStages = setLinearStage(s, 'processing', 'processing', receivedAt);
+      break;
+    }
+
+    case WebhookEvent.ProcessingPhaseComplete: {
+      if (
+        stages.processing?.status === 'completed' ||
+        stages.processing?.status === 'notify-skipped'
+      ) {
+        break;
+      }
+
+      let s = stages;
+      if (s.submission.status !== 'completed' && s.submission.status !== 'notify-skipped') {
+        s = setLinearStage(s, 'submission', 'notify-skipped', receivedAt);
+      }
+      s = setLinearStage(s, 'processing', 'completed', receivedAt);
+      s = setLinearStage(s, 'reportGeneration', 'pending', receivedAt);
+      updatedStages = s;
+
+      const providerPayload = webhook.payload?.provider_payload;
+      const reportResult = SimilarityReportPayloadSchema.safeParse(providerPayload);
+      if (reportResult.success) {
+        summaryReport = toStoredSimilarityReport(reportResult.data);
+      }
+
+      const reportObj = webhook.payload?.report;
+      if (
+        reportObj &&
+        typeof reportObj === 'object' &&
+        typeof (reportObj as any).report_id === 'string'
+      ) {
+        reportPdfId = String((reportObj as any).report_id);
+      }
+      break;
+    }
+
+    case WebhookEvent.ReportGenerationStarted: {
+      if (stages.reportGeneration?.status === 'processing') break;
+      let s = stages;
+      if (s.submission.status !== 'completed' && s.submission.status !== 'notify-skipped') {
+        s = setLinearStage(s, 'submission', 'notify-skipped', receivedAt);
+      }
+      if (s.processing?.status !== 'completed' && s.processing?.status !== 'notify-skipped') {
+        s = setLinearStage(s, 'processing', 'notify-skipped', receivedAt);
+      }
+      updatedStages = setLinearStage(s, 'reportGeneration', 'processing', receivedAt);
+      break;
+    }
+
+    case WebhookEvent.ReportGenerationComplete: {
+      if (
+        stages.reportGeneration?.status === 'completed' ||
+        stages.reportGeneration?.status === 'notify-skipped'
+      ) {
+        break;
+      }
+      let s = stages;
+      if (s.submission.status !== 'completed' && s.submission.status !== 'notify-skipped') {
+        s = setLinearStage(s, 'submission', 'notify-skipped', receivedAt);
+      }
+      if (s.processing?.status !== 'completed' && s.processing?.status !== 'notify-skipped') {
+        s = setLinearStage(s, 'processing', 'notify-skipped', receivedAt);
+      }
+      updatedStages = setLinearStage(s, 'reportGeneration', 'completed', receivedAt);
+
+      const reportObj = webhook.payload?.report;
+      if (
+        reportObj &&
+        typeof reportObj === 'object' &&
+        typeof (reportObj as any).report_id === 'string'
+      ) {
+        reportPdfId = String((reportObj as any).report_id);
+      }
+      break;
+    }
+
+    case WebhookEvent.ReportGenerationFailed: {
+      if (stages.reportGeneration?.status === 'error') break;
+      errorMessage =
+        typeof webhook.payload?.error_message === 'string'
+          ? webhook.payload.error_message
+          : 'Report generation failed';
+      let s = stages;
+      if (s.submission.status !== 'completed' && s.submission.status !== 'notify-skipped') {
+        s = setLinearStage(s, 'submission', 'notify-skipped', receivedAt);
+      }
+      if (s.processing?.status !== 'completed' && s.processing?.status !== 'notify-skipped') {
+        s = setLinearStage(s, 'processing', 'notify-skipped', receivedAt);
+      }
+      updatedStages = setLinearStage(s, 'reportGeneration', 'error', receivedAt, errorMessage);
+      break;
+    }
+  }
+
+  if (!updatedStages) return null;
+
+  const webhookLogEntry = {
+    event: webhook.event,
+    receivedAt,
+    payload: webhook.payload as Record<string, unknown> | undefined,
+  };
+  const webhookHistory = [webhookLogEntry, ...(current.webhookHistory ?? [])].slice(
+    0,
+    WEBHOOK_HISTORY_LIMIT,
+  );
+
+  const next: TextIntegrityDataSchema = {
+    ...current,
+    stages: updatedStages,
+    summaryReport,
+    reportPdfId: reportPdfId ?? current.reportPdfId,
+    latest: {
+      event: webhook.event,
+      receivedAt,
+      overallMatchPercentage:
+        summaryReport?.overallMatchPercentage ?? current.latest?.overallMatchPercentage,
+      reportPdfId: reportPdfId ?? current.latest?.reportPdfId,
+      errorMessage: errorMessage ?? current.latest?.errorMessage,
+    },
+    webhookHistory,
+  };
+
+  return next;
+}

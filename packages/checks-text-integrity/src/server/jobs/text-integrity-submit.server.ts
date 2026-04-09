@@ -1,0 +1,348 @@
+import type { CreateJob, CheckServiceRunData } from '@curvenote/scms-core';
+import type { Context } from '@curvenote/scms-server';
+import { JobStatus } from '@curvenote/scms-db';
+import type { Prisma } from '@curvenote/scms-db';
+import { httpError, coerceToObject, WORK_VERSION_DOCX_MIME } from '@curvenote/scms-core';
+import { z } from 'zod';
+import { uuidv7 } from 'uuidv7';
+import {
+  getPrismaClient,
+  jobs,
+  safeCheckServiceRunDataUpdate,
+  signFilesInMetadata,
+} from '@curvenote/scms-server';
+import type { TextIntegrityDataSchema, ServiceManifestSnapshot } from '../../schema.js';
+import {
+  startSubmission,
+  markSubmissionError as markSubmissionErrorSM,
+} from '../stateMachine.server.js';
+import { getTextIntegrityConfigWithOverrides } from '../config.server.js';
+
+/** Job type for Text Integrity submit via checks-relay. */
+export const TEXT_INTEGRITY_SUBMIT = 'TEXT_INTEGRITY_SUBMIT';
+
+const TextIntegritySubmitJobPayloadSchema = z.object({
+  work_version_id: z.string().uuid('work_version_id is required'),
+  text_integrity_run_id: z.string().min(1, 'text_integrity_run_id is required'),
+});
+
+export type TextIntegritySubmitJobPayload = z.infer<typeof TextIntegritySubmitJobPayloadSchema>;
+
+type AppChecksConfig = {
+  relayBaseUrl?: string;
+  relayApiKey?: string;
+  textIntegrityServiceName?: string;
+};
+
+const RELAY_SUBMIT_TIMEOUT_MS = 300_000;
+
+type ManuscriptFile = { url: string; filename: string; role: string };
+
+type MetadataWithFiles = {
+  files?: Record<string, { signedUrl?: string; name?: string; path?: string; type?: string }>;
+};
+
+function getAppChecks(ctx: Context): AppChecksConfig | undefined {
+  const app = ctx.$config?.app as { checks?: AppChecksConfig } | undefined;
+  return app?.checks;
+}
+
+function resolveServiceName(
+  merged: Record<string, unknown>,
+  checks: AppChecksConfig | undefined,
+): string {
+  const fromExt = merged.serviceName;
+  if (typeof fromExt === 'string' && fromExt.trim() !== '') return fromExt.trim();
+  const fromApp = checks?.textIntegrityServiceName;
+  if (typeof fromApp === 'string' && fromApp.trim() !== '') return fromApp.trim();
+  return 'ithenticate';
+}
+
+function pickManuscriptFromSignedMetadata(
+  metadata: MetadataWithFiles | null,
+  workVersionId: string,
+): ManuscriptFile {
+  const files = metadata?.files;
+  if (!files || typeof files !== 'object') {
+    throw httpError(422, `Work version ${workVersionId} has no metadata.files`);
+  }
+  const entries = Object.values(files);
+  let pdf: (typeof entries)[0] | undefined;
+  let docx: (typeof entries)[0] | undefined;
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object') continue;
+    const type = entry.type?.toLowerCase?.();
+    const name = (entry.name ?? entry.path ?? '').toLowerCase();
+    const isPdf = type === 'application/pdf' || name.endsWith('.pdf') || name === 'pdf';
+    const isDocx = type === WORK_VERSION_DOCX_MIME || name.endsWith('.docx');
+    if (isPdf && !pdf) pdf = entry;
+    if (isDocx && !docx) docx = entry;
+  }
+  const chosen = pdf ?? docx;
+  if (!chosen?.signedUrl) {
+    throw httpError(
+      422,
+      `Work version ${workVersionId} has no PDF or DOCX with a signedUrl; cannot submit to relay`,
+    );
+  }
+  let filename = (chosen.name ?? chosen.path ?? '').trim();
+  if (!filename) {
+    filename = pdf ? 'manuscript.pdf' : 'manuscript.docx';
+  } else if (pdf && !filename.toLowerCase().endsWith('.pdf')) {
+    filename = `${filename}.pdf`;
+  } else if (!pdf && docx && !filename.toLowerCase().endsWith('.docx')) {
+    filename = `${filename}.docx`;
+  }
+  return { url: chosen.signedUrl, filename, role: 'manuscript' };
+}
+
+type RelaySubmitResponse = {
+  status?: string;
+  message?: string;
+  error?: string;
+  result?: {
+    submissionId?: string;
+    externalRef?: string;
+  };
+};
+
+async function fetchServiceManifest(
+  relayBaseUrl: string,
+  relayApiKey: string,
+  serviceName: string,
+): Promise<ServiceManifestSnapshot | undefined> {
+  try {
+    const url = `${relayBaseUrl}/api/v1/services/${encodeURIComponent(serviceName)}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${relayApiKey}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return undefined;
+    const detail = (await res.json()) as Record<string, unknown>;
+    if (
+      typeof detail.name === 'string' &&
+      typeof detail.title === 'string' &&
+      typeof detail.logo === 'string' &&
+      typeof detail.version === 'string'
+    ) {
+      return {
+        name: detail.name,
+        title: detail.title,
+        logo: detail.logo,
+        version: detail.version,
+      };
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function readRelaySubmitResponse(res: Response): Promise<RelaySubmitResponse> {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text) as RelaySubmitResponse;
+  } catch {
+    return { message: text.slice(0, 500) };
+  }
+}
+
+/**
+ * TEXT_INTEGRITY_SUBMIT: sign manuscript URLs, POST checks-relay submit, update check run with TCA id.
+ */
+export async function textIntegritySubmitHandler(
+  ctx: Context,
+  data: CreateJob,
+  _storageBackend?: unknown,
+) {
+  const parseResult = TextIntegritySubmitJobPayloadSchema.safeParse(data.payload);
+  if (!parseResult.success) {
+    const msg = parseResult.error.issues.map((e: { message: string }) => e.message).join('; ');
+    throw httpError(400, `Invalid TEXT_INTEGRITY_SUBMIT payload: ${msg}`);
+  }
+  const payload = parseResult.data;
+
+  const prisma = await getPrismaClient();
+  const workVersionRow = await prisma.workVersion.findUnique({
+    where: { id: payload.work_version_id },
+  });
+  if (!workVersionRow) {
+    throw httpError(404, `Work version ${payload.work_version_id} not found`);
+  }
+
+  const job = await jobs.dbCreateJob({ ...data, status: JobStatus.QUEUED });
+  await jobs.dbUpdateJob(job.id, {
+    status: JobStatus.RUNNING,
+    message: 'Text integrity submit',
+  });
+
+  await prisma.linkedJob.create({
+    data: {
+      id: uuidv7(),
+      date_created: job.date_created,
+      job_id: job.id,
+      work_version_id: payload.work_version_id,
+    },
+  });
+
+  const markRunError = async (message: string) => {
+    await safeCheckServiceRunDataUpdate(
+      payload.text_integrity_run_id,
+      (runData?: Prisma.JsonValue) => {
+        const current = (runData ?? {}) as CheckServiceRunData<TextIntegrityDataSchema>;
+        return {
+          ...current,
+          status: 'error',
+          serviceData: markSubmissionErrorSM(current.serviceData, message),
+        } as Prisma.JsonObject;
+      },
+    );
+  };
+
+  try {
+    const baseExt =
+      (ctx.$config?.app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};
+    const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
+    const checks = getAppChecks(ctx);
+
+    const relayBaseUrl = (checks?.relayBaseUrl ?? '').trim().replace(/\/$/, '');
+    const relayApiKey = (checks?.relayApiKey ?? '').trim();
+    const apiKey = typeof mergedConfig.apiKey === 'string' ? mergedConfig.apiKey.trim() : '';
+    const apiBaseUrl =
+      typeof mergedConfig.apiBaseUrl === 'string' ? mergedConfig.apiBaseUrl.trim() : '';
+
+    if (!relayBaseUrl) {
+      throw httpError(
+        503,
+        'app.checks.relayBaseUrl is not configured; cannot submit to checks-relay',
+      );
+    }
+    if (!relayApiKey) {
+      throw httpError(
+        503,
+        'app.checks.relayApiKey is not configured; cannot submit to checks-relay',
+      );
+    }
+    if (!apiKey || !apiBaseUrl) {
+      throw httpError(
+        503,
+        'Text Integrity extension is missing apiKey or apiBaseUrl; configure credentials before running the check',
+      );
+    }
+
+    const serviceName = resolveServiceName(mergedConfig, checks);
+    const metadataRoot =
+      workVersionRow.metadata != null ? coerceToObject(workVersionRow.metadata) : null;
+    if (!metadataRoot || typeof metadataRoot !== 'object') {
+      throw httpError(422, `Work version ${payload.work_version_id} has no metadata`);
+    }
+
+    const signedMetadata = await signFilesInMetadata(
+      metadataRoot as Parameters<typeof signFilesInMetadata>[0],
+      workVersionRow.cdn ?? '',
+      ctx,
+    );
+
+    const manuscript = pickManuscriptFromSignedMetadata(
+      signedMetadata as MetadataWithFiles,
+      payload.work_version_id,
+    );
+
+    const notifyBase =
+      (typeof mergedConfig.notifyBaseUrl === 'string' && mergedConfig.notifyBaseUrl.trim() !== ''
+        ? mergedConfig.notifyBaseUrl.trim().replace(/\/$/, '')
+        : `${new URL(ctx.request.url).origin}/v1/hooks/text-integrity/notify`) ?? '';
+    const notifyUrl = `${notifyBase}/${payload.text_integrity_run_id}`;
+
+    const submitUrl = `${relayBaseUrl}/api/v1/services/${encodeURIComponent(serviceName)}/submit`;
+    const body = {
+      credentials: {
+        apiKey,
+        apiUrl: apiBaseUrl,
+      },
+      clientId: payload.text_integrity_run_id,
+      notifyUrl,
+      files: [manuscript],
+      metadata: {
+        title: workVersionRow.title,
+      },
+    };
+
+    const [res, manifest] = await Promise.all([
+      fetch(submitUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${relayApiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(RELAY_SUBMIT_TIMEOUT_MS),
+      }),
+      fetchServiceManifest(relayBaseUrl, relayApiKey, serviceName),
+    ]);
+
+    const relayJson = await readRelaySubmitResponse(res);
+
+    if (!res.ok || relayJson.status === 'error') {
+      const detail =
+        relayJson.message ??
+        relayJson.error ??
+        (typeof relayJson.result === 'object' && relayJson.result && 'error' in relayJson.result
+          ? String((relayJson.result as { error?: string }).error)
+          : null) ??
+        `checks-relay submit failed (HTTP ${res.status})`;
+      throw httpError(res.status >= 400 && res.status < 600 ? res.status : 502, detail);
+    }
+
+    const externalRef = relayJson.result?.externalRef;
+    if (!externalRef || typeof externalRef !== 'string') {
+      throw httpError(
+        502,
+        'checks-relay submit succeeded but response did not include result.externalRef',
+      );
+    }
+
+    await safeCheckServiceRunDataUpdate(
+      payload.text_integrity_run_id,
+      (runData?: Prisma.JsonValue) => {
+        const current = (runData ?? {}) as CheckServiceRunData<TextIntegrityDataSchema>;
+        const nextServiceData: TextIntegrityDataSchema = {
+          ...startSubmission(current.serviceData),
+          submissionId: externalRef,
+          manifest,
+        };
+        return {
+          ...current,
+          status: 'healthy',
+          serviceData: nextServiceData,
+        } as Prisma.JsonObject;
+      },
+    );
+  } catch (err) {
+    let message = 'Text integrity submit failed';
+    if (err instanceof Response) {
+      try {
+        const j = (await err.clone().json()) as { message?: string };
+        if (typeof j.message === 'string' && j.message) message = j.message;
+      } catch {
+        message = err.statusText || message;
+      }
+    } else if (err instanceof Error) {
+      message = err.message;
+    }
+    await markRunError(message);
+    throw err;
+  }
+
+  const completed = await jobs.dbUpdateJob(job.id, {
+    status: JobStatus.COMPLETED,
+    message: 'Text integrity submit complete',
+    results: {
+      message: 'Submit complete',
+      text_integrity_run_id: payload.text_integrity_run_id,
+    },
+  });
+
+  return completed;
+}

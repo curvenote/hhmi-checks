@@ -1,0 +1,640 @@
+// eslint-disable-next-line import/no-extraneous-dependencies
+import { describe, expect, it } from 'vitest';
+import {
+  applyWebhookEvent,
+  startSubmission,
+  markSubmissionError,
+} from './stateMachine.server.js';
+import {
+  type TextIntegrityDataSchema,
+  type WebhookBody,
+  WebhookEvent,
+  getCurrentTextIntegrityState,
+  getTextIntegrityError,
+} from '../schema.js';
+
+function makeWebhook(event: WebhookEvent, extra?: Partial<WebhookBody['payload']>): WebhookBody {
+  return { event, payload: extra };
+}
+
+const SAMPLE_SIMILARITY_REPORT = {
+  submission_id: 'sub-123',
+  overall_match_percentage: 12,
+  internet_match_percentage: 5,
+  publication_match_percentage: 3,
+  submitted_works_match_percentage: 4,
+  status: 'COMPLETE' as const,
+  time_requested: '2025-01-01T00:00:00Z',
+  time_generated: '2025-01-01T00:01:00Z',
+  top_source_largest_matched_word_count: 100,
+  top_matches: [
+    {
+      percentage: 8,
+      submission_id: 'match-1',
+      source_type: 'INTERNET',
+      matched_word_count_total: 80,
+      name: 'example.com',
+    },
+  ],
+};
+
+function processingCompleteWebhook(): WebhookBody {
+  return makeWebhook(WebhookEvent.ProcessingPhaseComplete, {
+    provider_payload: SAMPLE_SIMILARITY_REPORT,
+    report: { report_id: 'pdf-001' },
+  });
+}
+
+function reportCompleteWebhook(): WebhookBody {
+  return makeWebhook(WebhookEvent.ReportGenerationComplete, {
+    report: { report_id: 'pdf-002' },
+  });
+}
+
+describe('Text Integrity State Machine', () => {
+  describe('Lifecycle helpers', () => {
+    it('startSubmission initializes stages with submission processing', () => {
+      const result = startSubmission();
+      expect(result.stages.submission.status).toBe('processing');
+      expect(getCurrentTextIntegrityState(result)).toBe('submitting');
+    });
+
+    it('startSubmission updates existing data', () => {
+      const existing: TextIntegrityDataSchema = {
+        submissionId: 'sub-1',
+        stages: {
+          submission: { status: 'pending', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const result = startSubmission(existing, '2025-01-01T00:01:00Z');
+      expect(result.submissionId).toBe('sub-1');
+      expect(result.stages.submission.status).toBe('processing');
+      expect(result.stages.submission.history).toHaveLength(1);
+      expect(result.stages.submission.history[0].status).toBe('pending');
+    });
+
+    it('markSubmissionError sets error stage', () => {
+      const result = markSubmissionError(undefined, 'Network timeout');
+      expect(result.stages.submission.status).toBe('error');
+      expect(result.stages.submission.error).toBe('Network timeout');
+      expect(getCurrentTextIntegrityState(result)).toBe('error');
+      expect(getTextIntegrityError(result)).toBe('Network timeout');
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('initializes stages if current data has no stages', () => {
+      const initial: TextIntegrityDataSchema = { stages: { submission: { status: 'pending', history: [], timestamp: '2025-01-01T00:00:00Z' } } };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.SubmissionComplete),
+      );
+      expect(next).not.toBeNull();
+      expect(next?.stages.submission.status).toBe('completed');
+      expect(next?.stages.processing?.status).toBe('pending');
+    });
+
+    it('ignores unknown webhook events gracefully', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        { event: 'UNKNOWN_EVENT' as any },
+      );
+      expect(next).toEqual(initial);
+    });
+  });
+
+  describe('Service Data Updates', () => {
+    it('stores similarity report from PROCESSING_PHASE_COMPLETE', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const receivedAt = '2025-01-01T00:02:00Z';
+      const next = applyWebhookEvent(initial, processingCompleteWebhook(), receivedAt);
+
+      expect(next).not.toBeNull();
+      expect(next?.summaryReport).toBeDefined();
+      expect(next?.summaryReport?.overallMatchPercentage).toBe(12);
+      expect(next?.summaryReport?.topMatches).toHaveLength(1);
+      expect(next?.reportPdfId).toBe('pdf-001');
+    });
+
+    it('stores reportPdfId from REPORT_GENERATION_COMPLETE', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'processing',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      };
+      const next = applyWebhookEvent(initial, reportCompleteWebhook());
+
+      expect(next).not.toBeNull();
+      expect(next?.reportPdfId).toBe('pdf-002');
+    });
+
+    it('latest is updated from webhook event', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const receivedAt = '2025-01-01T00:02:00Z';
+      const next = applyWebhookEvent(initial, processingCompleteWebhook(), receivedAt);
+
+      expect(next?.latest?.event).toBe(WebhookEvent.ProcessingPhaseComplete);
+      expect(next?.latest?.receivedAt).toBe(receivedAt);
+      expect(next?.latest?.overallMatchPercentage).toBe(12);
+      expect(next?.latest?.reportPdfId).toBe('pdf-001');
+    });
+
+    it('webhookHistory accumulates events', () => {
+      let current: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      current = applyWebhookEvent(
+        current,
+        makeWebhook(WebhookEvent.SubmissionComplete),
+        '2025-01-01T00:01:00Z',
+      )!;
+      expect(current.webhookHistory).toHaveLength(1);
+
+      current = applyWebhookEvent(
+        current,
+        makeWebhook(WebhookEvent.ProcessingPhaseStarted),
+        '2025-01-01T00:02:00Z',
+      )!;
+      expect(current.webhookHistory).toHaveLength(2);
+      expect(current.webhookHistory![0].event).toBe(WebhookEvent.ProcessingPhaseStarted);
+      expect(current.webhookHistory![1].event).toBe(WebhookEvent.SubmissionComplete);
+    });
+
+    it('history logging for linear stages', () => {
+      const t0 = '2025-01-01T00:00:00Z';
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: t0 },
+          processing: { status: 'pending', history: [], timestamp: t0 },
+        },
+      };
+
+      const t1 = '2025-01-01T00:01:00Z';
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ProcessingPhaseStarted),
+        t1,
+      );
+
+      expect(next?.stages.processing?.status).toBe('processing');
+      expect(next?.stages.processing?.timestamp).toBe(t1);
+      expect(next?.stages.processing?.history).toHaveLength(1);
+      expect(next?.stages.processing?.history[0].status).toBe('pending');
+      expect(next?.stages.processing?.history[0].timestamp).toBe(t0);
+
+      const t2 = '2025-01-01T00:02:00Z';
+      const next2 = applyWebhookEvent(next!, processingCompleteWebhook(), t2);
+
+      expect(next2?.stages.processing?.status).toBe('completed');
+      expect(next2?.stages.processing?.history).toHaveLength(2);
+      expect(next2?.stages.processing?.history[0].status).toBe('processing');
+      expect(next2?.stages.processing?.history[0].timestamp).toBe(t1);
+      expect(next2?.stages.processing?.history[1].status).toBe('pending');
+      expect(next2?.stages.processing?.history[1].timestamp).toBe(t0);
+    });
+  });
+
+  describe('getCurrentTextIntegrityState derives correctly from stages', () => {
+    it('maps stages to UI states through the full workflow', () => {
+      let current: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      expect(getCurrentTextIntegrityState(current)).toBe('submitting');
+
+      current = applyWebhookEvent(current, makeWebhook(WebhookEvent.SubmissionComplete))!;
+      expect(getCurrentTextIntegrityState(current)).toBe('submission_complete');
+
+      current = applyWebhookEvent(current, makeWebhook(WebhookEvent.ProcessingPhaseStarted))!;
+      expect(getCurrentTextIntegrityState(current)).toBe('processing_requested');
+
+      current = applyWebhookEvent(current, processingCompleteWebhook())!;
+      expect(getCurrentTextIntegrityState(current)).toBe('processing_complete');
+
+      current = applyWebhookEvent(current, makeWebhook(WebhookEvent.ReportGenerationStarted))!;
+      expect(getCurrentTextIntegrityState(current)).toBe('report_generation_started');
+
+      current = applyWebhookEvent(current, reportCompleteWebhook())!;
+      expect(getCurrentTextIntegrityState(current)).toBe('report_generation_complete');
+    });
+
+    it('returns error on SUBMISSION_FAILED', () => {
+      const current: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(
+        current,
+        makeWebhook(WebhookEvent.SubmissionFailed, { error_message: 'Bad document' }),
+      )!;
+      expect(getCurrentTextIntegrityState(next)).toBe('error');
+      expect(getTextIntegrityError(next)).toBe('Bad document');
+    });
+
+    it('returns error on REPORT_GENERATION_FAILED', () => {
+      const current: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'processing',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      };
+      const next = applyWebhookEvent(
+        current,
+        makeWebhook(WebhookEvent.ReportGenerationFailed, {
+          error_message: 'PDF engine crashed',
+        }),
+      )!;
+      expect(getCurrentTextIntegrityState(next)).toBe('error');
+      expect(getTextIntegrityError(next)).toBe('PDF engine crashed');
+    });
+  });
+
+  describe('State Transitions', () => {
+    it('Submission processing -> completed', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.SubmissionComplete),
+      );
+      expect(next?.stages.submission.status).toBe('completed');
+      expect(next?.stages.processing?.status).toBe('pending');
+    });
+
+    it('Submission processing -> error (SUBMISSION_FAILED)', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.SubmissionFailed, { error_message: 'Invalid file' }),
+      );
+      expect(next?.stages.submission.status).toBe('error');
+      expect(next?.stages.submission.error).toBe('Invalid file');
+    });
+
+    it('Processing pending -> processing (PROCESSING_PHASE_STARTED)', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'pending', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ProcessingPhaseStarted),
+      );
+      expect(next?.stages.processing?.status).toBe('processing');
+    });
+
+    it('Processing processing -> completed (PROCESSING_PHASE_COMPLETE)', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(initial, processingCompleteWebhook());
+      expect(next?.stages.processing?.status).toBe('completed');
+      expect(next?.stages.reportGeneration?.status).toBe('pending');
+    });
+
+    it('Report generation pending -> processing (REPORT_GENERATION_STARTED)', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'pending',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ReportGenerationStarted),
+      );
+      expect(next?.stages.reportGeneration?.status).toBe('processing');
+    });
+
+    it('Report generation processing -> completed (REPORT_GENERATION_COMPLETE)', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'processing',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      };
+      const next = applyWebhookEvent(initial, reportCompleteWebhook());
+      expect(next?.stages.reportGeneration?.status).toBe('completed');
+    });
+
+    it('Report generation processing -> error (REPORT_GENERATION_FAILED)', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'processing',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ReportGenerationFailed, {
+          error_message: 'Timeout',
+        }),
+      );
+      expect(next?.stages.reportGeneration?.status).toBe('error');
+      expect(next?.stages.reportGeneration?.error).toBe('Timeout');
+    });
+  });
+
+  describe('Late notification catch-up', () => {
+    it('PROCESSING_PHASE_STARTED when submission still processing -> catch up submission', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ProcessingPhaseStarted),
+      );
+      expect(next?.stages.submission.status).toBe('notify-skipped');
+      expect(next?.stages.processing?.status).toBe('processing');
+    });
+
+    it('PROCESSING_PHASE_COMPLETE when submission still processing -> catch up submission', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(initial, processingCompleteWebhook());
+      expect(next?.stages.submission.status).toBe('notify-skipped');
+      expect(next?.stages.processing?.status).toBe('completed');
+    });
+
+    it('REPORT_GENERATION_STARTED when submission and processing never completed -> catch up both', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ReportGenerationStarted),
+      );
+      expect(next?.stages.submission.status).toBe('notify-skipped');
+      expect(next?.stages.processing?.status).toBe('notify-skipped');
+      expect(next?.stages.reportGeneration?.status).toBe('processing');
+    });
+
+    it('REPORT_GENERATION_COMPLETE when earlier stages not completed -> catch up all', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'pending', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(initial, reportCompleteWebhook());
+      expect(next?.stages.submission.status).toBe('notify-skipped');
+      expect(next?.stages.processing?.status).toBe('notify-skipped');
+      expect(next?.stages.reportGeneration?.status).toBe('completed');
+    });
+
+    it('REPORT_GENERATION_FAILED when earlier stages not completed -> catch up preceding stages', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'pending', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ReportGenerationFailed, {
+          error_message: 'Engine error',
+        }),
+      );
+      expect(next?.stages.submission.status).toBe('notify-skipped');
+      expect(next?.stages.processing?.status).toBe('notify-skipped');
+      expect(next?.stages.reportGeneration?.status).toBe('error');
+    });
+  });
+
+  describe('Duplicate / no-op transitions return null', () => {
+    it('SUBMISSION_COMPLETE when already completed', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'pending', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.SubmissionComplete),
+      );
+      expect(next).toBeNull();
+    });
+
+    it('PROCESSING_PHASE_STARTED when already processing', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ProcessingPhaseStarted),
+      );
+      expect(next).toBeNull();
+    });
+
+    it('PROCESSING_PHASE_COMPLETE when already completed', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'pending',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      };
+      const next = applyWebhookEvent(initial, processingCompleteWebhook());
+      expect(next).toBeNull();
+    });
+
+    it('REPORT_GENERATION_STARTED when already processing', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'processing',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ReportGenerationStarted),
+      );
+      expect(next).toBeNull();
+    });
+
+    it('REPORT_GENERATION_COMPLETE when already completed', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'completed',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      };
+      const next = applyWebhookEvent(initial, reportCompleteWebhook());
+      expect(next).toBeNull();
+    });
+
+    it('SUBMISSION_FAILED when already errored', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: {
+            status: 'error',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+            error: 'prev error',
+          },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.SubmissionFailed, { error_message: 'dup' }),
+      );
+      expect(next).toBeNull();
+    });
+
+    it('REPORT_GENERATION_FAILED when already errored', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'error',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+            error: 'prev',
+          },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ReportGenerationFailed, { error_message: 'dup' }),
+      );
+      expect(next).toBeNull();
+    });
+  });
+
+  describe('Full happy-path walkthrough', () => {
+    it('walks through the entire workflow from submission to report generation', () => {
+      const t0 = '2025-01-01T00:00:00Z';
+      let data: TextIntegrityDataSchema = startSubmission(undefined, t0);
+
+      expect(data.stages.submission.status).toBe('processing');
+      expect(getCurrentTextIntegrityState(data)).toBe('submitting');
+
+      const t1 = '2025-01-01T00:01:00Z';
+      data = applyWebhookEvent(data, makeWebhook(WebhookEvent.SubmissionComplete), t1)!;
+      expect(data.stages.submission.status).toBe('completed');
+      expect(data.stages.processing?.status).toBe('pending');
+      expect(getCurrentTextIntegrityState(data)).toBe('submission_complete');
+
+      const t2 = '2025-01-01T00:02:00Z';
+      data = applyWebhookEvent(
+        data,
+        makeWebhook(WebhookEvent.ProcessingPhaseStarted),
+        t2,
+      )!;
+      expect(data.stages.processing?.status).toBe('processing');
+      expect(getCurrentTextIntegrityState(data)).toBe('processing_requested');
+
+      const t3 = '2025-01-01T00:03:00Z';
+      data = applyWebhookEvent(data, processingCompleteWebhook(), t3)!;
+      expect(data.stages.processing?.status).toBe('completed');
+      expect(data.stages.reportGeneration?.status).toBe('pending');
+      expect(getCurrentTextIntegrityState(data)).toBe('processing_complete');
+      expect(data.summaryReport?.overallMatchPercentage).toBe(12);
+      expect(data.reportPdfId).toBe('pdf-001');
+
+      const t4 = '2025-01-01T00:04:00Z';
+      data = applyWebhookEvent(
+        data,
+        makeWebhook(WebhookEvent.ReportGenerationStarted),
+        t4,
+      )!;
+      expect(data.stages.reportGeneration?.status).toBe('processing');
+      expect(getCurrentTextIntegrityState(data)).toBe('report_generation_started');
+
+      const t5 = '2025-01-01T00:05:00Z';
+      data = applyWebhookEvent(data, reportCompleteWebhook(), t5)!;
+      expect(data.stages.reportGeneration?.status).toBe('completed');
+      expect(getCurrentTextIntegrityState(data)).toBe('report_generation_complete');
+      expect(data.reportPdfId).toBe('pdf-002');
+
+      expect(data.webhookHistory).toHaveLength(5);
+      expect(data.webhookHistory![0].event).toBe(WebhookEvent.ReportGenerationComplete);
+      expect(data.webhookHistory![4].event).toBe(WebhookEvent.SubmissionComplete);
+
+      expect(data.stages.submission.history.length).toBeGreaterThan(0);
+      expect(data.stages.processing?.history.length).toBeGreaterThan(0);
+      expect(data.stages.reportGeneration?.history.length).toBeGreaterThan(0);
+    });
+  });
+});
