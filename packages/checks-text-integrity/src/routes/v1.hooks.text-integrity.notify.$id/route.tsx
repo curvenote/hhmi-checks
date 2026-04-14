@@ -7,6 +7,7 @@ import {
   MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
   hasError,
   parseNotifyWebhookJson,
+  textIntegrityDataSchema,
 } from '../../schema.js';
 import { applyWebhookEvent } from '../../server/stateMachine.server.js';
 
@@ -58,7 +59,8 @@ export async function action(args: ActionFunctionArgs) {
   try {
     await safeCheckServiceRunDataUpdate(id, (runData?: Prisma.JsonValue) => {
       const current = (runData ?? {}) as CheckServiceRunData<TextIntegrityDataSchema>;
-      const currentServiceData = current.serviceData ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+      const parsed = textIntegrityDataSchema.safeParse(current.serviceData);
+      const currentServiceData = parsed.success ? parsed.data : MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
 
       const nextServiceData = applyWebhookEvent(currentServiceData, webhook, receivedAt);
 

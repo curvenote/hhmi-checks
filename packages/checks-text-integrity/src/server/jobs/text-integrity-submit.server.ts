@@ -11,7 +11,7 @@ import {
   safeCheckServiceRunDataUpdate,
   signFilesInMetadata,
 } from '@curvenote/scms-server';
-import type { TextIntegrityDataSchema, ServiceManifestSnapshot } from '../../schema.js';
+import type { TextIntegrityDataSchema } from '../../schema.js';
 import {
   startSubmission,
   markSubmissionError as markSubmissionErrorSM,
@@ -107,38 +107,6 @@ type RelaySubmitResponse = {
     externalRef?: string;
   };
 };
-
-async function fetchServiceManifest(
-  relayBaseUrl: string,
-  relayApiKey: string,
-  serviceName: string,
-): Promise<ServiceManifestSnapshot | undefined> {
-  try {
-    const url = `${relayBaseUrl}/api/v1/services/${encodeURIComponent(serviceName)}`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${relayApiKey}` },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) return undefined;
-    const detail = (await res.json()) as Record<string, unknown>;
-    if (
-      typeof detail.name === 'string' &&
-      typeof detail.title === 'string' &&
-      typeof detail.logo === 'string' &&
-      typeof detail.version === 'string'
-    ) {
-      return {
-        name: detail.name,
-        title: detail.title,
-        logo: detail.logo,
-        version: detail.version,
-      };
-    }
-    return undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 async function readRelaySubmitResponse(res: Response): Promise<RelaySubmitResponse> {
   const text = await res.text();
@@ -288,18 +256,15 @@ export async function textIntegritySubmitHandler(
       },
     };
 
-    const [res, manifest] = await Promise.all([
-      fetch(submitUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${relayApiKey}`,
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(RELAY_SUBMIT_TIMEOUT_MS),
-      }),
-      fetchServiceManifest(relayBaseUrl, relayApiKey, serviceName),
-    ]);
+    const res = await fetch(submitUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${relayApiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(RELAY_SUBMIT_TIMEOUT_MS),
+    });
 
     const relayJson = await readRelaySubmitResponse(res);
 
@@ -334,7 +299,6 @@ export async function textIntegritySubmitHandler(
           externalId: externalIdRaw,
           externalRef: externalIdRaw,
           submissionId: externalIdRaw,
-          manifest,
         };
         return {
           ...current,

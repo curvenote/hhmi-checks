@@ -14,7 +14,11 @@ import {
   hasPdfInMetadata,
 } from '@curvenote/scms-core';
 import type { Prisma } from '@curvenote/scms-db';
-import { MINIMAL_TEXT_INTEGRITY_SERVICE_DATA } from '../schema.js';
+import {
+  MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+  parseServiceManifestSnapshot,
+  textIntegrityDataSchema,
+} from '../schema.js';
 import type { TextIntegrityDataSchema } from '../schema.js';
 import { markSimilarityPdfJobRestarted, markSubmissionError } from './stateMachine.server.js';
 import { TEXT_INTEGRITY_SUBMIT } from './jobs/text-integrity-submit.server.js';
@@ -42,6 +46,13 @@ type CheckServiceRunData = {
   serviceData?: TextIntegrityDataSchema;
   serviceDataSchema?: Record<string, unknown>;
 };
+
+function readServiceDataFromRunData(runData: unknown): TextIntegrityDataSchema | undefined {
+  if (runData == null || typeof runData !== 'object') return undefined;
+  const raw = (runData as Record<string, unknown>).serviceData;
+  const parsed = textIntegrityDataSchema.safeParse(raw);
+  return parsed.success ? parsed.data : undefined;
+}
 
 function resolveServiceName(
   merged: Record<string, unknown>,
@@ -136,6 +147,15 @@ export async function handleTextIntegrityAction(
       };
     }
 
+    const baseExt =
+      (ctx.$config?.app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};
+    const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
+    const manifest = parseServiceManifestSnapshot(mergedConfig.manifest);
+    const initialServiceData: TextIntegrityDataSchema = {
+      ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+      ...(manifest ? { manifest } : {}),
+    };
+
     const timestamp = new Date().toISOString();
     const run = await prisma.checkServiceRun.create({
       data: {
@@ -148,7 +168,7 @@ export async function handleTextIntegrityAction(
         data: {
           status: 'healthy',
           serviceDataSchema: {},
-          serviceData: MINIMAL_TEXT_INTEGRITY_SERVICE_DATA as Prisma.JsonObject,
+          serviceData: initialServiceData as Prisma.JsonObject,
         },
       },
     });
@@ -174,14 +194,13 @@ export async function handleTextIntegrityAction(
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Text Integrity submit job failed';
       console.error('TEXT_INTEGRITY_SUBMIT job create failed', err);
-      await prisma.checkServiceRun.update({
-        where: { id: checkRunId },
-        data: {
-          data: {
-            status: 'error',
-            serviceData: markSubmissionError(undefined, message) as unknown as Prisma.JsonObject,
-          },
-        },
+      await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
+        const current = (data ?? {}) as CheckServiceRunData;
+        return {
+          ...current,
+          status: 'error',
+          serviceData: markSubmissionError(current.serviceData ?? initialServiceData, message),
+        } as Prisma.JsonObject;
       });
       return {
         error: { type: 'general', message },
@@ -221,7 +240,7 @@ export async function handleTextIntegrityAction(
     }
 
     const runData = run.data as Record<string, unknown> | null;
-    const serviceData = runData?.serviceData as TextIntegrityDataSchema | undefined;
+    const serviceData = readServiceDataFromRunData(runData);
     const externalCheckId = resolveRelayExternalCheckId(serviceData);
     if (!externalCheckId) {
       return {
@@ -342,8 +361,7 @@ export async function handleTextIntegrityAction(
       return { error: { type: 'general', message: 'Check run not found' }, status: 404 };
     }
 
-    const runData = run.data as CheckServiceRunData | null;
-    const serviceData = runData?.serviceData ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+    const serviceData = readServiceDataFromRunData(run.data) ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
     const externalCheckId = resolveRelayExternalCheckId(serviceData);
     if (!externalCheckId) {
       return {
@@ -466,7 +484,7 @@ export async function textIntegrityStatus(args: ExtensionCheckStatusArgs): Promi
     return Response.json({ status: 'unknown', serviceData: undefined });
   }
   const runData = run.data as Record<string, unknown> | null;
-  const status = (runData?.status as string) ?? 'unknown';
-  const serviceData = runData?.serviceData;
+  const status = typeof runData?.status === 'string' ? runData.status : 'unknown';
+  const serviceData = readServiceDataFromRunData(runData);
   return Response.json({ status, serviceData });
 }

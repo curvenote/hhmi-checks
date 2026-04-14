@@ -135,7 +135,7 @@ export const WebhookEventLogEntrySchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Service manifest snapshot (stamped at submit time from relay service discovery)
+// Service manifest snapshot (stamped from merged extension config on execute)
 // ---------------------------------------------------------------------------
 
 export const ServiceManifestSnapshotSchema = z.object({
@@ -147,15 +147,19 @@ export const ServiceManifestSnapshotSchema = z.object({
 
 export type ServiceManifestSnapshot = z.infer<typeof ServiceManifestSnapshotSchema>;
 
+/** Parse a service manifest snapshot from unknown JSON. */
+export function parseServiceManifestSnapshot(raw: unknown): ServiceManifestSnapshot | undefined {
+  const parsed = ServiceManifestSnapshotSchema.safeParse(raw);
+  return parsed.success ? parsed.data : undefined;
+}
+
 /**
- * Read the relay plugin manifest from check run `serviceData` (same object passed as `metadata` in UI).
- * Uses {@link ServiceManifestSnapshotSchema} so partial/invalid snapshots are ignored instead of widening types.
+ * Read the configured plugin manifest from check run `serviceData`
+ * (same object passed as `metadata` in UI).
  */
 export function getTextIntegrityManifest(metadata: unknown): ServiceManifestSnapshot | undefined {
   if (metadata == null || typeof metadata !== 'object') return undefined;
-  const raw = (metadata as Record<string, unknown>).manifest;
-  const parsed = ServiceManifestSnapshotSchema.safeParse(raw);
-  return parsed.success ? parsed.data : undefined;
+  return parseServiceManifestSnapshot((metadata as Record<string, unknown>).manifest);
 }
 
 // ---------------------------------------------------------------------------
@@ -170,7 +174,7 @@ export function getTextIntegrityManifest(metadata: unknown): ServiceManifestSnap
 export const textIntegrityDataSchema = z.object({
   stages: TextIntegrityStagesSchema,
 
-  /** Relay service manifest snapshot (name, title, logo URL, version) captured at submit time. */
+  /** Service manifest snapshot from merged extension config, stamped at execute time. */
   manifest: ServiceManifestSnapshotSchema.optional(),
 
   /** Denormalized snapshot of the most recent webhook event. */
