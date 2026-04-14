@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ZodIssue } from 'zod';
 
 /**
  * TCA webhook event names.
@@ -9,6 +10,7 @@ export enum WebhookEvent {
   SubmissionFailed = 'SUBMISSION_FAILED',
   ProcessingPhaseStarted = 'PROCESSING_PHASE_STARTED',
   ProcessingPhaseComplete = 'PROCESSING_PHASE_COMPLETE',
+  ProcessingPhaseFailed = 'PROCESSING_PHASE_FAILED',
   ReportGenerationStarted = 'REPORT_GENERATION_STARTED',
   ReportGenerationComplete = 'REPORT_GENERATION_COMPLETE',
   ReportGenerationFailed = 'REPORT_GENERATION_FAILED',
@@ -25,11 +27,14 @@ export const WebhookBodySchema = z.object({
   event: WebhookEventSchema,
   payload: z
     .object({
+      status: z.enum(['PROCESSING', 'SUCCESS', 'FAILED']).optional(),
       provider_payload: z.unknown().optional(),
       error_message: z.string().optional(),
       report: z
         .object({
           report_id: z.string().optional(),
+          report_pdf_url: z.string().optional(),
+          mime_type: z.string().optional(),
         })
         .passthrough()
         .optional(),
@@ -39,6 +44,78 @@ export const WebhookBodySchema = z.object({
 });
 
 export type WebhookBody = z.infer<typeof WebhookBodySchema>;
+
+// ---------------------------------------------------------------------------
+// checks-relay notify envelope (RelayNotifyEnvelope-compatible)
+// ---------------------------------------------------------------------------
+
+export const RelayNotifyEnvelopeSchema = z.object({
+  event: z.string(),
+  check_id: z.string().optional(),
+  client_id: z.string().optional(),
+  service_name: z.string().optional(),
+  occurred_at: z.string().optional(),
+  payload: z.record(z.string(), z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type RelayNotifyEnvelopeParsed = z.infer<typeof RelayNotifyEnvelopeSchema>;
+
+export type ParsedNotifyWebhookResult =
+  | { ok: true; webhook: WebhookBody }
+  | { ok: true; noop: true }
+  | { ok: false; issues: ZodIssue[] };
+
+function mapRelayEnvelopeToWebhookBody(
+  env: RelayNotifyEnvelopeParsed,
+): WebhookBody | 'noop' {
+  const payload = env.payload;
+  switch (env.event) {
+    case 'UPLOAD_PENDING':
+      return 'noop';
+    case 'UPLOAD_ACCEPTED':
+    case 'UPLOAD_COMPLETE':
+      return { event: WebhookEvent.SubmissionComplete, payload };
+    case 'UPLOAD_FAILED':
+      return { event: WebhookEvent.SubmissionFailed, payload };
+    case 'PROCESSING_PHASE_STARTED':
+      return { event: WebhookEvent.ProcessingPhaseStarted, payload };
+    case 'PROCESSING_PHASE_COMPLETE':
+      return { event: WebhookEvent.ProcessingPhaseComplete, payload };
+    case 'PROCESSING_PHASE_FAILED':
+      return { event: WebhookEvent.ProcessingPhaseFailed, payload };
+    case 'REPORT_GENERATION_STARTED':
+      return { event: WebhookEvent.ReportGenerationStarted, payload };
+    case 'REPORT_GENERATION_COMPLETE':
+      return { event: WebhookEvent.ReportGenerationComplete, payload };
+    case 'REPORT_GENERATION_FAILED':
+      return { event: WebhookEvent.ReportGenerationFailed, payload };
+    default:
+      console.warn(
+        `[checks-text-integrity] Unhandled relay notify event "${env.event}", accepting with no state change`,
+      );
+      return 'noop';
+  }
+}
+
+/**
+ * Accept legacy `{ event, payload }` bodies or full relay notify envelopes.
+ */
+export function parseNotifyWebhookJson(json: unknown): ParsedNotifyWebhookResult {
+  const legacy = WebhookBodySchema.safeParse(json);
+  if (legacy.success) {
+    return { ok: true, webhook: legacy.data };
+  }
+  const env = RelayNotifyEnvelopeSchema.safeParse(json);
+  if (!env.success) {
+    return { ok: false, issues: env.error.issues };
+  }
+  const mapped = mapRelayEnvelopeToWebhookBody(env.data);
+  if (mapped === 'noop') {
+    return { ok: true, noop: true };
+  }
+  return { ok: true, webhook: mapped };
+}
 
 // ---------------------------------------------------------------------------
 // Similarity report (TCA PROCESSING_PHASE_COMPLETE payload)

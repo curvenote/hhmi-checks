@@ -19,6 +19,9 @@ export const id = 'checks-proofig';
 export const name = 'Image Integrity Checks';
 export const description = 'Image integrity checking service for works';
 
+/** App-absolute POST target for Proofig check mutations (must match `registerRoutes` mount). */
+export const PROOFIG_CHECKS_ACTION_PATH = '/app/extensions/proofig/actions' as const;
+
 export const Logos = {
   Icon,
   LogoMono,
@@ -52,6 +55,7 @@ export function getChecks(): ClientExtensionCheckService[] {
       id: 'proofig',
       name: 'Image Integrity',
       description: 'Detect potential issues with images in your work.',
+      checksActionPath: PROOFIG_CHECKS_ACTION_PATH,
       sectionHeaderComponent: ImageIntegritySectionHeader,
       sectionActivityComponent: ImageIntegrityChecksSection,
       sectionSummaryBadgeComponent: ProofigSummaryBadge,

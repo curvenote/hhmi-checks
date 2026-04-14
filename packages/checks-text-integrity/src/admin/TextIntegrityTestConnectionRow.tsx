@@ -58,6 +58,7 @@ export function TextIntegrityTestConnectionRow({ credentials }: Props) {
       <input type="hidden" name="apiBaseUrl" value={credentials.apiBaseUrl} />
       <input type="hidden" name="apiKey" value={credentials.apiKey} />
       <input type="hidden" name="keyName" value={credentials.keyName} />
+      <input type="hidden" name="relayInstanceId" value={credentials.relayInstanceId} />
       <ui.StatefulButton type="submit" disabled={isTesting} size="sm" overlayBusy busy={isTesting}>
         Test connection
       </ui.StatefulButton>

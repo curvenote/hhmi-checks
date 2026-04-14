@@ -5,7 +5,7 @@ import type {
   JobRegistration,
 } from '@curvenote/scms-core';
 import { getPrismaClient } from '@curvenote/scms-server';
-import { extension as clientExtension } from './client.js';
+import { extension as clientExtension, TEXT_INTEGRITY_CHECKS_ACTION_PATH } from './client.js';
 import { handleTextIntegrityAction, textIntegrityStatus } from './server/actions.js';
 import {
   buildStoredServiceConfigurationForAdmin,
@@ -28,6 +28,7 @@ function getSafeAdminConfig(config: Record<string, unknown>): Record<string, unk
     apiBaseUrl: config.apiBaseUrl,
     apiKey: config.apiKey ? '****************' : undefined,
     keyName: config.keyName,
+    relayInstanceId: config.relayInstanceId,
     storedServiceConfiguration: buildStoredServiceConfigurationForAdmin(config),
   };
 }
@@ -54,6 +55,7 @@ export const extension: ServerExtension = {
         id: 'checks-text-integrity',
         name: 'Text Integrity',
         description: 'Verify text integrity in your work.',
+        checksActionPath: TEXT_INTEGRITY_CHECKS_ACTION_PATH,
         sectionHeaderComponent: TextIntegritySectionHeader,
         sectionActivityComponent: TextIntegrityChecksSection,
         handleAction: handleTextIntegrityAction,

@@ -40,9 +40,23 @@ export function ProofigProgressComponent({
   let Component = <DefaultArea />;
 
   if (currentStage === 'initialPost') {
-    Component = <InitialPostProgressArea data={stages.initialPost} />;
+    Component = (
+      <InitialPostProgressArea
+        data={stages.initialPost}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+        remoteStatusActionPath={remoteStatusActionPath}
+      />
+    );
   } else if (stages.subimageDetection && currentStage === 'subimageDetection') {
-    Component = <SubimageDetectionProgressArea data={stages.subimageDetection} />;
+    Component = (
+      <SubimageDetectionProgressArea
+        data={stages.subimageDetection}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+        remoteStatusActionPath={remoteStatusActionPath}
+      />
+    );
   } else if (stages.subimageSelection && currentStage === 'subimageSelection') {
     Component = (
       <SubimageApprovalProgressArea
@@ -55,7 +69,14 @@ export function ProofigProgressComponent({
       />
     );
   } else if (stages.integrityDetection && currentStage === 'integrityDetection') {
-    Component = <IntegrityDetectionProgressArea data={stages.integrityDetection} />;
+    Component = (
+      <IntegrityDetectionProgressArea
+        data={stages.integrityDetection}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+        remoteStatusActionPath={remoteStatusActionPath}
+      />
+    );
   } else if (stages.resultsReview && currentStage === 'resultsReview') {
     Component = (
       <ResultsSummaryArea

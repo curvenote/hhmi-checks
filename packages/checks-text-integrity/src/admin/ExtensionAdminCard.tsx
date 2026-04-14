@@ -4,6 +4,7 @@ import { ServiceLogo } from '../components/ServiceLogo.js';
 import { TextIntegrityCredentialsForm } from './TextIntegrityCredentialsForm.js';
 import { TextIntegrityTestConnectionRow } from './TextIntegrityTestConnectionRow.js';
 import { TextIntegrityUpdateConfigurationForm } from './TextIntegrityUpdateConfigurationForm.js';
+import { TextIntegritySettingsPanel } from './TextIntegritySettingsPanel.js';
 
 export function getManifest(
   record: Record<string, unknown> | undefined,
@@ -21,6 +22,7 @@ export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) 
     apiBaseUrl: '',
     apiKey: '',
     keyName: '',
+    relayInstanceId: '',
   });
 
   const manifest = getManifest(record);
@@ -31,16 +33,20 @@ export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) 
     <div className="grid grid-cols-1 gap-6 max-w-3xl">
       <div className="flex gap-3 justify-between items-center min-w-0">
         <h2 className="text-xl font-semibold">Checks: {title}</h2>
-        <ServiceLogo manifestLogoUrl={manifestLogo} className="h-4 shrink-0" />
+        <ServiceLogo manifestLogoUrl={manifestLogo} manifestTitle={title} className="h-4 shrink-0" />
       </div>
       <TextIntegrityCredentialsForm
         displayConfig={displayConfig}
         onCredentialsChange={setCredentials}
       />
-      <div className="flex gap-3 items-center min-w-0">
+      <div
+        id="text-integrity-service-actions"
+        className="flex gap-3 items-center min-w-0 scroll-mt-4"
+      >
         <TextIntegrityTestConnectionRow credentials={credentials} />
         <TextIntegrityUpdateConfigurationForm credentials={credentials} />
       </div>
+      <TextIntegritySettingsPanel storedServiceConfiguration={displayConfig.storedServiceConfiguration} />
     </div>
   );
 }

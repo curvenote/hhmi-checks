@@ -1,6 +1,7 @@
 import type { TextIntegrityDataSchema } from '../schema.js';
 import { canShowResults, hasError } from '../schema.js';
-import { ui } from '@curvenote/scms-core';
+import { cn, ui } from '@curvenote/scms-core';
+import { similarityScoreOutlineBadgeClassName } from './SimilarityPercentageBar.js';
 
 interface TextIntegritySummaryBadgeProps {
   metadata: TextIntegrityDataSchema | undefined;
@@ -21,14 +22,15 @@ export function TextIntegritySummaryBadge({ metadata }: TextIntegritySummaryBadg
 
   if (canShowResults(metadata) && metadata.summaryReport) {
     const overall = metadata.summaryReport.overallMatchPercentage ?? 0;
-    const variant =
-      overall > 20
-        ? ('destructive' as const)
-        : overall > 0
-          ? ('warning' as const)
-          : ('success' as const);
     return (
-      <ui.Badge variant={variant} size="xs" className="uppercase tracking-wide min-w-[80px]">
+      <ui.Badge
+        variant="primary"
+        size="xs"
+        className={cn(
+          'tracking-wide uppercase min-w-[80px]',
+          similarityScoreOutlineBadgeClassName(overall),
+        )}
+      >
         {overall}% similar
       </ui.Badge>
     );

@@ -181,8 +181,7 @@ export interface ChecksMetadataSection {
 export async function handleProofigAction(
   args: ExtensionCheckHandleActionArgs,
 ): Promise<ExtensionCheckHandleActionResult> {
-  const { intent: rawIntent, workVersionId, ctx, serverExtensions } = args;
-  const intent = rawIntent.startsWith('proofig:') ? rawIntent.split(':', 2)[1] : rawIntent;
+  const { intent, workVersionId, ctx, serverExtensions } = args;
 
   // ----- Execute path: upload flow or checks page with job creation -----
   if (intent === 'execute' && ctx) {

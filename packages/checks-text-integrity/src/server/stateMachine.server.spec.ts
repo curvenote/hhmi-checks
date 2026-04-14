@@ -11,6 +11,7 @@ import {
   WebhookEvent,
   getCurrentTextIntegrityState,
   getTextIntegrityError,
+  parseNotifyWebhookJson,
 } from '../schema.js';
 
 function makeWebhook(event: WebhookEvent, extra?: Partial<WebhookBody['payload']>): WebhookBody {
@@ -47,7 +48,10 @@ function processingCompleteWebhook(): WebhookBody {
 
 function reportCompleteWebhook(): WebhookBody {
   return makeWebhook(WebhookEvent.ReportGenerationComplete, {
-    report: { report_id: 'pdf-002' },
+    report: {
+      report_id: 'pdf-002',
+      report_pdf_url: 'https://api.turnitin.com/api/v1/submissions/sub-1/similarity/pdf/pdf-002',
+    },
   });
 }
 
@@ -142,6 +146,34 @@ describe('Text Integrity State Machine', () => {
 
       expect(next).not.toBeNull();
       expect(next?.reportPdfId).toBe('pdf-002');
+      expect(next?.reportPdfUrl).toBe(
+        'https://api.turnitin.com/api/v1/submissions/sub-1/similarity/pdf/pdf-002',
+      );
+    });
+
+    it('stores report_pdf_url from REPORT_GENERATION_STARTED when already processing', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'processing',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+        reportPdfId: 'pdf-x',
+      };
+      const url = 'https://api.example.com/api/v1/submissions/s1/similarity/pdf/pdf-x';
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ReportGenerationStarted, {
+          status: 'PROCESSING',
+          report: { report_id: 'pdf-x', report_pdf_url: url },
+        }),
+      );
+      expect(next).not.toBeNull();
+      expect(next?.reportPdfUrl).toBe(url);
     });
 
     it('latest is updated from webhook event', () => {
@@ -635,6 +667,57 @@ describe('Text Integrity State Machine', () => {
       expect(data.stages.submission.history.length).toBeGreaterThan(0);
       expect(data.stages.processing?.history.length).toBeGreaterThan(0);
       expect(data.stages.reportGeneration?.history.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('parseNotifyWebhookJson (relay envelopes)', () => {
+    it('maps UPLOAD_ACCEPTED to SubmissionComplete', () => {
+      const r = parseNotifyWebhookJson({
+        event: 'UPLOAD_ACCEPTED',
+        check_id: 'ext-1',
+        client_id: 'run-1',
+        payload: { upload_status: 'ACCEPTED' },
+      });
+      expect(r.ok).toBe(true);
+      if (r.ok && 'webhook' in r) {
+        expect(r.webhook.event).toBe(WebhookEvent.SubmissionComplete);
+      } else {
+        expect.fail('expected webhook branch');
+      }
+    });
+
+    it('returns noop for UPLOAD_PENDING', () => {
+      const r = parseNotifyWebhookJson({
+        event: 'UPLOAD_PENDING',
+        check_id: 'ext-1',
+        payload: { upload_status: 'PENDING' },
+      });
+      expect(r.ok).toBe(true);
+      if (r.ok && 'noop' in r) {
+        expect(r.noop).toBe(true);
+      } else {
+        expect.fail('expected noop branch');
+      }
+    });
+  });
+
+  describe('ProcessingPhaseFailed', () => {
+    it('marks processing stage error', () => {
+      const t0 = '2025-01-01T00:00:00Z';
+      let data = startSubmission(undefined, t0);
+      data = applyWebhookEvent(data, makeWebhook(WebhookEvent.SubmissionComplete), t0)!;
+      data = applyWebhookEvent(
+        data,
+        makeWebhook(WebhookEvent.ProcessingPhaseStarted),
+        t0,
+      )!;
+      const next = applyWebhookEvent(
+        data,
+        makeWebhook(WebhookEvent.ProcessingPhaseFailed, { error_message: 'phase blew up' }),
+        t0,
+      )!;
+      expect(next?.stages.processing?.status).toBe('error');
+      expect(next?.stages.processing?.error).toBe('phase blew up');
     });
   });
 });

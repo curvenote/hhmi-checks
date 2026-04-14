@@ -72,7 +72,7 @@ export function ProofigOpenReportButton({
       disabled={disabled || !reportUrl.trim() || busy}
       onClick={() => {
         const fd = new FormData();
-        fd.set('intent', 'proofig:refresh-report-url');
+        fd.set('intent', 'refresh-report-url');
         fd.set('workVersionId', workVersionId!.trim());
         fd.set('checkRunId', checkRunId!.trim());
         fetcher.submit(fd, { method: 'post', action: actionPath!.trim() });

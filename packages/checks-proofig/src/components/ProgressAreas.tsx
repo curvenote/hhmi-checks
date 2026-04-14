@@ -3,7 +3,7 @@ import { MissingReportUrlIcon } from './MissingReportUrlIcon.js';
 import { ReportNoLongerAvailable } from './ReportNoLongerAvailable.js';
 import type { ProofigStage } from '../schema.js';
 import { ui } from '@curvenote/scms-core';
-import { ProofigRefreshRemoteStatusButton } from './ProofigRefreshRemoteStatusButton.js';
+import { ProofigProgressRefreshRow } from './ProofigProgressRefreshRow.js';
 import { ProofigSubimageApprovalReportLink } from './ProofigSubimageApprovalReportLink.js';
 import { StageStartedRelative } from './StageStartedRelative.js';
 
@@ -58,7 +58,17 @@ export function PendingProgressArea({ data }: { data: ProofigStage }) {
   );
 }
 
-export function InitialPostProgressArea({ data }: { data: ProofigStage }) {
+export function InitialPostProgressArea({
+  data,
+  workVersionId,
+  checkRunId,
+  remoteStatusActionPath,
+}: {
+  data: ProofigStage;
+  workVersionId?: string;
+  checkRunId?: string;
+  remoteStatusActionPath?: string;
+}) {
   switch (data.status) {
     case 'pending':
       return (
@@ -73,6 +83,12 @@ export function InitialPostProgressArea({ data }: { data: ProofigStage }) {
             }
           />
           <StageProgressArea step={1} numSteps={4} stageStartedAt={data.timestamp} />
+          <ProofigProgressRefreshRow
+            remoteStatusActionPath={remoteStatusActionPath}
+            workVersionId={workVersionId}
+            checkRunId={checkRunId}
+            buttonSize="sm"
+          />
         </div>
       );
     case 'processing':
@@ -88,6 +104,12 @@ export function InitialPostProgressArea({ data }: { data: ProofigStage }) {
             }
           />
           <StageProgressArea step={1} numSteps={4} stageStartedAt={data.timestamp} />
+          <ProofigProgressRefreshRow
+            remoteStatusActionPath={remoteStatusActionPath}
+            workVersionId={workVersionId}
+            checkRunId={checkRunId}
+            buttonSize="sm"
+          />
         </div>
       );
     case 'completed':
@@ -103,6 +125,12 @@ export function InitialPostProgressArea({ data }: { data: ProofigStage }) {
             }
           />
           <StageProgressArea step={1} numSteps={4} stageStartedAt={data.timestamp} />
+          <ProofigProgressRefreshRow
+            remoteStatusActionPath={remoteStatusActionPath}
+            workVersionId={workVersionId}
+            checkRunId={checkRunId}
+            buttonSize="sm"
+          />
         </div>
       );
     case 'error':
@@ -111,7 +139,17 @@ export function InitialPostProgressArea({ data }: { data: ProofigStage }) {
   return <DefaultArea />;
 }
 
-export function SubimageDetectionProgressArea({ data }: { data: ProofigStage }) {
+export function SubimageDetectionProgressArea({
+  data,
+  workVersionId,
+  checkRunId,
+  remoteStatusActionPath,
+}: {
+  data: ProofigStage;
+  workVersionId?: string;
+  checkRunId?: string;
+  remoteStatusActionPath?: string;
+}) {
   if (data.status === 'error')
     return (
       <SimpleErrorArea step={2} numSteps={4} message="Subimage detection failed." data={data} />
@@ -134,6 +172,12 @@ export function SubimageDetectionProgressArea({ data }: { data: ProofigStage }) 
           stageStartedAt={data.timestamp}
           label="Waiting for"
           addSuffix={false}
+        />
+        <ProofigProgressRefreshRow
+          remoteStatusActionPath={remoteStatusActionPath}
+          workVersionId={workVersionId}
+          checkRunId={checkRunId}
+          buttonSize="sm"
         />
       </div>
     );
@@ -172,6 +216,12 @@ export function SubimageDetectionProgressArea({ data }: { data: ProofigStage }) 
         }
       />
       <StageProgressArea step={2} numSteps={4} stageStartedAt={data.timestamp} />
+      <ProofigProgressRefreshRow
+        remoteStatusActionPath={remoteStatusActionPath}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+        buttonSize="sm"
+      />
     </div>
   );
 }
@@ -244,15 +294,11 @@ export function SubimageApprovalProgressArea({
               </ProofigSubimageApprovalReportLink>
             </div>
             <div className="flex-1 min-h-px min-w-4 basis-4" aria-hidden />
-            <div className="flex flex-wrap gap-2 justify-end items-center">
-              {remoteStatusActionPath && workVersionId ? (
-                <ProofigRefreshRemoteStatusButton
-                  actionPath={remoteStatusActionPath}
-                  workVersionId={workVersionId}
-                  checkRunId={checkRunId}
-                />
-              ) : null}
-            </div>
+            <ProofigProgressRefreshRow
+              remoteStatusActionPath={remoteStatusActionPath}
+              workVersionId={workVersionId}
+              checkRunId={checkRunId}
+            />
           </>
         )}
       </div>
@@ -260,7 +306,17 @@ export function SubimageApprovalProgressArea({
   );
 }
 
-export function IntegrityDetectionProgressArea({ data }: { data: ProofigStage }) {
+export function IntegrityDetectionProgressArea({
+  data,
+  workVersionId,
+  checkRunId,
+  remoteStatusActionPath,
+}: {
+  data: ProofigStage;
+  workVersionId?: string;
+  checkRunId?: string;
+  remoteStatusActionPath?: string;
+}) {
   if (data.status === 'error')
     return (
       <SimpleErrorArea step={4} numSteps={4} message="Integrity detection failed." data={data} />
@@ -294,6 +350,12 @@ export function IntegrityDetectionProgressArea({ data }: { data: ProofigStage })
         }
       />
       <StageProgressArea step={4} numSteps={4} stageStartedAt={data.timestamp} />
+      <ProofigProgressRefreshRow
+        remoteStatusActionPath={remoteStatusActionPath}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+        buttonSize="sm"
+      />
     </div>
   );
 }

@@ -23,5 +23,31 @@ export async function registerRoutes(_appConfig: Config): Promise<RouteRegistrat
           ),
         ] satisfies RouteConfigEntry[],
     },
+    {
+      attachTo: 'app',
+      register: () =>
+        [
+          route(
+            'checks-text-integrity/download-pdf/:id',
+            resolveRoutePath(
+              import.meta.url,
+              'routes/app.checks-text-integrity.download-pdf.$id/route.tsx',
+            ),
+          ),
+        ] satisfies RouteConfigEntry[],
+    },
+    {
+      attachTo: 'app/extensions',
+      register: () =>
+        [
+          route(
+            'checks-text-integrity/actions',
+            resolveRoutePath(
+              import.meta.url,
+              'routes/app.extensions.checks-text-integrity.actions/route.tsx',
+            ),
+          ),
+        ] satisfies RouteConfigEntry[],
+    },
   ];
 }

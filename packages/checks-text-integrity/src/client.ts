@@ -18,6 +18,10 @@ export const id = 'checks-text-integrity';
 export const name = 'Text Integrity Checks';
 export const description = 'Text integrity checking service for works';
 
+/** App-absolute POST target for Text Integrity check mutations (must match `registerRoutes` mount). */
+export const TEXT_INTEGRITY_CHECKS_ACTION_PATH =
+  '/app/extensions/checks-text-integrity/actions' as const;
+
 export const Logos = {
   TextIntegrityIcon,
   TextIntegrityLogo,
@@ -50,6 +54,7 @@ export function getChecks(): ClientExtensionCheckService[] {
       id: 'checks-text-integrity',
       name: 'Text Integrity',
       description: 'Verify text integrity in your work.',
+      checksActionPath: TEXT_INTEGRITY_CHECKS_ACTION_PATH,
       sectionHeaderComponent: TextIntegritySectionHeader,
       sectionActivityComponent: TextIntegrityChecksSection,
       sectionSummaryBadgeComponent: TextIntegritySummaryBadge,

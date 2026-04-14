@@ -5,8 +5,8 @@ import type { Prisma } from '@curvenote/scms-db';
 import type { TextIntegrityDataSchema } from '../../schema.js';
 import {
   MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
-  WebhookBodySchema,
   hasError,
+  parseNotifyWebhookJson,
 } from '../../schema.js';
 import { applyWebhookEvent } from '../../server/stateMachine.server.js';
 
@@ -40,15 +40,19 @@ export async function action(args: ActionFunctionArgs) {
     return Response.json({ ok: false, error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const parseResult = WebhookBodySchema.safeParse(json);
-  if (!parseResult.success) {
+  const parsed = parseNotifyWebhookJson(json);
+  if (parsed.ok === false) {
     return Response.json(
-      { ok: false, error: 'Unknown webhook event or payload', issues: parseResult.error.issues },
+      { ok: false, error: 'Unknown webhook event or payload', issues: parsed.issues },
       { status: 400 },
     );
   }
 
-  const webhook = parseResult.data;
+  if ('noop' in parsed) {
+    return Response.json({ ok: true }, { status: 200 });
+  }
+
+  const webhook = parsed.webhook;
   const receivedAt = new Date().toISOString();
 
   try {

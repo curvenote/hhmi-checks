@@ -24,10 +24,24 @@ export function SimplifiedProgress({
   const { currentStage } = getCurrentProofigStage(stages);
 
   if (currentStage === 'initialPost') {
-    return <SimplifiedInitialPost data={stages.initialPost} />;
+    return (
+      <SimplifiedInitialPost
+        data={stages.initialPost}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+        remoteStatusActionPath={remoteStatusActionPath}
+      />
+    );
   }
   if (stages.subimageDetection && currentStage === 'subimageDetection') {
-    return <SimplifiedSubimageDetection data={stages.subimageDetection} />;
+    return (
+      <SimplifiedSubimageDetection
+        data={stages.subimageDetection}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+        remoteStatusActionPath={remoteStatusActionPath}
+      />
+    );
   }
   if (stages.subimageSelection && currentStage === 'subimageSelection') {
     return (
@@ -42,7 +56,14 @@ export function SimplifiedProgress({
     );
   }
   if (stages.integrityDetection && currentStage === 'integrityDetection') {
-    return <SimplifiedIntegrityDetection data={stages.integrityDetection} />;
+    return (
+      <SimplifiedIntegrityDetection
+        data={stages.integrityDetection}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+        remoteStatusActionPath={remoteStatusActionPath}
+      />
+    );
   }
   if (stages.resultsReview && currentStage === 'resultsReview') {
     return (

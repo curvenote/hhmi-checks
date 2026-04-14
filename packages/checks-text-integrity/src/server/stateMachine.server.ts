@@ -112,7 +112,15 @@ export function applyWebhookEvent(
   let updatedStages: TextIntegrityStages | null = null;
   let summaryReport: StoredSimilarityReport | undefined = current.summaryReport;
   let reportPdfId: string | undefined = current.reportPdfId;
+  let reportPdfUrl: string | undefined = current.reportPdfUrl;
   let errorMessage: string | undefined;
+
+  function mergeReportPayload(reportObj: unknown) {
+    if (!reportObj || typeof reportObj !== 'object') return;
+    const r = reportObj as Record<string, unknown>;
+    if (typeof r.report_id === 'string') reportPdfId = String(r.report_id);
+    if (typeof r.report_pdf_url === 'string') reportPdfUrl = String(r.report_pdf_url);
+  }
 
   switch (webhook.event) {
     case WebhookEvent.SubmissionComplete: {
@@ -165,19 +173,37 @@ export function applyWebhookEvent(
         summaryReport = toStoredSimilarityReport(reportResult.data);
       }
 
-      const reportObj = webhook.payload?.report;
-      if (
-        reportObj &&
-        typeof reportObj === 'object' &&
-        typeof (reportObj as any).report_id === 'string'
-      ) {
-        reportPdfId = String((reportObj as any).report_id);
+      mergeReportPayload(webhook.payload?.report);
+      break;
+    }
+
+    case WebhookEvent.ProcessingPhaseFailed: {
+      if (stages.processing?.status === 'error') break;
+      errorMessage =
+        typeof webhook.payload?.error_message === 'string'
+          ? webhook.payload.error_message
+          : 'Processing phase failed';
+      let s = stages;
+      if (s.submission.status !== 'completed' && s.submission.status !== 'notify-skipped') {
+        s = setLinearStage(s, 'submission', 'notify-skipped', receivedAt);
       }
+      updatedStages = setLinearStage(s, 'processing', 'error', receivedAt, errorMessage);
       break;
     }
 
     case WebhookEvent.ReportGenerationStarted: {
-      if (stages.reportGeneration?.status === 'processing') break;
+      mergeReportPayload(webhook.payload?.report);
+
+      if (stages.reportGeneration?.status === 'processing') {
+        const nextId = reportPdfId ?? current.reportPdfId;
+        const nextUrl = reportPdfUrl ?? current.reportPdfUrl;
+        if (nextId === current.reportPdfId && nextUrl === current.reportPdfUrl) {
+          break;
+        }
+        updatedStages = stages;
+        break;
+      }
+
       let s = stages;
       if (s.submission.status !== 'completed' && s.submission.status !== 'notify-skipped') {
         s = setLinearStage(s, 'submission', 'notify-skipped', receivedAt);
@@ -205,14 +231,7 @@ export function applyWebhookEvent(
       }
       updatedStages = setLinearStage(s, 'reportGeneration', 'completed', receivedAt);
 
-      const reportObj = webhook.payload?.report;
-      if (
-        reportObj &&
-        typeof reportObj === 'object' &&
-        typeof (reportObj as any).report_id === 'string'
-      ) {
-        reportPdfId = String((reportObj as any).report_id);
-      }
+      mergeReportPayload(webhook.payload?.report);
       break;
     }
 
@@ -251,16 +270,47 @@ export function applyWebhookEvent(
     stages: updatedStages,
     summaryReport,
     reportPdfId: reportPdfId ?? current.reportPdfId,
+    reportPdfUrl: reportPdfUrl ?? current.reportPdfUrl,
     latest: {
       event: webhook.event,
       receivedAt,
       overallMatchPercentage:
         summaryReport?.overallMatchPercentage ?? current.latest?.overallMatchPercentage,
       reportPdfId: reportPdfId ?? current.latest?.reportPdfId,
+      reportPdfUrl: reportPdfUrl ?? current.latest?.reportPdfUrl,
       errorMessage: errorMessage ?? current.latest?.errorMessage,
     },
     webhookHistory,
   };
 
   return next;
+}
+
+/**
+ * After a successful POST to start similarity PDF at TCA.
+ * Stores the new `pdfId` / `pdfUrl` (returned by the relay) so the UI can show the
+ * download link once the webhook flips report generation to "completed".
+ */
+export function markSimilarityPdfJobRestarted(
+  current: TextIntegrityDataSchema,
+  newPdfId?: string,
+  newPdfUrl?: string,
+  receivedAt: string = new Date().toISOString(),
+): TextIntegrityDataSchema {
+  const base = current;
+  const stages = base.stages ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA.stages;
+  const updatedStages = setLinearStage(stages, 'reportGeneration', 'processing', receivedAt);
+  return {
+    ...base,
+    stages: updatedStages,
+    reportPdfId: newPdfId ?? undefined,
+    reportPdfUrl: newPdfUrl ?? undefined,
+    latest: base.latest
+      ? {
+          ...base.latest,
+          reportPdfId: newPdfId ?? undefined,
+          reportPdfUrl: newPdfUrl ?? undefined,
+        }
+      : undefined,
+  };
 }

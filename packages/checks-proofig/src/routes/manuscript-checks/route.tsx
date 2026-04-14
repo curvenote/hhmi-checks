@@ -14,6 +14,8 @@ import {
 import { loadProofigCheckServiceRuns } from './loadRuns.server.js';
 import { getDraftForManuscriptChecks } from './getDraft.server.js';
 import { handleProofigAction } from '../../server/actions.js';
+import { extension as proofigServerExtension } from '../../server.js';
+import { PROOFIG_CHECKS_ACTION_PATH } from '../../client.js';
 import { MANUSCRIPT_UPLOAD_CONFIG } from './uploadConfig.js';
 import { SimplifiedRunCard } from '../../simplified/index.js';
 import type { CheckServiceRunWithVersion } from './loadRuns.server.js';
@@ -49,9 +51,9 @@ export async function action(args: Parameters<typeof withAppScopedContext>[0]) {
   const formData = await args.request.formData();
   const intent = formData.get('intent');
   if (
-    intent === 'proofig:fetch-remote-status' ||
-    intent === 'proofig:apply-notify-payload' ||
-    intent === 'proofig:refresh-report-url'
+    intent === 'fetch-remote-status' ||
+    intent === 'apply-notify-payload' ||
+    intent === 'refresh-report-url'
   ) {
     const workVersionId = formData.get('workVersionId')?.toString();
     if (!workVersionId) {
@@ -65,7 +67,7 @@ export async function action(args: Parameters<typeof withAppScopedContext>[0]) {
       workVersionId,
       formData,
       ctx,
-      serverExtensions: [],
+      serverExtensions: [proofigServerExtension],
     });
   }
   if (intent !== 'get-draft') {
@@ -95,8 +97,8 @@ export function shouldRevalidate({
   const intent = formData?.get('intent');
   if (
     intent === 'get-draft' ||
-    intent === 'proofig:fetch-remote-status' ||
-    intent === 'proofig:refresh-report-url'
+    intent === 'fetch-remote-status' ||
+    intent === 'refresh-report-url'
   ) {
     return false;
   }
@@ -322,7 +324,7 @@ export default function ManuscriptChecksPage({ loaderData }: { loaderData: Loade
                 <SimplifiedRunCard
                   key={run.id}
                   run={run}
-                  remoteStatusActionPath="/app/manuscript-checks"
+                  remoteStatusActionPath={PROOFIG_CHECKS_ACTION_PATH}
                 />
               ))
             )}

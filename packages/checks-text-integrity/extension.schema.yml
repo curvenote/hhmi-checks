@@ -23,4 +23,8 @@ properties:
   serviceName:
     type: string
     description: >-
-      Checks-relay plugin name for text integrity checks. Used for relay API paths under /api/v1/services/{serviceName}/ (e.g. configure, status, submit).
+      Checks-relay plugin name for text integrity checks. Used in paths under /api/v1/services/{serviceName}/instances/{instanceId}/ (upload, configure, status, check routes). Overrides app.checks.textIntegrityServiceName when set; default ithenticate.
+  relayInstanceId:
+    type: string
+    description: >-
+      checks-relay instance id (URL segment). Object-store overrides take precedence over this value when set in admin; otherwise defaults to the literal id "default".

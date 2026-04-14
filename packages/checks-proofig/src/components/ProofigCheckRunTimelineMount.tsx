@@ -41,7 +41,7 @@ export function ProofigCheckRunTimelineMount({
     if (!isProofigAwaitingSubimageApprovalInUi(stages)) return;
     hydrateRequestedRef.current = true;
     const fd = new FormData();
-    fd.set('intent', 'proofig:hydrate-subimage-approval-status');
+    fd.set('intent', 'hydrate-subimage-approval-status');
     fd.set('workVersionId', workVersionId);
     fd.set('checkRunId', checkRunId);
     hydrateFetcher.submit(fd, { method: 'post', action: remoteStatusActionPath });

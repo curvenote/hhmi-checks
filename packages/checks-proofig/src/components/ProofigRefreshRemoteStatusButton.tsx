@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react';
 import { useEffect, useRef } from 'react';
 import { useFetcher, useRevalidator } from 'react-router';
 import { ui } from '@curvenote/scms-core';
@@ -11,10 +12,12 @@ export function ProofigRefreshRemoteStatusButton({
   actionPath,
   workVersionId,
   checkRunId,
+  buttonSize,
 }: {
   actionPath: string;
   workVersionId: string;
   checkRunId?: string;
+  buttonSize?: ComponentProps<typeof ui.StatefulButton>['size'];
 }) {
   const fetcher = useFetcher<RefreshFetcherData>();
   const revalidator = useRevalidator();
@@ -38,15 +41,15 @@ export function ProofigRefreshRemoteStatusButton({
 
   const refresh = () => {
     const fd = new FormData();
-    fd.set('intent', 'proofig:refresh-remote-status');
+    fd.set('intent', 'refresh-remote-status');
     fd.set('workVersionId', workVersionId);
     if (checkRunId) fd.set('checkRunId', checkRunId);
     fetcher.submit(fd, { method: 'post', action: actionPath });
   };
 
   return (
-    <ui.StatefulButton variant="link" busy={busy} onClick={refresh} overlayBusy>
-      Get Latest Status
+    <ui.StatefulButton variant="link" busy={busy} onClick={refresh} overlayBusy size={buttonSize}>
+      Refresh
     </ui.StatefulButton>
   );
 }

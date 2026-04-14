@@ -18,6 +18,18 @@ import {
   coerceTextIntegrityStoredObject,
   getTextIntegrityConfigWithOverrides,
 } from '../server/config.server.js';
+import {
+  applyTextIntegritySettingPatch,
+  buildDefaultSettings,
+  cloneServiceSettings,
+  isSettingsEmpty,
+  reconcileSettingsWithFeatures,
+} from '../server/text-integrity-settings.server.js';
+import {
+  checksRelayConfigureUrl,
+  checksRelayStatusUrl,
+  resolveRelayInstanceId,
+} from '../server/relay-urls.server.js';
 
 type AppChecksConfig = {
   relayBaseUrl?: string;
@@ -37,6 +49,7 @@ type ActionError = {
 type RelaySessionOk = {
   relayBaseUrl: string;
   relayApiKey: string;
+  relayInstanceId: string;
   apiUrl: string;
   apiKey: string;
   apiKeyFromForm: string;
@@ -202,6 +215,9 @@ async function resolveTextIntegrityRelaySession(
   const prisma = await getPrismaClient();
   const merged = await getTextIntegrityConfigWithOverrides(extBase, prisma);
   const serviceName = resolveTextIntegrityServiceName(merged, checks);
+  const relayInstanceIdRaw = (formData.get('relayInstanceId') ?? '').toString().trim();
+  const relayInstanceId =
+    relayInstanceIdRaw !== '' ? relayInstanceIdRaw : resolveRelayInstanceId(merged);
 
   const keyNameRaw = (formData.get('keyName') ?? '').toString().trim();
   let apiUrl = (formData.get('apiBaseUrl') ?? '').toString().trim();
@@ -229,6 +245,7 @@ async function resolveTextIntegrityRelaySession(
     data: {
       relayBaseUrl,
       relayApiKey,
+      relayInstanceId,
       apiUrl,
       apiKey,
       apiKeyFromForm,
@@ -246,8 +263,8 @@ async function postRelayServiceDetails(
 ): Promise<
   { ok: true; serviceDetails: Record<string, unknown> } | { ok: false; error: ActionError }
 > {
-  const { relayBaseUrl, relayApiKey, serviceName, apiUrl, apiKey } = s;
-  const url = `${relayBaseUrl}/api/v1/services/${encodeURIComponent(serviceName)}/configure`;
+  const { relayBaseUrl, relayApiKey, relayInstanceId, serviceName, apiUrl, apiKey } = s;
+  const url = checksRelayConfigureUrl(relayBaseUrl, serviceName, relayInstanceId);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -359,8 +376,8 @@ async function postRelayServiceDetails(
 async function postRelayFeaturesAction(
   s: RelaySessionOk,
 ): Promise<{ ok: true; featuresResult: unknown } | { ok: false; error: ActionError }> {
-  const { relayBaseUrl, relayApiKey, serviceName, apiUrl, apiKey } = s;
-  const serviceStatusUrl = `${relayBaseUrl}/api/v1/services/${encodeURIComponent(serviceName)}/status`;
+  const { relayBaseUrl, relayApiKey, relayInstanceId, serviceName, apiUrl, apiKey } = s;
+  const serviceStatusUrl = checksRelayStatusUrl(relayBaseUrl, serviceName, relayInstanceId);
   const res = await fetch(serviceStatusUrl, {
     method: 'POST',
     headers: {
@@ -497,6 +514,18 @@ function mergeStoredObjectWithCredentials(
   if (prev.eula != null) {
     next.eula = cloneJsonObject(prev.eula);
   }
+  if (prev.defaults != null) {
+    next.defaults = JSON.parse(JSON.stringify(prev.defaults)) as typeof prev.defaults;
+  }
+  if (prev.settings != null) {
+    next.settings = cloneServiceSettings(prev.settings);
+  }
+  if (typeof prev.notifyBaseUrl === 'string') {
+    next.notifyBaseUrl = prev.notifyBaseUrl;
+  }
+  if (typeof prev.relayInstanceId === 'string' && prev.relayInstanceId.trim() !== '') {
+    next.relayInstanceId = prev.relayInstanceId.trim();
+  }
   return next;
 }
 
@@ -607,10 +636,33 @@ async function performTextIntegrityConfigureAndPersist(
     };
     if (parsedStatus.manifest) {
       stored.manifest = parsedStatus.manifest;
+    } else if (prev.manifest != null) {
+      stored.manifest = cloneJsonObject(prev.manifest);
     }
     if (parsedStatus.eula) {
       stored.eula = parsedStatus.eula;
+    } else if (prev.eula != null) {
+      stored.eula = cloneJsonObject(prev.eula);
     }
+    if (typeof prev.notifyBaseUrl === 'string') {
+      stored.notifyBaseUrl = prev.notifyBaseUrl;
+    }
+    if (typeof prev.relayInstanceId === 'string' && prev.relayInstanceId.trim() !== '') {
+      stored.relayInstanceId = prev.relayInstanceId.trim();
+    }
+    if (prev.defaults != null) {
+      stored.defaults = JSON.parse(JSON.stringify(prev.defaults)) as typeof prev.defaults;
+    }
+
+    if (prev.settings != null && !isSettingsEmpty(prev.settings)) {
+      stored.settings = reconcileSettingsWithFeatures(
+        cloneServiceSettings(prev.settings),
+        parsedStatus.features,
+      );
+    } else {
+      stored.settings = buildDefaultSettings(parsedStatus.features);
+    }
+
     return stored as TextIntegrityStoredObject & Prisma.JsonObject;
   });
 
@@ -627,6 +679,7 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
           const apiBaseUrl = (formData.get('apiBaseUrl') ?? '').toString().trim();
           const apiKeyRaw = (formData.get('apiKey') ?? '').toString();
           const keyNameRaw = (formData.get('keyName') ?? '').toString().trim();
+          const relayInstanceIdRaw = (formData.get('relayInstanceId') ?? '').toString().trim();
           const objectId = await getOrCreateTextIntegrityConfigObjectId();
           await safeObjectDataUpdate<TextIntegrityStoredObject & Prisma.JsonObject>(
             objectId,
@@ -644,15 +697,72 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
               } else {
                 delete credentials.keyName;
               }
-              return mergeStoredObjectWithCredentials(
-                prev,
-                credentials,
-              ) as TextIntegrityStoredObject & Prisma.JsonObject;
+              const next = mergeStoredObjectWithCredentials(prev, credentials);
+              if (relayInstanceIdRaw !== '') {
+                next.relayInstanceId = relayInstanceIdRaw;
+              } else {
+                delete next.relayInstanceId;
+              }
+              return next as TextIntegrityStoredObject & Prisma.JsonObject;
             },
           );
           return { success: true };
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Failed to save';
+          return { error: { type: 'general', message } };
+        }
+      },
+    },
+    {
+      name: 'text-integrity-update-setting',
+      handler: async (_ctx: Context, formData: FormData) => {
+        try {
+          const name = (formData.get('name') ?? '').toString();
+          const value = (formData.get('value') ?? '').toString();
+          if (!name) {
+            return { error: { type: 'validation', message: 'Setting name is required' } };
+          }
+
+          const objectId = await getOrCreateTextIntegrityConfigObjectId();
+          let validationMessage: string | null = null;
+
+          await safeObjectDataUpdate<TextIntegrityStoredObject & Prisma.JsonObject>(
+            objectId,
+            (current) => {
+              const prev = coerceTextIntegrityStoredObject(coerceToObject(current));
+              const features = prev.features;
+              if (features == null || typeof features !== 'object' || Array.isArray(features)) {
+                validationMessage = 'Configure the service first so features are available.';
+                return prev as TextIntegrityStoredObject & Prisma.JsonObject;
+              }
+
+              let settings = cloneServiceSettings(prev.settings);
+              if (isSettingsEmpty(settings)) {
+                settings = buildDefaultSettings(features as Record<string, unknown>);
+              }
+
+              const r = applyTextIntegritySettingPatch(
+                settings,
+                features as Record<string, unknown>,
+                name,
+                value,
+              );
+              if (!r.ok) {
+                validationMessage = r.message;
+                return prev as TextIntegrityStoredObject & Prisma.JsonObject;
+              }
+
+              const next: TextIntegrityStoredObject = { ...prev, settings };
+              return next as TextIntegrityStoredObject & Prisma.JsonObject;
+            },
+          );
+
+          if (validationMessage != null) {
+            return { error: { type: 'validation', message: validationMessage } };
+          }
+          return { success: true };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to update setting';
           return { error: { type: 'general', message } };
         }
       },

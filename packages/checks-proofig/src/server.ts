@@ -5,7 +5,7 @@ import type {
   JobRegistration,
 } from '@curvenote/scms-core';
 import { getPrismaClient } from '@curvenote/scms-server';
-import { extension as clientExtension } from './client.js';
+import { extension as clientExtension, PROOFIG_CHECKS_ACTION_PATH } from './client.js';
 import { handleProofigAction, proofigStatus } from './server/actions.js';
 import { getProofigConfigWithOverrides } from './server/config.server.js';
 import {
@@ -59,6 +59,7 @@ export const extension: ServerExtension = {
         id: 'proofig',
         name: 'Image Integrity',
         description: 'Detect potential issues with images in your work.',
+        checksActionPath: PROOFIG_CHECKS_ACTION_PATH,
         sectionHeaderComponent: ImageIntegritySectionHeader,
         sectionActivityComponent: ImageIntegrityChecksSection,
         handleAction: handleProofigAction,

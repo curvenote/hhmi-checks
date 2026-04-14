@@ -10,14 +10,23 @@ import { canShowResults } from '../schema.js';
 
 interface TextIntegrityChecksSectionProps {
   metadata: TextIntegrityDataSchema | undefined;
+  remoteStatusActionPath?: string;
+  workVersionId?: string;
+  checkRunId?: string;
 }
 
-export function TextIntegrityChecksSection({ metadata }: TextIntegrityChecksSectionProps) {
+export function TextIntegrityChecksSection({
+  metadata,
+  remoteStatusActionPath,
+  workVersionId,
+  checkRunId,
+}: TextIntegrityChecksSectionProps) {
   const fetcher = useFetcher();
   const hasData = !!metadata?.stages;
   const isSubmitting = fetcher.state === 'submitting';
   const showResults = canShowResults(metadata);
   const manifestLogo = metadata?.manifest?.logo;
+  const manifestTitle = metadata?.manifest?.title;
 
   useRevalidateOnInterval({
     enabled: (hasData && !showResults) || isSubmitting,
@@ -33,16 +42,23 @@ export function TextIntegrityChecksSection({ metadata }: TextIntegrityChecksSect
   if (!hasData) {
     return (
       <CTAPlaceholderPanel
-        logo={<ServiceLogo manifestLogoUrl={manifestLogo} className="mb-4 h-16" />}
+        logo={
+          <ServiceLogo
+            manifestLogoUrl={manifestLogo}
+            manifestTitle={manifestTitle}
+            className="mb-4 h-16"
+          />
+        }
         title="No text integrity checks run yet"
         description="Run text integrity checks to verify text in your work."
         action={
-          <fetcher.Form method="post">
+          <fetcher.Form method="post" action={remoteStatusActionPath}>
+            <input type="hidden" name="workVersionId" value={workVersionId ?? ''} />
             <ui.StatefulButton
               type="submit"
               variant="default"
               name="intent"
-              value="checks-text-integrity:execute"
+              value="execute"
               busy={isSubmitting}
             >
               Run checks now
@@ -63,7 +79,14 @@ export function TextIntegrityChecksSection({ metadata }: TextIntegrityChecksSect
   }
 
   if (showResults && metadata.summaryReport) {
-    return <TextIntegrityResultsArea metadata={metadata} />;
+    return (
+      <TextIntegrityResultsArea
+        metadata={metadata}
+        actionPath={remoteStatusActionPath}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+      />
+    );
   }
 
   return (

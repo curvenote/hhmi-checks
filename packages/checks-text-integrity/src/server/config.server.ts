@@ -30,6 +30,8 @@ export interface TextIntegrityCredentialsStored {
  */
 export interface TextIntegrityStoredObject {
   credentials?: TextIntegrityCredentialsStored;
+  /** Overrides extension YAML for relay URL instance segment when set. */
+  relayInstanceId?: string;
   notifyBaseUrl?: string;
   /** Service manifest from the relay plugin (name, title, logo, etc.). */
   manifest?: Record<string, unknown>;
@@ -41,6 +43,25 @@ export interface TextIntegrityStoredObject {
   eula?: Record<string, unknown>;
   /** Legacy; omitted on new writes. */
   defaults?: TextIntegrityDefaults;
+  /**
+   * Admin-editable similarity / indexing options (seeded on first Configure, then patched in admin UI).
+   * Mirrors report-related slices of the TCA API (indexing + similarity generation/view settings).
+   */
+  settings?: TextIntegrityServiceSettings;
+}
+
+/** Persisted admin settings for text integrity (Object row + merged extension config). */
+export interface TextIntegrityServiceSettings {
+  indexing_settings?: {
+    add_to_index?: boolean;
+  };
+  similarity?: {
+    generation_settings?: {
+      search_repositories?: string[];
+      auto_exclude_self_matching_scope?: 'NONE' | 'ALL';
+    };
+    view_settings?: Record<string, boolean | number>;
+  };
 }
 
 /**
@@ -52,6 +73,8 @@ export interface TextIntegrityConfigOverlay {
   keyName?: string;
   /** Checks relay plugin name (from app config), e.g. ithenticate */
   serviceName?: string;
+  /** Relay URL instance segment; merged from extension yaml and Object row. */
+  relayInstanceId?: string;
   /**
    * Absolute base for Text Integrity webhook URLs (no trailing slash).
    * Default: `{request-origin}/v1/hooks/text-integrity/notify` when running the submit job.
@@ -62,6 +85,7 @@ export interface TextIntegrityConfigOverlay {
   webhooks?: unknown[];
   eula?: Record<string, unknown>;
   defaults?: TextIntegrityDefaults;
+  settings?: TextIntegrityServiceSettings;
 }
 
 export function cloneJsonObject(v: Record<string, unknown>): Record<string, unknown> {
@@ -137,8 +161,16 @@ export function coerceTextIntegrityStoredObject(data: unknown): TextIntegritySto
     out.defaults = raw.defaults;
   }
 
+  if (raw.settings != null && typeof raw.settings === 'object' && !Array.isArray(raw.settings)) {
+    out.settings = cloneJsonObject(raw.settings as Record<string, unknown>) as TextIntegrityServiceSettings;
+  }
+
   if (typeof raw.notifyBaseUrl === 'string') {
     out.notifyBaseUrl = raw.notifyBaseUrl;
+  }
+
+  if (typeof raw.relayInstanceId === 'string') {
+    out.relayInstanceId = raw.relayInstanceId;
   }
 
   return out;
@@ -152,11 +184,13 @@ function parseOverlay(data: unknown): Partial<TextIntegrityConfigOverlay> {
   if (typeof c.apiKey === 'string') overlay.apiKey = c.apiKey;
   if (typeof c.keyName === 'string') overlay.keyName = c.keyName;
   if (typeof stored.notifyBaseUrl === 'string') overlay.notifyBaseUrl = stored.notifyBaseUrl;
+  if (typeof stored.relayInstanceId === 'string') overlay.relayInstanceId = stored.relayInstanceId;
   if (stored.manifest) overlay.manifest = stored.manifest;
   if (stored.features) overlay.features = stored.features;
   if (stored.webhooks) overlay.webhooks = stored.webhooks;
   if (stored.eula) overlay.eula = stored.eula;
   if (stored.defaults) overlay.defaults = stored.defaults;
+  if (stored.settings) overlay.settings = stored.settings;
   return overlay;
 }
 
@@ -166,6 +200,8 @@ const ADMIN_SERVICE_CONFIGURATION_KEYS = [
   'webhooks',
   'eula',
   'defaults',
+  'settings',
+  'relayInstanceId',
 ] as const;
 
 /**

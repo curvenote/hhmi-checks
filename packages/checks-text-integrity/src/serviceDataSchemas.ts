@@ -119,6 +119,7 @@ export const TextIntegrityLatestSchema = z.object({
   receivedAt: z.string(),
   overallMatchPercentage: z.number().optional(),
   reportPdfId: z.string().optional(),
+  reportPdfUrl: z.string().optional(),
   errorMessage: z.string().optional(),
 });
 export type TextIntegrityLatest = z.infer<typeof TextIntegrityLatestSchema>;
@@ -168,18 +169,28 @@ export const textIntegrityDataSchema = z.object({
   webhookHistory: z.array(WebhookEventLogEntrySchema).optional(),
 
   // --- Top-level identifiers ---
-  /** TCA submission ID from POST /submissions. */
+  /** Provider check id from relay upload (`result.externalId`); preferred for /check/:externalId routes. */
+  externalId: z.string().optional(),
+  /**
+   * Legacy: same as externalId for rows created before relay instance API.
+   * Also populated on new submits for backward compatibility.
+   */
   submissionId: z.string().optional(),
+  /** External reference from the service plugin (provider submission id). */
+  externalRef: z.string().optional(),
   /** PDF id (from TCA generate similarity PDF endpoint), used to download via relay. */
   reportPdfId: z.string().optional(),
+  /**
+   * TCA similarity PDF GET URL (from checks-relay notify `payload.report.report_pdf_url`).
+   * Caller must use provider auth to fetch; not a public browser link unless proxied.
+   */
+  reportPdfUrl: z.string().optional(),
 
   // --- Report data ---
   /** Summary report when processing is complete (camelCase stored shape). */
   summaryReport: StoredSimilarityReportSchema.optional(),
   /** URL to view the report in the TCA viewer (if available). */
   viewerUrl: z.string().optional(),
-  /** Download PDF report URL (if TCA provides). */
-  reportPdfUrl: z.string().optional(),
 });
 
 export type TextIntegrityDataSchema = z.infer<typeof textIntegrityDataSchema>;

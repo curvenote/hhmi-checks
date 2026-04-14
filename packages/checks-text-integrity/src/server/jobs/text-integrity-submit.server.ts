@@ -17,6 +17,7 @@ import {
   markSubmissionError as markSubmissionErrorSM,
 } from '../stateMachine.server.js';
 import { getTextIntegrityConfigWithOverrides } from '../config.server.js';
+import { checksRelayUploadUrl, resolveRelayInstanceId } from '../relay-urls.server.js';
 
 /** Job type for Text Integrity submit via checks-relay. */
 export const TEXT_INTEGRITY_SUBMIT = 'TEXT_INTEGRITY_SUBMIT';
@@ -101,6 +102,7 @@ type RelaySubmitResponse = {
   message?: string;
   error?: string;
   result?: {
+    externalId?: string;
     submissionId?: string;
     externalRef?: string;
   };
@@ -149,7 +151,7 @@ async function readRelaySubmitResponse(res: Response): Promise<RelaySubmitRespon
 }
 
 /**
- * TEXT_INTEGRITY_SUBMIT: sign manuscript URLs, POST checks-relay submit, update check run with TCA id.
+ * TEXT_INTEGRITY_SUBMIT: sign manuscript URLs, POST checks-relay upload, update check run with provider externalId.
  */
 export async function textIntegritySubmitHandler(
   ctx: Context,
@@ -169,6 +171,16 @@ export async function textIntegritySubmitHandler(
   });
   if (!workVersionRow) {
     throw httpError(404, `Work version ${payload.work_version_id} not found`);
+  }
+
+  const userId = ctx.user?.id ?? data.invoked_by_id;
+  let submitterUser: { id: string; email: string | null; display_name: string | null } | undefined;
+  if (userId) {
+    const row = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, display_name: true },
+    });
+    if (row) submitterUser = row;
   }
 
   const job = await jobs.dbCreateJob({ ...data, status: JobStatus.QUEUED });
@@ -232,6 +244,7 @@ export async function textIntegritySubmitHandler(
     }
 
     const serviceName = resolveServiceName(mergedConfig, checks);
+    const relayInstanceId = resolveRelayInstanceId(mergedConfig);
     const metadataRoot =
       workVersionRow.metadata != null ? coerceToObject(workVersionRow.metadata) : null;
     if (!metadataRoot || typeof metadataRoot !== 'object') {
@@ -255,17 +268,23 @@ export async function textIntegritySubmitHandler(
         : `${new URL(ctx.request.url).origin}/v1/hooks/text-integrity/notify`) ?? '';
     const notifyUrl = `${notifyBase}/${payload.text_integrity_run_id}`;
 
-    const submitUrl = `${relayBaseUrl}/api/v1/services/${encodeURIComponent(serviceName)}/submit`;
+    const submitUrl = checksRelayUploadUrl(relayBaseUrl, serviceName, relayInstanceId);
+    const userIdentity = submitterUser
+      ? {
+          id: submitterUser.id,
+          given_name: submitterUser.display_name ?? 'Unknown',
+          family_name: '',
+          email: submitterUser.email ?? '',
+        }
+      : undefined;
     const body = {
-      credentials: {
-        apiKey,
-        apiUrl: apiBaseUrl,
-      },
       clientId: payload.text_integrity_run_id,
       notifyUrl,
-      files: [manuscript],
+      files: [{ url: manuscript.url, filename: manuscript.filename }],
       metadata: {
         title: workVersionRow.title,
+        owner: userIdentity,
+        submitter: userIdentity,
       },
     };
 
@@ -291,15 +310,18 @@ export async function textIntegritySubmitHandler(
         (typeof relayJson.result === 'object' && relayJson.result && 'error' in relayJson.result
           ? String((relayJson.result as { error?: string }).error)
           : null) ??
-        `checks-relay submit failed (HTTP ${res.status})`;
+        `checks-relay upload failed (HTTP ${res.status})`;
       throw httpError(res.status >= 400 && res.status < 600 ? res.status : 502, detail);
     }
 
-    const externalRef = relayJson.result?.externalRef;
-    if (!externalRef || typeof externalRef !== 'string') {
+    const externalIdRaw =
+      relayJson.result?.externalId ??
+      relayJson.result?.externalRef ??
+      relayJson.result?.submissionId;
+    if (!externalIdRaw || typeof externalIdRaw !== 'string') {
       throw httpError(
         502,
-        'checks-relay submit succeeded but response did not include result.externalRef',
+        'checks-relay upload succeeded but response did not include result.externalId',
       );
     }
 
@@ -309,7 +331,9 @@ export async function textIntegritySubmitHandler(
         const current = (runData ?? {}) as CheckServiceRunData<TextIntegrityDataSchema>;
         const nextServiceData: TextIntegrityDataSchema = {
           ...startSubmission(current.serviceData),
-          submissionId: externalRef,
+          externalId: externalIdRaw,
+          externalRef: externalIdRaw,
+          submissionId: externalIdRaw,
           manifest,
         };
         return {

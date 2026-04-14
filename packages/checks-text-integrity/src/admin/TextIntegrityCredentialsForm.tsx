@@ -13,6 +13,8 @@ export type TextIntegrityCredentials = {
   apiBaseUrl: string;
   apiKey: string;
   keyName: string;
+  /** Extension YAML + stored override; empty save clears stored value (YAML or "default"). */
+  relayInstanceId: string;
 };
 
 type Props = {
@@ -24,9 +26,12 @@ type Props = {
 export function TextIntegrityCredentialsForm({ displayConfig, onCredentialsChange }: Props) {
   const initialUrl = typeof displayConfig.apiBaseUrl === 'string' ? displayConfig.apiBaseUrl : '';
   const initialKeyName = typeof displayConfig.keyName === 'string' ? displayConfig.keyName : '';
+  const initialRelayInstanceId =
+    typeof displayConfig.relayInstanceId === 'string' ? displayConfig.relayInstanceId : '';
   const [turnitinUrl, setTurnitinUrl] = useState(initialUrl);
   const [turnitinApiKey, setTurnitinApiKey] = useState('');
   const [keyName, setKeyName] = useState(initialKeyName);
+  const [relayInstanceId, setRelayInstanceId] = useState(initialRelayInstanceId);
 
   const saveFetcher = useFetcher<SaveActionData>();
   const savePrevStateRef = useRef(saveFetcher.state);
@@ -38,15 +43,19 @@ export function TextIntegrityCredentialsForm({ displayConfig, onCredentialsChang
   useEffect(() => {
     setTurnitinUrl(typeof displayConfig.apiBaseUrl === 'string' ? displayConfig.apiBaseUrl : '');
     setKeyName(typeof displayConfig.keyName === 'string' ? displayConfig.keyName : '');
-  }, [displayConfig.apiBaseUrl, displayConfig.keyName]);
+    setRelayInstanceId(
+      typeof displayConfig.relayInstanceId === 'string' ? displayConfig.relayInstanceId : '',
+    );
+  }, [displayConfig.apiBaseUrl, displayConfig.keyName, displayConfig.relayInstanceId]);
 
   useEffect(() => {
     onCredentialsChangeRef.current({
       apiBaseUrl: turnitinUrl,
       apiKey: turnitinApiKey,
       keyName,
+      relayInstanceId,
     });
-  }, [turnitinUrl, turnitinApiKey, keyName]);
+  }, [turnitinUrl, turnitinApiKey, keyName, relayInstanceId]);
 
   useEffect(() => {
     const prev = savePrevStateRef.current;
@@ -80,6 +89,25 @@ export function TextIntegrityCredentialsForm({ displayConfig, onCredentialsChang
           disabled={fieldsDisabled}
           className="w-full font-mono"
         />
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium" htmlFor="ti-relay-instance">
+          Checks relay instance id
+        </label>
+        <ui.TextField
+          id="ti-relay-instance"
+          name="relayInstanceId"
+          value={relayInstanceId}
+          onChange={(e) => setRelayInstanceId(e.target.value)}
+          placeholder="default"
+          disabled={fieldsDisabled}
+          className="w-full font-mono"
+        />
+        <p className="text-xs text-muted-foreground">
+          URL segment for checks-relay (paths include <span className="font-mono">/instances/</span>).
+          Set in extension YAML or here (stored value wins). Leave blank and save to clear a stored
+          override, then extension YAML or the literal <span className="font-mono">default</span>.
+        </p>
       </div>
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="ti-keyname">
@@ -120,6 +148,7 @@ export function TextIntegrityCredentialsForm({ displayConfig, onCredentialsChang
         <input type="hidden" name="apiBaseUrl" value={turnitinUrl} />
         <input type="hidden" name="apiKey" value={turnitinApiKey} />
         <input type="hidden" name="keyName" value={keyName} />
+        <input type="hidden" name="relayInstanceId" value={relayInstanceId} />
         <ui.StatefulButton
           type="submit"
           disabled={fieldsDisabled}
