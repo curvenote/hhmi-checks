@@ -6,7 +6,7 @@ import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
 import { TextIntegrityProgressComponent } from './TextIntegrityProgressComponent.js';
 import { TextIntegrityResultsArea } from './TextIntegrityResultsArea.js';
 import type { TextIntegrityDataSchema } from '../schema.js';
-import { canShowResults } from '../schema.js';
+import { canShowResults, getTextIntegrityManifest } from '../schema.js';
 
 interface TextIntegrityChecksSectionProps {
   metadata: TextIntegrityDataSchema | undefined;
@@ -25,8 +25,9 @@ export function TextIntegrityChecksSection({
   const hasData = !!metadata?.stages;
   const isSubmitting = fetcher.state === 'submitting';
   const showResults = canShowResults(metadata);
-  const manifestLogo = metadata?.manifest?.logo;
-  const manifestTitle = metadata?.manifest?.title;
+  const manifest = getTextIntegrityManifest(metadata);
+  const manifestLogo = manifest?.logo;
+  const manifestTitle = manifest?.title;
 
   useRevalidateOnInterval({
     enabled: (hasData && !showResults) || isSubmitting,

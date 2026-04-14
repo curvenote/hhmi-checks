@@ -147,6 +147,17 @@ export const ServiceManifestSnapshotSchema = z.object({
 
 export type ServiceManifestSnapshot = z.infer<typeof ServiceManifestSnapshotSchema>;
 
+/**
+ * Read the relay plugin manifest from check run `serviceData` (same object passed as `metadata` in UI).
+ * Uses {@link ServiceManifestSnapshotSchema} so partial/invalid snapshots are ignored instead of widening types.
+ */
+export function getTextIntegrityManifest(metadata: unknown): ServiceManifestSnapshot | undefined {
+  if (metadata == null || typeof metadata !== 'object') return undefined;
+  const raw = (metadata as Record<string, unknown>).manifest;
+  const parsed = ServiceManifestSnapshotSchema.safeParse(raw);
+  return parsed.success ? parsed.data : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Main service data schema
 // ---------------------------------------------------------------------------

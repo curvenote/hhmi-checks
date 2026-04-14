@@ -13,10 +13,12 @@ import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSe
 import { ImageIntegritySectionHeader } from './components/ImageIntegritySectionHeader.js';
 import { ProofigCheckRunTimelineMount } from './components/ProofigCheckRunTimelineMount.js';
 import { ProofigSummaryBadge } from './components/ProofigSummaryBadge.js';
+import { ProofigSummaryTitle } from './components/ProofigSummaryTitle.js';
 import ExtensionAdminCard from './admin/ExtensionAdminCard.js';
+import { extensionPackageTitle } from './meta.js';
 
 export const id = 'checks-proofig';
-export const name = 'Image Integrity Checks';
+export const name = extensionPackageTitle;
 export const description = 'Image integrity checking service for works';
 
 /** App-absolute POST target for Proofig check mutations (must match `registerRoutes` mount). */
@@ -59,6 +61,7 @@ export function getChecks(): ClientExtensionCheckService[] {
       sectionHeaderComponent: ImageIntegritySectionHeader,
       sectionActivityComponent: ImageIntegrityChecksSection,
       sectionSummaryBadgeComponent: ProofigSummaryBadge,
+      sectionSummaryTitleComponent: ProofigSummaryTitle,
       checkRunTimelineMountComponent: ProofigCheckRunTimelineMount,
     },
   ];

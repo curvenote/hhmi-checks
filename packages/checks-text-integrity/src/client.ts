@@ -12,10 +12,12 @@ import { TextIntegrityIcon, TextIntegrityLogo, TextIntegrityLogoMono } from './i
 import { TextIntegrityChecksSection } from './components/TextIntegrityChecksSection.js';
 import { TextIntegritySectionHeader } from './components/TextIntegritySectionHeader.js';
 import { TextIntegritySummaryBadge } from './components/TextIntegritySummaryBadge.js';
+import { TextIntegritySummaryTitle } from './components/TextIntegritySummaryTitle.js';
 import ExtensionAdminCard from './admin/ExtensionAdminCard.js';
+import { extensionPackageTitle } from './meta.js';
 
 export const id = 'checks-text-integrity';
-export const name = 'Text Integrity Checks';
+export const name = extensionPackageTitle;
 export const description = 'Text integrity checking service for works';
 
 /** App-absolute POST target for Text Integrity check mutations (must match `registerRoutes` mount). */
@@ -58,6 +60,7 @@ export function getChecks(): ClientExtensionCheckService[] {
       sectionHeaderComponent: TextIntegritySectionHeader,
       sectionActivityComponent: TextIntegrityChecksSection,
       sectionSummaryBadgeComponent: TextIntegritySummaryBadge,
+      sectionSummaryTitleComponent: TextIntegritySummaryTitle,
     },
   ];
 }

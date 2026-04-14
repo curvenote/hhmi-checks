@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { TextIntegrityLogo } from '../icons.js';
 import { cn } from '@curvenote/scms-core';
 
 /**
@@ -40,9 +39,5 @@ export function ServiceLogo({
     );
   }
 
-  if (manifestTitle) {
-    return <span className={cn(className, 'h-auto')}>{manifestTitle}</span>;
-  }
-
-  return <TextIntegrityLogo className={className} />;
+  return <span className={cn(className, 'h-auto')}>{manifestTitle ?? 'Text Integrity'}</span>;
 }

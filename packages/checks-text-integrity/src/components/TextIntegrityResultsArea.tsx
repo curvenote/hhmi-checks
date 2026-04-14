@@ -1,4 +1,5 @@
 import type { TextIntegrityDataSchema } from '../schema.js';
+import { getTextIntegrityManifest } from '../schema.js';
 import { SimilarityScoresBlock } from './SimilarityScoresBlock.js';
 import { TextIntegrityPdfReportStatus } from './TextIntegrityPdfReportStatus.js';
 import { TopMatchesBlock } from './TopMatchesBlock.js';
@@ -18,6 +19,7 @@ export function TextIntegrityResultsArea({
   checkRunId,
 }: TextIntegrityResultsAreaProps) {
   const { summaryReport, stages } = metadata;
+  const manifest = getTextIntegrityManifest(metadata);
   const reportGenStatus = stages?.reportGeneration?.status;
   const waitingForReport = reportGenStatus === 'processing' || reportGenStatus === 'pending';
   const reportGenerationComplete = reportGenStatus === 'completed';
@@ -35,8 +37,8 @@ export function TextIntegrityResultsArea({
           actionPath={actionPath}
           workVersionId={workVersionId}
           checkRunId={checkRunId}
-          manifestLogoUrl={metadata.manifest?.logo}
-          manifestTitle={metadata.manifest?.title}
+          manifestLogoUrl={manifest?.logo}
+          manifestTitle={manifest?.title}
         />
         <TextIntegrityPdfReportStatus
           reportGenerationComplete={reportGenerationComplete}
