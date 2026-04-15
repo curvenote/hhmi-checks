@@ -6,7 +6,6 @@
 export type AppChecksRelayConfig = {
   relayBaseUrl?: string;
   relayApiKey?: string;
-  textIntegrityServiceName?: string;
 };
 
 /**

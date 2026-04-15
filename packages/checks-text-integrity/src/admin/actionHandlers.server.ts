@@ -34,7 +34,6 @@ import {
 type AppChecksConfig = {
   relayBaseUrl?: string;
   relayApiKey?: string;
-  textIntegrityServiceName?: string;
 };
 
 type Phase = 'relay' | 'relay_auth' | 'provider';
@@ -64,15 +63,10 @@ function getAppChecks(ctx: Context): AppChecksConfig | undefined {
   return app?.checks;
 }
 
-function resolveTextIntegrityServiceName(
-  mergedExtensionConfig: Record<string, unknown>,
-  checks: AppChecksConfig | undefined,
-): string {
+function resolveTextIntegrityServiceName(mergedExtensionConfig: Record<string, unknown>): string {
   const fromExt = mergedExtensionConfig.serviceName;
   if (typeof fromExt === 'string' && fromExt.trim() !== '') return fromExt.trim();
-  const fromApp = checks?.textIntegrityServiceName;
-  if (typeof fromApp === 'string' && fromApp.trim() !== '') return fromApp.trim();
-  return 'ithenticate';
+  return 'echo';
 }
 
 function stripCredentialsFromStoredData(data: unknown): Record<string, unknown> {
@@ -214,7 +208,7 @@ async function resolveTextIntegrityRelaySession(
       | undefined) ?? {};
   const prisma = await getPrismaClient();
   const merged = await getTextIntegrityConfigWithOverrides(extBase, prisma);
-  const serviceName = resolveTextIntegrityServiceName(merged, checks);
+  const serviceName = resolveTextIntegrityServiceName(merged);
   const relayInstanceIdRaw = (formData.get('relayInstanceId') ?? '').toString().trim();
   const relayInstanceId =
     relayInstanceIdRaw !== '' ? relayInstanceIdRaw : resolveRelayInstanceId(merged);

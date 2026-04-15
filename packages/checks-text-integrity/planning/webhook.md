@@ -132,7 +132,7 @@ Decision captured: relay should store **per-tenant/per-integration** TCA credent
 
 Tasks:
 - Define where tenant credentials live (suggest: relay `objectStore` via a new `id_type`, scoped by integration identifier).
-- Ensure `ithenticate.configure` writes/updates that credential reference (not the secret itself unless encrypted-at-rest) and that runtime code can resolve credentials when handling webhooks.
+- Ensure service configure writes/updates that credential reference (not the secret itself unless encrypted-at-rest) and that runtime code can resolve credentials when handling webhooks.
 - Document rotation story (what happens when api_key changes; how to reconcile existing webhook registrations).
 
 #### Phase_2.B — Standardize relay→SCMS notify event contract (snake_case) and emit multiple events per webhook when required

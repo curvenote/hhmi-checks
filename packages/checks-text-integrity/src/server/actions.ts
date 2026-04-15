@@ -33,7 +33,6 @@ import {
 type AppChecksConfig = {
   relayBaseUrl?: string;
   relayApiKey?: string;
-  textIntegrityServiceName?: string;
 };
 
 function getAppChecks(ctx: { $config?: Record<string, unknown> }): AppChecksConfig | undefined {
@@ -54,15 +53,10 @@ function readServiceDataFromRunData(runData: unknown): TextIntegrityDataSchema |
   return parsed.success ? parsed.data : undefined;
 }
 
-function resolveServiceName(
-  merged: Record<string, unknown>,
-  checks: AppChecksConfig | undefined,
-): string {
+function resolveServiceName(merged: Record<string, unknown>): string {
   const fromExt = merged.serviceName;
   if (typeof fromExt === 'string' && fromExt.trim() !== '') return fromExt.trim();
-  const fromApp = checks?.textIntegrityServiceName;
-  if (typeof fromApp === 'string' && fromApp.trim() !== '') return fromApp.trim();
-  return 'ithenticate';
+  return 'echo';
 }
 
 async function relaySimilarityPdfStart(
@@ -183,7 +177,7 @@ export async function handleTextIntegrityAction(
           job_type: TEXT_INTEGRITY_SUBMIT,
           payload: {
             work_version_id: workVersionId,
-            text_integrity_run_id: checkRunId,
+            check_service_run_id: checkRunId,
           },
           invoked_by_id: ctx.user?.id,
           activity_type: 'CHECK_STARTED',
@@ -279,7 +273,7 @@ export async function handleTextIntegrityAction(
       };
     }
 
-    const serviceName = resolveServiceName(mergedConfig, checks);
+    const serviceName = resolveServiceName(mergedConfig);
     const relayInstanceId = resolveRelayInstanceId(mergedConfig);
     const viewerUrlEndpoint = checksRelayReportViewerUrl(
       relayBaseUrl,
@@ -400,7 +394,7 @@ export async function handleTextIntegrityAction(
       };
     }
 
-    const serviceName = resolveServiceName(mergedConfig, checks);
+    const serviceName = resolveServiceName(mergedConfig);
     const relayInstanceId = resolveRelayInstanceId(mergedConfig);
 
     let startRes: Response;

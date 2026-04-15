@@ -24,7 +24,7 @@ export const TEXT_INTEGRITY_SUBMIT = 'TEXT_INTEGRITY_SUBMIT';
 
 const TextIntegritySubmitJobPayloadSchema = z.object({
   work_version_id: z.string().uuid('work_version_id is required'),
-  text_integrity_run_id: z.string().min(1, 'text_integrity_run_id is required'),
+  check_service_run_id: z.string().min(1, 'check_service_run_id is required'),
 });
 
 export type TextIntegritySubmitJobPayload = z.infer<typeof TextIntegritySubmitJobPayloadSchema>;
@@ -32,7 +32,6 @@ export type TextIntegritySubmitJobPayload = z.infer<typeof TextIntegritySubmitJo
 type AppChecksConfig = {
   relayBaseUrl?: string;
   relayApiKey?: string;
-  textIntegrityServiceName?: string;
 };
 
 const RELAY_SUBMIT_TIMEOUT_MS = 300_000;
@@ -48,15 +47,10 @@ function getAppChecks(ctx: Context): AppChecksConfig | undefined {
   return app?.checks;
 }
 
-function resolveServiceName(
-  merged: Record<string, unknown>,
-  checks: AppChecksConfig | undefined,
-): string {
+function resolveServiceName(merged: Record<string, unknown>): string {
   const fromExt = merged.serviceName;
   if (typeof fromExt === 'string' && fromExt.trim() !== '') return fromExt.trim();
-  const fromApp = checks?.textIntegrityServiceName;
-  if (typeof fromApp === 'string' && fromApp.trim() !== '') return fromApp.trim();
-  return 'ithenticate';
+  return 'echo';
 }
 
 function pickManuscriptFromSignedMetadata(
@@ -168,7 +162,7 @@ export async function textIntegritySubmitHandler(
 
   const markRunError = async (message: string) => {
     await safeCheckServiceRunDataUpdate(
-      payload.text_integrity_run_id,
+      payload.check_service_run_id,
       (runData?: Prisma.JsonValue) => {
         const current = (runData ?? {}) as CheckServiceRunData<TextIntegrityDataSchema>;
         return {
@@ -211,7 +205,7 @@ export async function textIntegritySubmitHandler(
       );
     }
 
-    const serviceName = resolveServiceName(mergedConfig, checks);
+    const serviceName = resolveServiceName(mergedConfig);
     const relayInstanceId = resolveRelayInstanceId(mergedConfig);
     const metadataRoot =
       workVersionRow.metadata != null ? coerceToObject(workVersionRow.metadata) : null;
@@ -234,7 +228,7 @@ export async function textIntegritySubmitHandler(
       (typeof mergedConfig.notifyBaseUrl === 'string' && mergedConfig.notifyBaseUrl.trim() !== ''
         ? mergedConfig.notifyBaseUrl.trim().replace(/\/$/, '')
         : `${new URL(ctx.request.url).origin}/v1/hooks/text-integrity/notify`) ?? '';
-    const notifyUrl = `${notifyBase}/${payload.text_integrity_run_id}`;
+    const notifyUrl = `${notifyBase}/${payload.check_service_run_id}`;
 
     const submitUrl = checksRelayUploadUrl(relayBaseUrl, serviceName, relayInstanceId);
     const userIdentity = submitterUser
@@ -246,8 +240,8 @@ export async function textIntegritySubmitHandler(
         }
       : undefined;
     const body = {
-      clientId: payload.text_integrity_run_id,
-      notifyUrl,
+      client_id: payload.check_service_run_id,
+      notify_url: notifyUrl,
       files: [{ url: manuscript.url, filename: manuscript.filename }],
       metadata: {
         title: workVersionRow.title,
@@ -291,7 +285,7 @@ export async function textIntegritySubmitHandler(
     }
 
     await safeCheckServiceRunDataUpdate(
-      payload.text_integrity_run_id,
+      payload.check_service_run_id,
       (runData?: Prisma.JsonValue) => {
         const current = (runData ?? {}) as CheckServiceRunData<TextIntegrityDataSchema>;
         const nextServiceData: TextIntegrityDataSchema = {
@@ -328,7 +322,7 @@ export async function textIntegritySubmitHandler(
     message: 'Text integrity submit complete',
     results: {
       message: 'Submit complete',
-      text_integrity_run_id: payload.text_integrity_run_id,
+      check_service_run_id: payload.check_service_run_id,
     },
   });
 

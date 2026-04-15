@@ -71,7 +71,7 @@ export interface TextIntegrityConfigOverlay {
   apiBaseUrl?: string;
   apiKey?: string;
   keyName?: string;
-  /** Checks relay plugin name (from app config), e.g. ithenticate */
+  /** Checks-relay plugin name from extension YAML / Object overlay; runtime default echo when unset. */
   serviceName?: string;
   /** Relay URL instance segment; merged from extension yaml and Object row. */
   relayInstanceId?: string;

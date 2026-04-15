@@ -62,9 +62,9 @@ If the product instead wants **at most one open submission per work version**, y
 
 ---
 
-## iThenticate plugin expectations (`service-plugin-ithenticate`)
+## Text integrity plugin expectations
 
-**Credentials** (`extractCredentials` in `packages/service-plugin-ithenticate/src/utils.ts`):
+**Credentials** (`extractCredentials` in the relay text integrity plugin):
 
 | Field               | Required | Notes |
 |--------------------|----------|--------|
@@ -76,7 +76,7 @@ If the product instead wants **at most one open submission per work version**, y
 **Payload** (`runSubmit` in the same file):
 
 - **`files`** — Non-empty array. Only **`files[0]`** is used today: each item must be enough for `TcaClient.fetchFile(file.url)` — at minimum **`url`** and **`filename`** (used for upload and title fallback).
-- **`metadata`** — Freeform from the client; iThenticate reads TCA-oriented fields (`owner`, `title`, `submitter`, `eula`, `group`, etc.) and maps them into the TCA create-submission body. Sensible defaults exist: e.g. `owner.id` falls back to **`payload.clientId`** if omitted.
+- **`metadata`** — Freeform from the client; the plugin reads TCA-oriented fields (`owner`, `title`, `submitter`, `eula`, `group`, etc.) and maps them into the TCA create-submission body. Sensible defaults exist: e.g. `owner.id` falls back to **`payload.clientId`** if omitted.
 - **`clientId`** — Still present on the payload for those defaults.
 
 SCMS already stores **`apiBaseUrl`** in extension config; the job should map that to relay **`credentials.apiUrl`** (naming differs between app and TCA client).
@@ -110,7 +110,7 @@ Conceptually:
 
 **Relay HTTP headers:** Match existing SCMS → relay calls (e.g. admin configure/status): **`Authorization: Bearer <app.checks.relayApiKey>`** (exact config path as used elsewhere in this extension).
 
-**`serviceName`:** Resolve like admin code: extension `serviceName` or `app.checks.textIntegrityServiceName`, default **`ithenticate`**.
+**`serviceName`:** Extension `serviceName` only (merged YAML + Object overlay); default **`echo`** when unset.
 
 ---
 
@@ -118,7 +118,7 @@ Conceptually:
 
 ### Config and HTTP client
 
-- Resolve **`relayBaseUrl`**, **`relayApiKey`**, **`serviceName`**, TCA **`apiKey`**, **`apiUrl`** from merged extension + app config (reuse or mirror `getTextIntegrityConfigWithOverrides` / patterns in `admin/actionHandlers.server.ts`).
+- Resolve **`relayBaseUrl`** and **`relayApiKey`** from `app.checks`; **`serviceName`** from merged extension config only; TCA **`apiKey`** / **`apiUrl`** from merged extension + Object store (reuse or mirror `getTextIntegrityConfigWithOverrides` / patterns in `admin/actionHandlers.server.ts`).
 - Fail fast with a clear job error if any required piece is missing.
 
 ### Manuscript URL and filename
