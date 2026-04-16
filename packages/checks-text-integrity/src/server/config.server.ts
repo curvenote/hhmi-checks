@@ -21,7 +21,19 @@ export interface TextIntegrityDefaults {
 export interface TextIntegrityCredentialsStored {
   apiBaseUrl?: string;
   apiKey?: string;
-  keyName?: string;
+}
+
+/** Writes only supported credential fields (drops deprecated keys from stored JSON). */
+export function pickTextIntegrityCredentialsForWrite(
+  prev: TextIntegrityCredentialsStored | undefined,
+  patch: Partial<TextIntegrityCredentialsStored>,
+): TextIntegrityCredentialsStored {
+  const out: TextIntegrityCredentialsStored = {};
+  if (typeof prev?.apiBaseUrl === 'string') out.apiBaseUrl = prev.apiBaseUrl;
+  if (typeof prev?.apiKey === 'string') out.apiKey = prev.apiKey;
+  if (patch.apiBaseUrl !== undefined) out.apiBaseUrl = patch.apiBaseUrl;
+  if (patch.apiKey !== undefined) out.apiKey = patch.apiKey;
+  return out;
 }
 
 /**
@@ -70,7 +82,6 @@ export interface TextIntegrityServiceSettings {
 export interface TextIntegrityConfigOverlay {
   apiBaseUrl?: string;
   apiKey?: string;
-  keyName?: string;
   /** Checks-relay plugin name from extension YAML / Object overlay; runtime default echo when unset. */
   serviceName?: string;
   /** Relay URL instance segment; merged from extension yaml and Object row. */
@@ -103,7 +114,7 @@ function isTextIntegrityDefaults(v: unknown): v is TextIntegrityDefaults {
 
 /**
  * Normalizes raw Object.data into the stored shape and returns a copy safe to mutate/write.
- * Migrates legacy root-level apiBaseUrl / apiKey / keyName into `credentials`, and `featuresEnabled` → `features`.
+ * Migrates legacy root-level apiBaseUrl / apiKey into `credentials`, and `featuresEnabled` → `features`.
  */
 export function coerceTextIntegrityStoredObject(data: unknown): TextIntegrityStoredObject {
   const raw =
@@ -117,16 +128,12 @@ export function coerceTextIntegrityStoredObject(data: unknown): TextIntegritySto
     const c = nested as Record<string, unknown>;
     if (typeof c.apiBaseUrl === 'string') credentials.apiBaseUrl = c.apiBaseUrl;
     if (typeof c.apiKey === 'string') credentials.apiKey = c.apiKey;
-    if (typeof c.keyName === 'string') credentials.keyName = c.keyName;
   }
   if (typeof raw.apiBaseUrl === 'string' && credentials.apiBaseUrl === undefined) {
     credentials.apiBaseUrl = raw.apiBaseUrl;
   }
   if (typeof raw.apiKey === 'string' && credentials.apiKey === undefined) {
     credentials.apiKey = raw.apiKey;
-  }
-  if (typeof raw.keyName === 'string' && credentials.keyName === undefined) {
-    credentials.keyName = raw.keyName;
   }
 
   if (Object.keys(credentials).length === 0) {
@@ -182,7 +189,6 @@ function parseOverlay(data: unknown): Partial<TextIntegrityConfigOverlay> {
   const c = stored.credentials ?? {};
   if (typeof c.apiBaseUrl === 'string') overlay.apiBaseUrl = c.apiBaseUrl;
   if (typeof c.apiKey === 'string') overlay.apiKey = c.apiKey;
-  if (typeof c.keyName === 'string') overlay.keyName = c.keyName;
   if (typeof stored.notifyBaseUrl === 'string') overlay.notifyBaseUrl = stored.notifyBaseUrl;
   if (typeof stored.relayInstanceId === 'string') overlay.relayInstanceId = stored.relayInstanceId;
   if (stored.manifest) overlay.manifest = stored.manifest;

@@ -17,6 +17,7 @@ import {
   cloneJsonObject,
   coerceTextIntegrityStoredObject,
   getTextIntegrityConfigWithOverrides,
+  pickTextIntegrityCredentialsForWrite,
 } from '../server/config.server.js';
 import {
   applyTextIntegritySettingPatch,
@@ -52,7 +53,6 @@ type RelaySessionOk = {
   apiUrl: string;
   apiKey: string;
   apiKeyFromForm: string;
-  keyNameRaw: string;
   serviceName: string;
 };
 
@@ -213,7 +213,6 @@ async function resolveTextIntegrityRelaySession(
   const relayInstanceId =
     relayInstanceIdRaw !== '' ? relayInstanceIdRaw : resolveRelayInstanceId(merged);
 
-  const keyNameRaw = (formData.get('keyName') ?? '').toString().trim();
   let apiUrl = (formData.get('apiBaseUrl') ?? '').toString().trim();
   if (!apiUrl) {
     apiUrl = typeof merged.apiBaseUrl === 'string' ? merged.apiBaseUrl.trim() : '';
@@ -243,7 +242,6 @@ async function resolveTextIntegrityRelaySession(
       apiUrl,
       apiKey,
       apiKeyFromForm,
-      keyNameRaw,
       serviceName,
     },
   };
@@ -605,23 +603,15 @@ async function performTextIntegrityConfigureAndPersist(
   const parsedStatus = parseRelayStatusForStorage(featuresRes.featuresResult);
   if (!parsedStatus.ok) return parsedStatus;
 
-  const { apiUrl, apiKeyFromForm, keyNameRaw } = s;
+  const { apiUrl, apiKeyFromForm } = s;
 
   const objectId = await getOrCreateTextIntegrityConfigObjectId();
   await safeObjectDataUpdate<TextIntegrityStoredObject & Prisma.JsonObject>(objectId, (current) => {
     const prev = coerceTextIntegrityStoredObject(coerceToObject(current));
-    const credentials: TextIntegrityCredentialsStored = {
-      ...prev.credentials,
+    const credentials = pickTextIntegrityCredentialsForWrite(prev.credentials, {
       apiBaseUrl: apiUrl,
-    };
-    if (apiKeyFromForm.trim() !== '') {
-      credentials.apiKey = apiKeyFromForm;
-    }
-    if (keyNameRaw !== '') {
-      credentials.keyName = keyNameRaw;
-    } else {
-      delete credentials.keyName;
-    }
+      ...(apiKeyFromForm.trim() !== '' ? { apiKey: apiKeyFromForm } : {}),
+    });
 
     const stored: TextIntegrityStoredObject = {
       credentials,
@@ -672,25 +662,16 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
         try {
           const apiBaseUrl = (formData.get('apiBaseUrl') ?? '').toString().trim();
           const apiKeyRaw = (formData.get('apiKey') ?? '').toString();
-          const keyNameRaw = (formData.get('keyName') ?? '').toString().trim();
           const relayInstanceIdRaw = (formData.get('relayInstanceId') ?? '').toString().trim();
           const objectId = await getOrCreateTextIntegrityConfigObjectId();
           await safeObjectDataUpdate<TextIntegrityStoredObject & Prisma.JsonObject>(
             objectId,
             (current) => {
               const prev = coerceTextIntegrityStoredObject(coerceToObject(current));
-              const credentials: TextIntegrityCredentialsStored = {
-                ...prev.credentials,
+              const credentials = pickTextIntegrityCredentialsForWrite(prev.credentials, {
                 apiBaseUrl,
-              };
-              if (apiKeyRaw.trim() !== '') {
-                credentials.apiKey = apiKeyRaw;
-              }
-              if (keyNameRaw !== '') {
-                credentials.keyName = keyNameRaw;
-              } else {
-                delete credentials.keyName;
-              }
+                ...(apiKeyRaw.trim() !== '' ? { apiKey: apiKeyRaw } : {}),
+              });
               const next = mergeStoredObjectWithCredentials(prev, credentials);
               if (relayInstanceIdRaw !== '') {
                 next.relayInstanceId = relayInstanceIdRaw;

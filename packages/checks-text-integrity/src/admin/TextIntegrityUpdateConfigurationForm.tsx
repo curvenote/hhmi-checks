@@ -90,14 +90,12 @@ export function TextIntegrityUpdateConfigurationForm({ credentials }: Props) {
     fd.set('intent', INTENT_GET_STATUS);
     fd.set('apiBaseUrl', credentials.apiBaseUrl);
     fd.set('apiKey', credentials.apiKey);
-    fd.set('keyName', credentials.keyName);
     fd.set('relayInstanceId', credentials.relayInstanceId);
     statusFetcher.submit(fd, { method: 'post' });
   }, [
     statusOpen,
     credentials.apiBaseUrl,
     credentials.apiKey,
-    credentials.keyName,
     credentials.relayInstanceId,
   ]);
 
@@ -107,14 +105,12 @@ export function TextIntegrityUpdateConfigurationForm({ credentials }: Props) {
     fd.set('intent', INTENT_CONFIGURE_SERVICE);
     fd.set('apiBaseUrl', credentials.apiBaseUrl);
     fd.set('apiKey', credentials.apiKey);
-    fd.set('keyName', credentials.keyName);
     fd.set('relayInstanceId', credentials.relayInstanceId);
     configureFetcher.submit(fd, { method: 'post' });
   }, [
     configureOpen,
     credentials.apiBaseUrl,
     credentials.apiKey,
-    credentials.keyName,
     credentials.relayInstanceId,
   ]);
 

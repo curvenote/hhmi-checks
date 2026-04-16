@@ -12,25 +12,22 @@ type SaveActionData = {
 export type TextIntegrityCredentials = {
   apiBaseUrl: string;
   apiKey: string;
-  keyName: string;
   /** Extension YAML + stored override; empty save clears stored value (YAML or "default"). */
   relayInstanceId: string;
 };
 
 type Props = {
   displayConfig: Record<string, unknown>;
-  /** Called whenever URL, key name, or API key value changes (ref-safe; parent need not memoize). */
+  /** Called whenever URL, relay instance, or API key value changes (ref-safe; parent need not memoize). */
   onCredentialsChange: (c: TextIntegrityCredentials) => void;
 };
 
 export function TextIntegrityCredentialsForm({ displayConfig, onCredentialsChange }: Props) {
   const initialUrl = typeof displayConfig.apiBaseUrl === 'string' ? displayConfig.apiBaseUrl : '';
-  const initialKeyName = typeof displayConfig.keyName === 'string' ? displayConfig.keyName : '';
   const initialRelayInstanceId =
     typeof displayConfig.relayInstanceId === 'string' ? displayConfig.relayInstanceId : '';
   const [turnitinUrl, setTurnitinUrl] = useState(initialUrl);
   const [turnitinApiKey, setTurnitinApiKey] = useState('');
-  const [keyName, setKeyName] = useState(initialKeyName);
   const [relayInstanceId, setRelayInstanceId] = useState(initialRelayInstanceId);
 
   const saveFetcher = useFetcher<SaveActionData>();
@@ -42,20 +39,18 @@ export function TextIntegrityCredentialsForm({ displayConfig, onCredentialsChang
 
   useEffect(() => {
     setTurnitinUrl(typeof displayConfig.apiBaseUrl === 'string' ? displayConfig.apiBaseUrl : '');
-    setKeyName(typeof displayConfig.keyName === 'string' ? displayConfig.keyName : '');
     setRelayInstanceId(
       typeof displayConfig.relayInstanceId === 'string' ? displayConfig.relayInstanceId : '',
     );
-  }, [displayConfig.apiBaseUrl, displayConfig.keyName, displayConfig.relayInstanceId]);
+  }, [displayConfig.apiBaseUrl, displayConfig.relayInstanceId]);
 
   useEffect(() => {
     onCredentialsChangeRef.current({
       apiBaseUrl: turnitinUrl,
       apiKey: turnitinApiKey,
-      keyName,
       relayInstanceId,
     });
-  }, [turnitinUrl, turnitinApiKey, keyName, relayInstanceId]);
+  }, [turnitinUrl, turnitinApiKey, relayInstanceId]);
 
   useEffect(() => {
     const prev = savePrevStateRef.current;
@@ -110,23 +105,6 @@ export function TextIntegrityCredentialsForm({ displayConfig, onCredentialsChang
         </p>
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-medium" htmlFor="ti-keyname">
-          Turnitin API key name
-        </label>
-        <ui.TextField
-          id="ti-keyname"
-          name="keyName"
-          value={keyName}
-          onChange={(e) => setKeyName(e.target.value)}
-          placeholder="e.g. hhmi-workspace-staging-key-1"
-          disabled={fieldsDisabled}
-          className="w-full font-mono"
-        />
-        <p className="text-xs text-muted-foreground">
-          Non-secret signing key identifier. Clear the field and save to use deployment config only.
-        </p>
-      </div>
-      <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="ti-key">
           Turnitin API key
         </label>
@@ -147,7 +125,6 @@ export function TextIntegrityCredentialsForm({ displayConfig, onCredentialsChang
         <input type="hidden" name="intent" value={INTENT_SAVE_AUTH} />
         <input type="hidden" name="apiBaseUrl" value={turnitinUrl} />
         <input type="hidden" name="apiKey" value={turnitinApiKey} />
-        <input type="hidden" name="keyName" value={keyName} />
         <input type="hidden" name="relayInstanceId" value={relayInstanceId} />
         <ui.StatefulButton
           type="submit"

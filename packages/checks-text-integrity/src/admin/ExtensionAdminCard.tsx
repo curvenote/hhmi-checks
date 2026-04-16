@@ -21,7 +21,6 @@ export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) 
   const [credentials, setCredentials] = useState({
     apiBaseUrl: '',
     apiKey: '',
-    keyName: '',
     relayInstanceId: '',
   });
 

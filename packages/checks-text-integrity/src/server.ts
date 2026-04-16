@@ -27,7 +27,6 @@ function getSafeAdminConfig(config: Record<string, unknown>): Record<string, unk
   return {
     apiBaseUrl: config.apiBaseUrl,
     apiKey: config.apiKey ? '****************' : undefined,
-    keyName: config.keyName,
     relayInstanceId: config.relayInstanceId,
     storedServiceConfiguration: buildStoredServiceConfigurationForAdmin(config),
   };

@@ -16,10 +16,6 @@ properties:
   apiBaseUrl:
     type: string
     description: Default external text integrity API base URL (may be overridden in admin / Object store)
-  keyName:
-    type: string
-    description: >-
-      Non-secret identifier for the signing key (e.g. CDN private bucket key name). May be overridden via admin / Object store.
   serviceName:
     type: string
     description: >-
