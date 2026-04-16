@@ -12,6 +12,8 @@ import {
   type ExtensionCheckHandleActionArgs,
   type ExtensionCheckHandleActionResult,
   type ExtensionCheckStatusArgs,
+  hasDocxInMetadata,
+  hasPdfInMetadata,
   KnownJobTypes,
 } from '@curvenote/scms-core';
 import type { Prisma } from '@curvenote/scms-db';
@@ -31,38 +33,6 @@ import { postProofigRemoteStatus } from './proofigRemoteStatus.server.js';
 import { applyNotifyPayloadToCheckRun } from './applyNotifyPayloadToCheckRun.server.js';
 import { getProofingToken } from './proofigAuth.server.js';
 import { proofigReportUrlWithAccessToken } from './proofigReportUrl.server.js';
-
-const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-
-type FileEntryLike = { type?: string; name?: string; path?: string };
-
-function hasPdfInMetadata(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== 'object') return false;
-  const meta = metadata as Record<string, unknown>;
-  const files = meta.files;
-  if (!files || typeof files !== 'object') return false;
-  const entries = Object.values(files) as FileEntryLike[];
-  return entries.some((f) => {
-    if (!f || typeof f !== 'object') return false;
-    const type = f.type?.toLowerCase?.();
-    const name = (f.name ?? f.path ?? '')?.toString?.().toLowerCase?.() ?? '';
-    return type === 'application/pdf' || name.endsWith('.pdf') || name === 'pdf';
-  });
-}
-
-function hasDocxInMetadata(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== 'object') return false;
-  const meta = metadata as Record<string, unknown>;
-  const files = meta.files;
-  if (!files || typeof files !== 'object') return false;
-  const entries = Object.values(files) as FileEntryLike[];
-  return entries.some(
-    (f) =>
-      f?.type === DOCX_MIME ||
-      (typeof f?.name === 'string' && f.name.toLowerCase().endsWith('.docx')) ||
-      (typeof f?.path === 'string' && f.path.toLowerCase().endsWith('.docx')),
-  );
-}
 
 async function findProofigRunForWorkVersion(
   workVersionId: string,
@@ -193,7 +163,7 @@ export interface ChecksMetadataSection {
     enabled?: string[];
     proofig?: ProofigDataSchema;
     'curvenote-structure'?: { dispatched: boolean };
-    ithenticate?: { dispatched: boolean };
+    textIntegrity?: { dispatched: boolean };
   };
 }
 
@@ -211,8 +181,7 @@ export interface ChecksMetadataSection {
 export async function handleProofigAction(
   args: ExtensionCheckHandleActionArgs,
 ): Promise<ExtensionCheckHandleActionResult> {
-  const { intent: rawIntent, workVersionId, ctx, serverExtensions } = args;
-  const intent = rawIntent.startsWith('proofig:') ? rawIntent.split(':', 2)[1] : rawIntent;
+  const { intent, workVersionId, ctx, serverExtensions } = args;
 
   // ----- Execute path: upload flow or checks page with job creation -----
   if (intent === 'execute' && ctx) {

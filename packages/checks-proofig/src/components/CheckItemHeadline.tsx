@@ -32,16 +32,19 @@ function FractionalDisplay({
   denominator,
   numerator,
   className,
+  label,
 }: {
   denominator: number;
   numerator: number;
   /** When set, replaces the default `text-3xl` wrapper classes (include size/color as needed). */
   className?: string;
+  label?: string;
 }) {
   return (
     <div className={cn('text-3xl font-medium text-gray-900 dark:text-gray-100', className)}>
       {numerator}
-      <span className={cn('font-extralight text-gray-500', className)}>/{denominator}</span>
+      <span className={cn('text-gray-500', className, 'font-extralight')}>/{denominator}</span>
+      {label ? ` ${label}` : ''}
     </div>
   );
 }
@@ -75,12 +78,28 @@ export function CheckItemHeadline({
     );
   }
 
-  if (matchByAlgo === 0) {
+  if (matchByAlgo === 0 && matchedProblems === 0 && inspectedProblems === 0) {
     return (
       <div className="space-y-1">
         <div className={`text-3xl font-medium ${colors.clear}`}>All Clear</div>
         <div className="text-muted-foreground">
           {plural(`No issues found with %s ${countedItemPlural}`, total, { 0: 'your' })}
+        </div>
+      </div>
+    );
+  }
+
+  if (matchByAlgo === 0 && matchedProblems === 0 && inspectedProblems > 0) {
+    return (
+      <div className="space-y-1">
+        <div className={`flex text-3xl font-medium ${colors.problem}`}>
+          {plural('%s Problem(s)', inspectedProblems)}
+        </div>
+        <div className="text-muted-foreground">
+          {plural(
+            'No issues found by Proofig but %s problem(s) found by manual inspection',
+            matchedProblems,
+          )}
         </div>
       </div>
     );
@@ -98,24 +117,10 @@ export function CheckItemHeadline({
     );
   }
 
-  if (matchByAlgo === 0 && inspectedProblems > 0) {
-    return (
-      <div className="space-y-1">
-        <FractionalDisplay numerator={matchedProblems + inspectedProblems} denominator={total} />
-        <div className="text-muted-foreground">
-          {plural(
-            'No issues found by Proofig but %s problem(s) found by manual inspection',
-            matchedProblems,
-          )}
-        </div>
-      </div>
-    );
-  }
-
   if (matchedProblems > 0 && inspectedProblems === 0) {
     return (
       <div className="space-y-1">
-        <div className={`text-3xl font-medium ${colors.problem}`}>
+        <div className={`flex text-3xl font-medium ${colors.problem}`}>
           {plural('%s Problem(s)', matchedProblems)}
         </div>
         <div className="text-muted-foreground">
@@ -131,7 +136,7 @@ export function CheckItemHeadline({
 
   return (
     <div className="space-y-1">
-      <div className={`text-3xl font-medium ${colors.problem}`}>
+      <div className={`flex text-3xl font-medium ${colors.problem}`}>
         {plural('%s Problem(s)', matchedProblems + inspectedProblems)}
       </div>
       <div className="text-muted-foreground">

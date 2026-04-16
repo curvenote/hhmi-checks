@@ -1,4 +1,5 @@
 import { FileCheck } from 'lucide-react';
+import { cn } from '@curvenote/scms-core';
 import proofigLogoMono from './assets/proofig-logo-mono.svg';
 import proofigLogo from './assets/proofig-logo.svg';
 
@@ -14,11 +15,18 @@ export function Logo({ className }: { className?: string }) {
   return <img src={proofigLogo} alt="Proofig Logo" className={className} />;
 }
 
-export function LogoThemed({ className }: { className?: string }) {
+export function LogoThemed({
+  className,
+  alt = 'Proofig',
+}: {
+  className?: string;
+  /** Accessibility label for both light and dark logo variants. */
+  alt?: string;
+}) {
   return (
-    <span className={`inline-flex items-center shrink-0 ${className}`}>
-      <Logo className="w-auto h-full dark:hidden" />
-      <LogoMono className="hidden w-auto h-full dark:block" />
+    <span className={cn('inline-flex shrink-0 items-center', className)}>
+      <img src={proofigLogo} alt={alt} className="h-full w-auto dark:hidden" />
+      <img src={proofigLogoMono} alt={alt} className="hidden h-full w-auto dark:block" />
     </span>
   );
 }

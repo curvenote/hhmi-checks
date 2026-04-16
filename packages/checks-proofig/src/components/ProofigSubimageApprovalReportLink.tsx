@@ -11,7 +11,7 @@ type RefreshFetcherData = {
 /**
  * Opens the Proofig report in a new tab using a server-refreshed access token in the report URL.
  * When remote refresh is configured, also opens a short dialog; dismissing it (X, overlay, Escape,
- * or primary action) POSTs proofig:refresh-remote-status.
+ * or primary action) POSTs refresh-remote-status.
  */
 const DEFAULT_FOLLOW_UP_TITLE = 'Proofig was opened for figure panel approval';
 const DEFAULT_FOLLOW_UP_DESCRIPTION =
@@ -60,7 +60,7 @@ export function ProofigSubimageApprovalReportLink({
   const submitRefresh = () => {
     if (!actionPath || !workVersionId) return;
     const fd = new FormData();
-    fd.set('intent', 'proofig:refresh-remote-status');
+    fd.set('intent', 'refresh-remote-status');
     fd.set('workVersionId', workVersionId);
     if (checkRunId) fd.set('checkRunId', checkRunId);
     fetcher.submit(fd, { method: 'post', action: actionPath });

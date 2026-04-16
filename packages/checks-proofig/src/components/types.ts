@@ -7,6 +7,6 @@ export interface ChecksMetadataSection {
     enabled?: string[];
     proofig?: ProofigDataSchema;
     'curvenote-structure'?: { dispatched: boolean };
-    ithenticate?: { dispatched: boolean };
+    textIntegrity?: { dispatched: boolean };
   };
 }

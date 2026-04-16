@@ -32,5 +32,15 @@ export async function registerRoutes(_appConfig: Config): Promise<RouteRegistrat
           ),
         ] satisfies RouteConfigEntry[],
     },
+    {
+      attachTo: 'app/extensions',
+      register: () =>
+        [
+          route(
+            'proofig/actions',
+            resolveRoutePath(import.meta.url, 'routes/app.extensions.proofig.actions/route.tsx'),
+          ),
+        ] satisfies RouteConfigEntry[],
+    },
   ];
 }

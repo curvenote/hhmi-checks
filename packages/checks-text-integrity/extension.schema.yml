@@ -1,0 +1,27 @@
+# $schema: https://json-schema.org/draft/2020-12/schema
+title: Text Integrity Checks extension
+description: Configuration for the checks-text-integrity extension (app.extensions.checks-text-integrity)
+type: object
+additionalProperties: false
+properties:
+  task:
+    type: boolean
+    description: This extension registers dashboard / task integration
+  checks:
+    type: boolean
+    description: This extension registers check services on works
+  routes:
+    type: boolean
+    description: This extension registers HTTP routes
+  serviceName:
+    type: string
+    description: >-
+      Checks-relay plugin name for text integrity checks. Used in paths under /api/v1/services/{serviceName}/instances/{instanceId}/ (upload, configure, status, check routes). When omitted, runtime defaults to echo.
+  relayInstanceId:
+    type: string
+    description: >-
+      checks-relay instance id (URL segment). Object-store overrides take precedence over this value when set in admin; otherwise defaults to the literal id "default".
+  notifyBaseUrl:
+    type: string
+    description: >-
+      Optional absolute base for Text Integrity webhook notify URLs (no trailing slash). When unset, submit uses `{request-origin}/v1/hooks/text-integrity/notify`. Provider API keys belong in object store only, not here.
