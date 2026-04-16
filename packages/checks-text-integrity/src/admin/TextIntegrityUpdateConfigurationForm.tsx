@@ -88,31 +88,19 @@ export function TextIntegrityUpdateConfigurationForm({ credentials }: Props) {
     if (!statusOpen) return;
     const fd = new FormData();
     fd.set('intent', INTENT_GET_STATUS);
-    fd.set('apiBaseUrl', credentials.apiBaseUrl);
     fd.set('apiKey', credentials.apiKey);
     fd.set('relayInstanceId', credentials.relayInstanceId);
     statusFetcher.submit(fd, { method: 'post' });
-  }, [
-    statusOpen,
-    credentials.apiBaseUrl,
-    credentials.apiKey,
-    credentials.relayInstanceId,
-  ]);
+  }, [statusOpen, credentials.apiKey, credentials.relayInstanceId]);
 
   useEffect(() => {
     if (!configureOpen) return;
     const fd = new FormData();
     fd.set('intent', INTENT_CONFIGURE_SERVICE);
-    fd.set('apiBaseUrl', credentials.apiBaseUrl);
     fd.set('apiKey', credentials.apiKey);
     fd.set('relayInstanceId', credentials.relayInstanceId);
     configureFetcher.submit(fd, { method: 'post' });
-  }, [
-    configureOpen,
-    credentials.apiBaseUrl,
-    credentials.apiKey,
-    credentials.relayInstanceId,
-  ]);
+  }, [configureOpen, credentials.apiKey, credentials.relayInstanceId]);
 
   useEffect(() => {
     if (statusOpen) setStatusTab('relay-status');

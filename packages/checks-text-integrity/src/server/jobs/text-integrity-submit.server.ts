@@ -182,9 +182,6 @@ export async function textIntegritySubmitHandler(
 
     const relayBaseUrl = (checks?.relayBaseUrl ?? '').trim().replace(/\/$/, '');
     const relayApiKey = (checks?.relayApiKey ?? '').trim();
-    const apiKey = typeof mergedConfig.apiKey === 'string' ? mergedConfig.apiKey.trim() : '';
-    const apiBaseUrl =
-      typeof mergedConfig.apiBaseUrl === 'string' ? mergedConfig.apiBaseUrl.trim() : '';
 
     if (!relayBaseUrl) {
       throw httpError(
@@ -196,12 +193,6 @@ export async function textIntegritySubmitHandler(
       throw httpError(
         503,
         'app.checks.relayApiKey is not configured; cannot submit to checks-relay',
-      );
-    }
-    if (!apiKey || !apiBaseUrl) {
-      throw httpError(
-        503,
-        'Text Integrity extension is missing apiKey or apiBaseUrl; configure credentials before running the check',
       );
     }
 

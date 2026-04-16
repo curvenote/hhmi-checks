@@ -2,7 +2,7 @@
 title: Text Integrity Checks extension
 description: Configuration for the checks-text-integrity extension (app.extensions.checks-text-integrity)
 type: object
-additionalProperties: true
+additionalProperties: false
 properties:
   task:
     type: boolean
@@ -13,9 +13,6 @@ properties:
   routes:
     type: boolean
     description: This extension registers HTTP routes
-  apiBaseUrl:
-    type: string
-    description: Default external text integrity API base URL (may be overridden in admin / Object store)
   serviceName:
     type: string
     description: >-
@@ -24,3 +21,7 @@ properties:
     type: string
     description: >-
       checks-relay instance id (URL segment). Object-store overrides take precedence over this value when set in admin; otherwise defaults to the literal id "default".
+  notifyBaseUrl:
+    type: string
+    description: >-
+      Optional absolute base for Text Integrity webhook notify URLs (no trailing slash). When unset, submit uses `{request-origin}/v1/hooks/text-integrity/notify`. Provider API keys belong in object store only, not here.

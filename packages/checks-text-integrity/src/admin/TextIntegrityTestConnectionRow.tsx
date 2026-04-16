@@ -55,7 +55,6 @@ export function TextIntegrityTestConnectionRow({ credentials }: Props) {
   return (
     <testFetcher.Form method="post" className="flex flex-wrap gap-3 items-center">
       <input type="hidden" name="intent" value={INTENT_TEST} />
-      <input type="hidden" name="apiBaseUrl" value={credentials.apiBaseUrl} />
       <input type="hidden" name="apiKey" value={credentials.apiKey} />
       <input type="hidden" name="relayInstanceId" value={credentials.relayInstanceId} />
       <ui.StatefulButton type="submit" disabled={isTesting} size="sm" overlayBusy busy={isTesting}>

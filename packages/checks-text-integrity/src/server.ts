@@ -25,7 +25,6 @@ export { getTextIntegrityConfigWithOverrides } from './server/config.server.js';
 
 function getSafeAdminConfig(config: Record<string, unknown>): Record<string, unknown> {
   return {
-    apiBaseUrl: config.apiBaseUrl,
     apiKey: config.apiKey ? '****************' : undefined,
     relayInstanceId: config.relayInstanceId,
     storedServiceConfiguration: buildStoredServiceConfigurationForAdmin(config),

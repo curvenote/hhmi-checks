@@ -19,7 +19,6 @@ export function getManifest(
 export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) {
   const displayConfig = record ?? {};
   const [credentials, setCredentials] = useState({
-    apiBaseUrl: '',
     apiKey: '',
     relayInstanceId: '',
   });

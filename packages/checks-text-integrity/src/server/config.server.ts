@@ -19,7 +19,7 @@ export interface TextIntegrityDefaults {
 
 /** Credentials block persisted on the Object row (UI overrides). */
 export interface TextIntegrityCredentialsStored {
-  apiBaseUrl?: string;
+  /** Provider API key for server-side PDF fetch (TCA resource URLs from webhooks). */
   apiKey?: string;
 }
 
@@ -29,9 +29,7 @@ export function pickTextIntegrityCredentialsForWrite(
   patch: Partial<TextIntegrityCredentialsStored>,
 ): TextIntegrityCredentialsStored {
   const out: TextIntegrityCredentialsStored = {};
-  if (typeof prev?.apiBaseUrl === 'string') out.apiBaseUrl = prev.apiBaseUrl;
   if (typeof prev?.apiKey === 'string') out.apiKey = prev.apiKey;
-  if (patch.apiBaseUrl !== undefined) out.apiBaseUrl = patch.apiBaseUrl;
   if (patch.apiKey !== undefined) out.apiKey = patch.apiKey;
   return out;
 }
@@ -80,7 +78,6 @@ export interface TextIntegrityServiceSettings {
  * Flat fields merged onto app.extensions['checks-text-integrity'] for runtime / admin loaders.
  */
 export interface TextIntegrityConfigOverlay {
-  apiBaseUrl?: string;
   apiKey?: string;
   /** Checks-relay plugin name from extension YAML / Object overlay; runtime default echo when unset. */
   serviceName?: string;
@@ -114,7 +111,7 @@ function isTextIntegrityDefaults(v: unknown): v is TextIntegrityDefaults {
 
 /**
  * Normalizes raw Object.data into the stored shape and returns a copy safe to mutate/write.
- * Migrates legacy root-level apiBaseUrl / apiKey into `credentials`, and `featuresEnabled` → `features`.
+ * Migrates legacy root-level apiKey into `credentials`, and `featuresEnabled` → `features`.
  */
 export function coerceTextIntegrityStoredObject(data: unknown): TextIntegrityStoredObject {
   const raw =
@@ -126,11 +123,7 @@ export function coerceTextIntegrityStoredObject(data: unknown): TextIntegritySto
   const nested = raw.credentials;
   if (nested != null && typeof nested === 'object' && !Array.isArray(nested)) {
     const c = nested as Record<string, unknown>;
-    if (typeof c.apiBaseUrl === 'string') credentials.apiBaseUrl = c.apiBaseUrl;
     if (typeof c.apiKey === 'string') credentials.apiKey = c.apiKey;
-  }
-  if (typeof raw.apiBaseUrl === 'string' && credentials.apiBaseUrl === undefined) {
-    credentials.apiBaseUrl = raw.apiBaseUrl;
   }
   if (typeof raw.apiKey === 'string' && credentials.apiKey === undefined) {
     credentials.apiKey = raw.apiKey;
@@ -187,7 +180,6 @@ function parseOverlay(data: unknown): Partial<TextIntegrityConfigOverlay> {
   const stored = coerceTextIntegrityStoredObject(data);
   const overlay: Partial<TextIntegrityConfigOverlay> = {};
   const c = stored.credentials ?? {};
-  if (typeof c.apiBaseUrl === 'string') overlay.apiBaseUrl = c.apiBaseUrl;
   if (typeof c.apiKey === 'string') overlay.apiKey = c.apiKey;
   if (typeof stored.notifyBaseUrl === 'string') overlay.notifyBaseUrl = stored.notifyBaseUrl;
   if (typeof stored.relayInstanceId === 'string') overlay.relayInstanceId = stored.relayInstanceId;
@@ -279,17 +271,22 @@ export function syncDefaultsFromFeatures(
  * Returns base config with optional overrides from the Object table.
  * Loads the first Object row with type TEXT_INTEGRITY_CONFIG_OBJECT_TYPE (by date_modified desc)
  * and merges overlay fields onto the base config.
+ *
+ * Provider `apiKey` is taken only from the object-store overlay (credentials), never from app YAML.
  */
 export async function getTextIntegrityConfigWithOverrides(
   baseConfig: Record<string, unknown>,
   prisma: PrismaClient,
 ): Promise<Record<string, unknown>> {
+  const base = { ...baseConfig };
+  delete base.apiKey;
+
   const row = await prisma.object.findFirst({
     where: { type: TEXT_INTEGRITY_CONFIG_OBJECT_TYPE },
     orderBy: { date_modified: 'desc' },
     select: { data: true },
   });
-  if (!row?.data) return { ...baseConfig };
+  if (!row?.data) return base;
   const overlay = parseOverlay(row.data);
-  return { ...baseConfig, ...overlay };
+  return { ...base, ...overlay };
 }

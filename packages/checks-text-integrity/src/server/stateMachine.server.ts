@@ -287,14 +287,13 @@ export function applyWebhookEvent(
 }
 
 /**
- * After a successful POST to start similarity PDF at TCA.
- * Stores the new `pdfId` / `pdfUrl` (returned by the relay) so the UI can show the
- * download link once the webhook flips report generation to "completed".
+ * After a successful POST to checks-relay to start similarity PDF generation.
+ * Stores the new `reportPdfId` only; clears `reportPdfUrl` until a notify webhook
+ * provides `payload.report.report_pdf_url` (see mergeReportPayload).
  */
 export function markSimilarityPdfJobRestarted(
   current: TextIntegrityDataSchema,
-  newPdfId?: string,
-  newPdfUrl?: string,
+  newPdfId: string,
   receivedAt: string = new Date().toISOString(),
 ): TextIntegrityDataSchema {
   const base = current;
@@ -303,13 +302,13 @@ export function markSimilarityPdfJobRestarted(
   return {
     ...base,
     stages: updatedStages,
-    reportPdfId: newPdfId ?? undefined,
-    reportPdfUrl: newPdfUrl ?? undefined,
+    reportPdfId: newPdfId,
+    reportPdfUrl: undefined,
     latest: base.latest
       ? {
           ...base.latest,
-          reportPdfId: newPdfId ?? undefined,
-          reportPdfUrl: newPdfUrl ?? undefined,
+          reportPdfId: newPdfId,
+          reportPdfUrl: undefined,
         }
       : undefined,
   };

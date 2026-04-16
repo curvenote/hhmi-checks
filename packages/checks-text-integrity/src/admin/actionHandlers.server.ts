@@ -50,10 +50,9 @@ type RelaySessionOk = {
   relayBaseUrl: string;
   relayApiKey: string;
   relayInstanceId: string;
-  apiUrl: string;
-  apiKey: string;
-  apiKeyFromForm: string;
   serviceName: string;
+  /** Optional; persisted on configure/save only (relay uses instance credentials for TCA). */
+  apiKeyFromForm: string;
 };
 
 const RELAY_LIVENESS_TIMEOUT_MS = 10_000;
@@ -169,7 +168,8 @@ async function checkRelayLiveness(
 }
 
 /**
- * Liveness, merged extension config, Turnitin credentials, and relay service name.
+ * Liveness, merged extension config, and relay routing (instance id + service name).
+ * TCA credentials live on checks-relay per instance; relay ignores provider credentials in POST bodies.
  */
 async function resolveTextIntegrityRelaySession(
   ctx: Context,
@@ -213,25 +213,7 @@ async function resolveTextIntegrityRelaySession(
   const relayInstanceId =
     relayInstanceIdRaw !== '' ? relayInstanceIdRaw : resolveRelayInstanceId(merged);
 
-  let apiUrl = (formData.get('apiBaseUrl') ?? '').toString().trim();
-  if (!apiUrl) {
-    apiUrl = typeof merged.apiBaseUrl === 'string' ? merged.apiBaseUrl.trim() : '';
-  }
   const apiKeyFromForm = (formData.get('apiKey') ?? '').toString();
-  let apiKey = apiKeyFromForm;
-  if (!apiKey.trim()) {
-    apiKey = typeof merged.apiKey === 'string' ? merged.apiKey : '';
-  }
-
-  if (!apiUrl || !apiKey) {
-    return {
-      ok: false,
-      error: {
-        type: 'validation',
-        message: 'Enter Turnitin URL and API key (or save them first).',
-      },
-    };
-  }
 
   return {
     ok: true,
@@ -239,8 +221,6 @@ async function resolveTextIntegrityRelaySession(
       relayBaseUrl,
       relayApiKey,
       relayInstanceId,
-      apiUrl,
-      apiKey,
       apiKeyFromForm,
       serviceName,
     },
@@ -255,7 +235,7 @@ async function postRelayServiceDetails(
 ): Promise<
   { ok: true; serviceDetails: Record<string, unknown> } | { ok: false; error: ActionError }
 > {
-  const { relayBaseUrl, relayApiKey, relayInstanceId, serviceName, apiUrl, apiKey } = s;
+  const { relayBaseUrl, relayApiKey, relayInstanceId, serviceName } = s;
   const url = checksRelayConfigureUrl(relayBaseUrl, serviceName, relayInstanceId);
   const res = await fetch(url, {
     method: 'POST',
@@ -263,9 +243,7 @@ async function postRelayServiceDetails(
       Authorization: `Bearer ${relayApiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      credentials: { apiUrl, apiKey },
-    }),
+    body: JSON.stringify({}),
   });
 
   const rawText = await res.text();
@@ -368,7 +346,7 @@ async function postRelayServiceDetails(
 async function postRelayFeaturesAction(
   s: RelaySessionOk,
 ): Promise<{ ok: true; featuresResult: unknown } | { ok: false; error: ActionError }> {
-  const { relayBaseUrl, relayApiKey, relayInstanceId, serviceName, apiUrl, apiKey } = s;
+  const { relayBaseUrl, relayApiKey, relayInstanceId, serviceName } = s;
   const serviceStatusUrl = checksRelayStatusUrl(relayBaseUrl, serviceName, relayInstanceId);
   const res = await fetch(serviceStatusUrl, {
     method: 'POST',
@@ -376,12 +354,7 @@ async function postRelayFeaturesAction(
       Authorization: `Bearer ${relayApiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      credentials: {
-        apiUrl,
-        apiKey,
-      },
-    }),
+    body: JSON.stringify({}),
   });
 
   const rawText = await res.text();
@@ -603,13 +576,12 @@ async function performTextIntegrityConfigureAndPersist(
   const parsedStatus = parseRelayStatusForStorage(featuresRes.featuresResult);
   if (!parsedStatus.ok) return parsedStatus;
 
-  const { apiUrl, apiKeyFromForm } = s;
+  const { apiKeyFromForm } = s;
 
   const objectId = await getOrCreateTextIntegrityConfigObjectId();
   await safeObjectDataUpdate<TextIntegrityStoredObject & Prisma.JsonObject>(objectId, (current) => {
     const prev = coerceTextIntegrityStoredObject(coerceToObject(current));
     const credentials = pickTextIntegrityCredentialsForWrite(prev.credentials, {
-      apiBaseUrl: apiUrl,
       ...(apiKeyFromForm.trim() !== '' ? { apiKey: apiKeyFromForm } : {}),
     });
 
@@ -660,7 +632,6 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
       name: 'text-integrity-save-auth',
       handler: async (_ctx: Context, formData: FormData) => {
         try {
-          const apiBaseUrl = (formData.get('apiBaseUrl') ?? '').toString().trim();
           const apiKeyRaw = (formData.get('apiKey') ?? '').toString();
           const relayInstanceIdRaw = (formData.get('relayInstanceId') ?? '').toString().trim();
           const objectId = await getOrCreateTextIntegrityConfigObjectId();
@@ -669,7 +640,6 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
             (current) => {
               const prev = coerceTextIntegrityStoredObject(coerceToObject(current));
               const credentials = pickTextIntegrityCredentialsForWrite(prev.credentials, {
-                apiBaseUrl,
                 ...(apiKeyRaw.trim() !== '' ? { apiKey: apiKeyRaw } : {}),
               });
               const next = mergeStoredObjectWithCredentials(prev, credentials);

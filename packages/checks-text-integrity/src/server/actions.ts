@@ -65,8 +65,6 @@ async function relaySimilarityPdfStart(
   serviceName: string,
   relayInstanceId: string,
   externalId: string,
-  apiKey: string,
-  apiBaseUrl: string,
 ): Promise<Response> {
   const url = checksRelayReportPdfStartUrl(relayBaseUrl, serviceName, relayInstanceId, externalId);
   return fetch(url, {
@@ -75,9 +73,7 @@ async function relaySimilarityPdfStart(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${relayApiKey}`,
     },
-    body: JSON.stringify({
-      credentials: { apiKey, apiUrl: apiBaseUrl },
-    }),
+    body: JSON.stringify({}),
   });
 }
 
@@ -253,22 +249,10 @@ export async function handleTextIntegrityAction(
 
     const relayBaseUrl = (checks?.relayBaseUrl ?? '').trim().replace(/\/$/, '');
     const relayApiKey = (checks?.relayApiKey ?? '').trim();
-    const apiKey = typeof mergedConfig.apiKey === 'string' ? mergedConfig.apiKey.trim() : '';
-    const apiBaseUrl =
-      typeof mergedConfig.apiBaseUrl === 'string' ? mergedConfig.apiBaseUrl.trim() : '';
 
     if (!relayBaseUrl || !relayApiKey) {
       return {
         error: { type: 'general', message: 'Checks relay is not configured' },
-        status: 503,
-      };
-    }
-    if (!apiKey || !apiBaseUrl) {
-      return {
-        error: {
-          type: 'general',
-          message: 'Text Integrity credentials are not configured',
-        },
         status: 503,
       };
     }
@@ -291,7 +275,6 @@ export async function handleTextIntegrityAction(
           Authorization: `Bearer ${relayApiKey}`,
         },
         body: JSON.stringify({
-          credentials: { apiKey, apiUrl: apiBaseUrl },
           viewerUserId: ctx.user?.id ?? 'anonymous',
           ...VIEWER_URL_DEFAULTS,
         }),
@@ -374,22 +357,10 @@ export async function handleTextIntegrityAction(
 
     const relayBaseUrl = (checks?.relayBaseUrl ?? '').trim().replace(/\/$/, '');
     const relayApiKey = (checks?.relayApiKey ?? '').trim();
-    const apiKey = typeof mergedConfig.apiKey === 'string' ? mergedConfig.apiKey.trim() : '';
-    const apiBaseUrl =
-      typeof mergedConfig.apiBaseUrl === 'string' ? mergedConfig.apiBaseUrl.trim() : '';
 
     if (!relayBaseUrl || !relayApiKey) {
       return {
         error: { type: 'general', message: 'Checks relay is not configured' },
-        status: 503,
-      };
-    }
-    if (!apiKey || !apiBaseUrl) {
-      return {
-        error: {
-          type: 'general',
-          message: 'Text Integrity credentials are not configured',
-        },
         status: 503,
       };
     }
@@ -405,8 +376,6 @@ export async function handleTextIntegrityAction(
         serviceName,
         relayInstanceId,
         externalCheckId,
-        apiKey,
-        apiBaseUrl,
       );
     } catch (e) {
       return {
@@ -434,15 +403,20 @@ export async function handleTextIntegrityAction(
       result?: { pdf_id?: string };
     } | null;
     const newPdfId = startResult?.result?.pdf_id;
-    const newPdfUrl =
-      newPdfId && apiBaseUrl && externalCheckId
-        ? `${apiBaseUrl.replace(/\/$/, '')}/api/v1/submissions/${encodeURIComponent(externalCheckId)}/similarity/pdf/${encodeURIComponent(newPdfId)}`
-        : undefined;
+    if (!newPdfId || typeof newPdfId !== 'string') {
+      return {
+        error: {
+          type: 'general',
+          message: 'Checks relay did not return a similarity PDF id; cannot restart',
+        },
+        status: 502,
+      };
+    }
 
     await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
       const current = (data ?? {}) as CheckServiceRunData;
       const sd = current.serviceData ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
-      const next = markSimilarityPdfJobRestarted(sd, newPdfId, newPdfUrl);
+      const next = markSimilarityPdfJobRestarted(sd, newPdfId);
       return { ...current, serviceData: next } as Prisma.JsonObject;
     });
 
