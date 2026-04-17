@@ -47,7 +47,7 @@ export function TextIntegrityTestConnectionRow({ credentials }: Props) {
 
     if (d.success) {
       ui.toastSuccess('Service connection OK', {
-        description: 'Features call completed via checks relay.',
+        description: 'Service called via checks relay.',
       });
     }
   }, [testFetcher.state, testFetcher.data]);
