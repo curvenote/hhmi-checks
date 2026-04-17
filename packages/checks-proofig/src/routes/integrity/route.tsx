@@ -41,14 +41,17 @@ export const meta = ({
   return [{ key: 'title', title: joinPageTitle('Manuscript checks', branding.title) }];
 };
 
+// TODO: tie in to extension config
+const ext = { scopes: { app: { integrity: 'ext:app:integrity' } } };
+
 export async function loader(args: Parameters<typeof withAppScopedContext>[0]) {
-  const ctx = await withAppScopedContext(args, [scopes.app.works.upload, scopes.app.integrity]);
+  const ctx = await withAppScopedContext(args, [scopes.app.works.upload, ext.scopes.app.integrity]);
   const runs = await loadProofigCheckServiceRuns(ctx);
   return { runs };
 }
 
 export async function action(args: Parameters<typeof withAppScopedContext>[0]) {
-  const ctx = await withAppScopedContext(args, [scopes.app.works.upload, scopes.app.integrity]);
+  const ctx = await withAppScopedContext(args, [scopes.app.works.upload, ext.scopes.app.integrity]);
   const formData = await args.request.formData();
   const intent = formData.get('intent');
   if (
@@ -263,12 +266,7 @@ export default function ManuscriptChecksPage({ loaderData }: { loaderData: Loade
           <ui.Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
             <ui.DialogContent className="max-w-2xl">
               <div className="pb-2">
-                <img
-                  src={proofigLogo}
-                  alt="Proofig"
-                  className="h-8 w-auto"
-                  loading="lazy"
-                />
+                <img src={proofigLogo} alt="Proofig" className="w-auto h-8" loading="lazy" />
               </div>
               <ui.DialogHeader>
                 <div className="space-y-1">
