@@ -1,0 +1,33 @@
+{
+  "name": "hhmi-checks",
+  "private": true,
+  "version": "0.0.1",
+  "description": "HHMI check integration extensions - powered by Curvenote.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "changeset": "changeset",
+    "version": "changeset version",
+    "publish": "npm run clean && npm run build -- --force && changeset publish && git push --follow-tags",
+    "publish:ci": "npm run build && changeset publish && git push --follow-tags",
+    "build": "npm run --workspaces build",
+    "clean": "npm run --workspaces clean",
+    "lint": "npm run --workspaces lint",
+    "lint:format": "npm run --workspaces lint:format",
+    "lint:format:fix": "npm run --workspaces lint:format:fix",
+    "test": "npm run --workspaces test"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.7",
+    "eslint-config-curvenote": "^0.0.4"
+  },
+  "dependencies": {
+    "@changesets/changelog-github": "^0.5.1"
+  },
+  "engines": {
+    "npm": ">=10.0.0",
+    "node": ">=22.21.0"
+  },
+  "packageManager": "npm@10.9.2"
+}
