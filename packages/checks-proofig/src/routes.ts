@@ -26,10 +26,7 @@ export async function registerRoutes(_appConfig: Config): Promise<RouteRegistrat
       attachTo: 'app',
       register: () =>
         [
-          route(
-            'manuscript-checks',
-            resolveRoutePath(import.meta.url, 'routes/manuscript-checks/route.tsx'),
-          ),
+          route('integrity', resolveRoutePath(import.meta.url, 'routes/integrity/route.tsx')),
         ] satisfies RouteConfigEntry[],
     },
     {

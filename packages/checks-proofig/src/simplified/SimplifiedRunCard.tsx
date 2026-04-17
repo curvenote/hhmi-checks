@@ -1,7 +1,7 @@
 import type { ProofigDataSchema } from '../schema.js';
 import { formatDate, ui } from '@curvenote/scms-core';
 import { SimplifiedProgress } from './SimplifiedProgress.js';
-import type { CheckServiceRunWithVersion } from '../routes/manuscript-checks/loadRuns.server.js';
+import type { CheckServiceRunWithVersion } from '../routes/integrity/loadRuns.server.js';
 import { FileDown } from 'lucide-react';
 
 type RunData = {

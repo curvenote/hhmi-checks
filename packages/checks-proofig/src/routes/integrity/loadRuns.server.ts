@@ -37,7 +37,7 @@ export async function loadProofigCheckServiceRuns(
 ): Promise<CheckServiceRunWithVersion[]> {
   const prisma = await getPrismaClient();
   const rows = await prisma.checkServiceRun.findMany({
-    where: { kind: PROOFIG_KIND },
+    where: { kind: PROOFIG_KIND, created_by_id: ctx.user.id },
     orderBy: { date_modified: 'desc' },
     take: limit,
     select: {

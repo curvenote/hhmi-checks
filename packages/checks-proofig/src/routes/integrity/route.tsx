@@ -18,6 +18,7 @@ import { extension as proofigServerExtension } from '../../server.js';
 import { PROOFIG_CHECKS_ACTION_PATH } from '../../client.js';
 import { MANUSCRIPT_UPLOAD_CONFIG } from './uploadConfig.js';
 import { SimplifiedRunCard } from '../../simplified/index.js';
+import proofigLogo from '../../assets/proofig-logo.svg';
 import type { CheckServiceRunWithVersion } from './loadRuns.server.js';
 
 type LoaderData = { runs: CheckServiceRunWithVersion[] };
@@ -41,13 +42,13 @@ export const meta = ({
 };
 
 export async function loader(args: Parameters<typeof withAppScopedContext>[0]) {
-  const ctx = await withAppScopedContext(args, [scopes.app.works.upload]);
+  const ctx = await withAppScopedContext(args, [scopes.app.works.upload, scopes.app.integrity]);
   const runs = await loadProofigCheckServiceRuns(ctx);
   return { runs };
 }
 
 export async function action(args: Parameters<typeof withAppScopedContext>[0]) {
-  const ctx = await withAppScopedContext(args, [scopes.app.works.upload]);
+  const ctx = await withAppScopedContext(args, [scopes.app.works.upload, scopes.app.integrity]);
   const formData = await args.request.formData();
   const intent = formData.get('intent');
   if (
@@ -255,18 +256,28 @@ export default function ManuscriptChecksPage({ loaderData }: { loaderData: Loade
       <PageFrame hasSecondaryNav={false} className="max-w-[1600px]">
         <div className="space-y-6">
           <div className="flex gap-4 justify-between items-center">
-            <h1 className="text-2xl font-semibold">Manuscript checks</h1>
-            <ui.Button onClick={() => setDialogOpen(true)}>New check</ui.Button>
+            <h1 className="text-2xl font-semibold">Integrity Checks</h1>
+            <ui.Button onClick={() => setDialogOpen(true)}>Run Check</ui.Button>
           </div>
 
           <ui.Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
             <ui.DialogContent className="max-w-2xl">
+              <div className="pb-2">
+                <img
+                  src={proofigLogo}
+                  alt="Proofig"
+                  className="h-8 w-auto"
+                  loading="lazy"
+                />
+              </div>
               <ui.DialogHeader>
-                <ui.DialogTitle>Start new check</ui.DialogTitle>
-                <ui.DialogDescription>
-                  Set the article title, upload your manuscript file, then run check to finalize the
-                  work and start the Proofig check (same as confirm-work on the upload page).
-                </ui.DialogDescription>
+                <div className="space-y-1">
+                  <ui.DialogTitle>Start new check</ui.DialogTitle>
+                  <ui.DialogDescription>
+                    Set the article title, upload your manuscript file, then run check to finalize
+                    the work and start the Proofig check.
+                  </ui.DialogDescription>
+                </div>
               </ui.DialogHeader>
               <div className="space-y-4">
                 {draftFetcher.state === 'submitting' || draftFetcher.state === 'loading' ? (
