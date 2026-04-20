@@ -118,7 +118,7 @@ export function ResultsSummaryArea({
     if (matchedReport > 0) {
       legend.push({
         value: matchedReport,
-        label: plural('Flagged by Proofig and marked as (a|)problem(s)', matchedReport),
+        label: plural('Flagged by Proofig and marked as (a|) problem(s)', matchedReport),
         textColor: COLORS.bad.text,
         borderColor: COLORS.bad.border,
       });
