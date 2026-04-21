@@ -1,25 +1,20 @@
 import type { FileUploadConfig } from '@curvenote/scms-core';
 
 /**
- * Matches the platform's manuscript slot config so WorkFileUpload
- * submits to the upload route with the same slot and validation.
+ * Manuscript slot for the integrity flow: single PDF, 50MB max.
+ * Keep `slot: 'manuscript'` so WorkFileUpload still targets the platform upload route.
  */
 export const MANUSCRIPT_UPLOAD_CONFIG: FileUploadConfig = {
   slot: 'manuscript',
   label: 'Manuscript',
   icon: 'file',
-  description: 'Upload your manuscript files (.doc, .docx, .pdf) here',
+  description: 'Upload your manuscript as a single PDF (max 50MB)',
   optional: false,
-  multiple: true,
-  maxFiles: 20,
-  accept:
-    '.doc,.docx,.pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf',
-  mimeTypes: [
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/pdf',
-  ],
-  maxSize: 500 * 1024 * 1024, // 500MB
+  multiple: false,
+  maxFiles: 1,
+  accept: '.pdf,application/pdf',
+  mimeTypes: ['application/pdf'],
+  maxSize: 50 * 1024 * 1024, // 50MB
   hideFileCount: false,
   requireLabel: false,
 };

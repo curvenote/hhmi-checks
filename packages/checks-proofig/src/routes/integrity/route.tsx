@@ -272,8 +272,8 @@ export default function ManuscriptChecksPage({ loaderData }: { loaderData: Loade
                 <div className="space-y-1">
                   <ui.DialogTitle>Start new check</ui.DialogTitle>
                   <ui.DialogDescription>
-                    Set the article title, upload your manuscript file, then run check to finalize
-                    the work and start the Proofig check.
+                    Set the article title, upload a single PDF (max 50MB), then run check to
+                    finalize the work and start the Proofig check.
                   </ui.DialogDescription>
                 </div>
               </ui.DialogHeader>
