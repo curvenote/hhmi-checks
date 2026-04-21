@@ -2,6 +2,7 @@ import type { ProofigStage } from '../schema.js';
 import { ui } from '@curvenote/scms-core';
 import { ProofigProgressRefreshRow } from '../components/ProofigProgressRefreshRow.js';
 import { SimplifiedError } from './SimplifiedError.js';
+import { SimplifiedProgressAlertMessage } from './SimplifiedProgressAlertMessage.js';
 
 export function SimplifiedIntegrityDetection({
   data,
@@ -20,7 +21,10 @@ export function SimplifiedIntegrityDetection({
 
   return (
     <div className="space-y-2">
-      <ui.SimpleAlert type="info" message="Running integrity checks…" />
+      <ui.SimpleAlert
+        type="info"
+        message={<SimplifiedProgressAlertMessage text="Running integrity checks…" />}
+      />
       <ProofigProgressRefreshRow
         remoteStatusActionPath={remoteStatusActionPath}
         workVersionId={workVersionId}

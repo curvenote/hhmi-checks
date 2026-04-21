@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useFetcher, useRevalidator } from 'react-router';
 import { withAppScopedContext } from '@curvenote/scms-server';
 import {
+  LoadingSpinner,
   MainWrapper,
   PageFrame,
   getBrandingFromMetaMatches,
@@ -279,7 +280,10 @@ export default function ManuscriptChecksPage({ loaderData }: { loaderData: Loade
               </ui.DialogHeader>
               <div className="space-y-4">
                 {draftFetcher.state === 'submitting' || draftFetcher.state === 'loading' ? (
-                  <p className="text-sm text-muted-foreground">Preparing upload…</p>
+                  <p className="flex justify-between items-center gap-3 text-sm text-muted-foreground">
+                    <span>Preparing upload…</span>
+                    <LoadingSpinner className="shrink-0 text-muted-foreground" size={22} thickness={3} />
+                  </p>
                 ) : draftData && !draftData.success && draftData.error ? (
                   <ui.SimpleAlert type="error" message={draftData.error} />
                 ) : draftReady && uploadActionUrl ? (

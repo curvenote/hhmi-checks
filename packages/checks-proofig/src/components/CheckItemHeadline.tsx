@@ -98,7 +98,7 @@ export function CheckItemHeadline({
         <div className="text-muted-foreground">
           {plural(
             'No issues found by Proofig but %s problem(s) found by manual inspection',
-            matchedProblems,
+            inspectedProblems,
           )}
         </div>
       </div>

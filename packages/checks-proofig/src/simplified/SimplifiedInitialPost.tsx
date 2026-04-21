@@ -2,6 +2,7 @@ import type { ProofigStage } from '../schema.js';
 import { ui } from '@curvenote/scms-core';
 import { ProofigProgressRefreshRow } from '../components/ProofigProgressRefreshRow.js';
 import { SimplifiedError } from './SimplifiedError.js';
+import { SimplifiedProgressAlertMessage } from './SimplifiedProgressAlertMessage.js';
 
 export function SimplifiedInitialPost({
   data,
@@ -28,14 +29,17 @@ export function SimplifiedInitialPost({
     case 'pending':
       return (
         <div className="space-y-2">
-          <ui.SimpleAlert type="info" message="Connecting…" />
+          <ui.SimpleAlert type="info" message={<SimplifiedProgressAlertMessage text="Connecting…" />} />
           {refresh}
         </div>
       );
     case 'processing':
       return (
         <div className="space-y-2">
-          <ui.SimpleAlert type="info" message="Uploading to Proofig…" />
+          <ui.SimpleAlert
+            type="info"
+            message={<SimplifiedProgressAlertMessage text="Uploading to Proofig…" />}
+          />
           {refresh}
         </div>
       );
@@ -50,7 +54,7 @@ export function SimplifiedInitialPost({
     default:
       return (
         <div className="space-y-2">
-          <ui.SimpleAlert type="info" message="Pending" />
+          <ui.SimpleAlert type="info" message={<SimplifiedProgressAlertMessage text="Pending" />} />
           {refresh}
         </div>
       );

@@ -2,6 +2,7 @@ import type { ProofigStage } from '../schema.js';
 import { ui } from '@curvenote/scms-core';
 import { ProofigProgressRefreshRow } from '../components/ProofigProgressRefreshRow.js';
 import { SimplifiedError } from './SimplifiedError.js';
+import { SimplifiedProgressAlertMessage } from './SimplifiedProgressAlertMessage.js';
 
 export function SimplifiedSubimageDetection({
   data,
@@ -27,7 +28,10 @@ export function SimplifiedSubimageDetection({
   if (data.status === 'pending') {
     return (
       <div className="space-y-2">
-        <ui.SimpleAlert type="info" message="Subimage detection pending…" />
+        <ui.SimpleAlert
+          type="info"
+          message={<SimplifiedProgressAlertMessage text="Subimage detection pending…" />}
+        />
         {refresh}
       </div>
     );
@@ -35,7 +39,10 @@ export function SimplifiedSubimageDetection({
 
   return (
     <div className="space-y-2">
-      <ui.SimpleAlert type="info" message="Identifying sub-images…" />
+      <ui.SimpleAlert
+        type="info"
+        message={<SimplifiedProgressAlertMessage text="Identifying sub-images…" />}
+      />
       {refresh}
     </div>
   );

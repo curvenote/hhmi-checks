@@ -1,10 +1,15 @@
+import type { ReactNode } from 'react';
 import type { ProofigDataSchema } from '../schema.js';
-import { getProofigSummaryCounts } from '../utils/proofigSummary.js';
+import { getProofigSummaryCounts, proofigIsAwaitingHumanReview } from '../utils/proofigSummary.js';
 import { plural, ui } from '@curvenote/scms-core';
 import { LogoMono } from '../icons.js';
 import { ReportNoLongerAvailable } from '../components/ReportNoLongerAvailable.js';
 import { ProofigRefreshRemoteStatusButton } from '../components/ProofigRefreshRemoteStatusButton.js';
 import { ProofigOpenReportButton } from '../components/ProofigOpenReportButton.js';
+
+const REVIEW = 'text-amber-700 dark:text-amber-300';
+const CLEAR = 'text-[#1B8364] dark:text-[#5cd09a]';
+const PROBLEM = 'text-[#9B1E1E] dark:text-red-400';
 
 export function SimplifiedResultsSummary({
   proofigData,
@@ -17,70 +22,165 @@ export function SimplifiedResultsSummary({
   checkRunId?: string;
   remoteStatusActionPath?: string;
 }) {
-  const { total, matchesReview, bad } = getProofigSummaryCounts(proofigData);
-  const waiting = matchesReview;
-  const good = Math.max(0, total - matchesReview - bad);
+  const {
+    total,
+    matchesReview,
+    matchesNotBad,
+    matchesReport,
+    inspectsReport,
+    bad,
+  } = getProofigSummaryCounts(proofigData);
+  const awaitingHumanReview = proofigIsAwaitingHumanReview(proofigData);
   const reportUrl = proofigData?.reportUrl;
+  const deleted = proofigData?.deleted;
+  const showOpenReport = !!reportUrl && !deleted && matchesReview > 0;
 
-  const isAllClear = bad === 0 && waiting === 0;
-  const hasOnlyConfirmedProblems = bad > 0 && waiting === 0;
+  const hasPartialReportWhileAwaiting =
+    awaitingHumanReview && (matchesReport > 0 || inspectsReport > 0);
+
+  const footer =
+    total === 0 ? null : awaitingHumanReview ? (
+      <span>
+        Total: {total}
+        {' · '}
+        Awaiting review: {matchesReview}
+        {hasPartialReportWhileAwaiting && (
+          <>
+            {matchesReport > 0 && (
+              <>
+                {' · '}
+                {plural('Confirmed problem(s)', matchesReport)}: {matchesReport}
+              </>
+            )}
+            {inspectsReport > 0 && (
+              <>
+                {' · '}
+                {plural('Manual (a|) problem(s)', inspectsReport)}: {inspectsReport}
+              </>
+            )}
+          </>
+        )}
+      </span>
+    ) : (
+      <span>
+        Total: {total}
+        {' · '}
+        Matches reviewed: {matchesReview}
+        {matchesNotBad > 0 && (
+          <>
+            {' · '}
+            {plural('Not accepted as (a|) problem(s)', matchesNotBad)}: {matchesNotBad}
+          </>
+        )}
+        {matchesReport > 0 && (
+          <>
+            {' · '}
+            {plural('Confirmed problem(s)', matchesReport)}: {matchesReport}
+          </>
+        )}
+        {inspectsReport > 0 && (
+          <>
+            {' · '}
+            {plural('Manual (a|) problem(s)', inspectsReport)}: {inspectsReport}
+          </>
+        )}
+      </span>
+    );
+
+  let body: ReactNode;
+  if (total === 0) {
+    body = (
+      <div className="space-y-1">
+        <div className="text-3xl font-medium text-muted-foreground">No sub-images</div>
+        <div className="text-sm text-muted-foreground">No figures were detected.</div>
+      </div>
+    );
+  } else if (awaitingHumanReview) {
+    body = (
+      <div className="space-y-1">
+        <div className="flex flex-wrap gap-2 items-baseline">
+          <div className={`text-3xl font-medium ${REVIEW}`}>
+            {matchesNotBad}
+            <span className="font-extralight text-gray-500 dark:text-gray-400">/{total}</span>
+          </div>
+          <div className={`text-3xl font-medium ${REVIEW}`}>Awaiting review</div>
+        </div>
+        <div className="text-sm text-muted-foreground">
+          {`${plural('(An|Some) issue(s) (has|have) been flagged ', matchesReport)}`}by Proofig,
+          these should be reviewed and any confirmed problems added to the report.
+        </div>
+      </div>
+    );
+  } else if (matchesReview === 0 && matchesReport === 0 && inspectsReport === 0) {
+    body = (
+      <div className="space-y-1">
+        <div className={`text-3xl font-medium ${CLEAR}`}>All Clear</div>
+        <div className="text-base font-bold">No issues flagged with your figures</div>
+      </div>
+    );
+  } else if (matchesReview === 0 && matchesReport === 0 && inspectsReport > 0) {
+    body = (
+      <div className="space-y-1">
+        <div className={`text-3xl font-medium ${PROBLEM}`}>{plural('%s Problem(s)', inspectsReport)}</div>
+        <div className="text-base font-bold text-muted-foreground">
+          {plural(
+            'No issues found by Proofig but %s problem(s) found by manual inspection',
+            inspectsReport,
+          )}
+        </div>
+      </div>
+    );
+  } else if (matchesReview > 0 && inspectsReport === 0 && matchesReport === 0) {
+    body = (
+      <div className="space-y-1">
+        <div className={`text-3xl font-medium ${CLEAR}`}>Confirmed All Clear</div>
+        <div className="text-base font-bold text-muted-foreground">
+          Potential issues were flagged by Proofig but none were confirmed as problems during review.
+        </div>
+      </div>
+    );
+  } else if (matchesReport > 0 && inspectsReport === 0) {
+    body = (
+      <div className="space-y-1">
+        <div className={`text-3xl font-medium ${PROBLEM}`}>{plural('%s Problem(s)', matchesReport)}</div>
+        <div className={`text-base font-bold ${PROBLEM}`}>
+          {plural(
+            '%s issue(s) flagged by Proofig (was|were) confirmed as having (a|) problem(s)',
+            matchesReport,
+          )}
+        </div>
+      </div>
+    );
+  } else {
+    body = (
+      <div className="space-y-1">
+        <div className={`text-3xl font-medium ${PROBLEM}`}>{plural('%s Problem(s)', bad)}</div>
+        <div className={`text-base font-bold ${PROBLEM}`}>
+          {plural(
+            '%s issues(s) flagged by Proofig (was|were) confirmed as having (a|) problem(s)',
+            matchesReport,
+          )}
+          {inspectsReport > 0
+            ? `, ${plural('%s additional sub-image(s) (has|have) problems', inspectsReport)} found by manual inspection.`
+            : '.'}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
-      {total === 0 ? (
-        <div className="space-y-1">
-          <div className="text-3xl font-medium text-muted-foreground">No sub-images</div>
-          <div className="text-sm text-muted-foreground">No figures were detected.</div>
-        </div>
-      ) : isAllClear ? (
-        <div className="space-y-1">
-          <div className="text-3xl font-medium text-[#1B8364]">All Clear</div>
-          <div className="text-base font-bold">No issues flagged with your figures</div>
-        </div>
-      ) : hasOnlyConfirmedProblems ? (
-        <div className="space-y-1">
-          <div className="text-3xl font-medium text-[#9B1E1E]">{plural('%s Problem(s)', bad)}</div>
-          <div className="text-base font-bold text-[#9B1E1E]">
-            {plural('%s figure(s)', bad)} confirmed as problematic
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-1">
-          <div className="text-3xl font-medium text-gray-900 dark:text-gray-100">
-            {bad + waiting}
-            <span className="font-extralight text-gray-500">/{total}</span>
-          </div>
-          <div className="text-base font-bold">
-            {bad > 0 && waiting > 0 && (
-              <>
-                <span className="text-[#9B1E1E]">
-                  {plural('%s figure(s)', bad)} marked problematic
-                </span>
-                , {waiting} {good > 0 ? 'still ' : ''}waiting on review
-              </>
-            )}
-            {bad === 0 && waiting > 0 && (
-              <>
-                {plural('%s figure(s)', waiting)} {plural('(is|are)', waiting)}{' '}
-                {good > 0 ? 'still ' : ''}waiting on review
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="text-sm text-muted-foreground">
-        Total: {total} · No issues: {good} · Awaiting review: {waiting} · Flagged: {bad}
-      </div>
+      {body}
+      {footer ? <div className="text-sm text-muted-foreground">{footer}</div> : null}
       <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
-        {proofigData?.deleted ? (
+        {deleted ? (
           <ReportNoLongerAvailable />
         ) : (
           <div className="flex flex-wrap gap-2 items-center w-full min-w-0">
             <div className="flex flex-wrap gap-2 items-center min-w-0">
-              {reportUrl ? (
+              {showOpenReport ? (
                 <ProofigOpenReportButton
-                  reportUrl={reportUrl}
+                  reportUrl={reportUrl!}
                   actionPath={remoteStatusActionPath}
                   workVersionId={workVersionId}
                   checkRunId={checkRunId}
