@@ -3,9 +3,11 @@ import type {
   ServerExtension,
   ExtensionCheckService,
   JobRegistration,
+  ScopeTree,
 } from '@curvenote/scms-core';
 import { getPrismaClient } from '@curvenote/scms-server';
 import { extension as clientExtension, TEXT_INTEGRITY_CHECKS_ACTION_PATH } from './client.js';
+import { ext } from './scopes.js';
 import { handleTextIntegrityAction, textIntegrityStatus } from './server/actions.js';
 import {
   buildStoredServiceConfigurationForAdmin,
@@ -31,6 +33,10 @@ function getSafeAdminConfig(config: Record<string, unknown>): Record<string, unk
   };
 }
 
+function getScopes(): ScopeTree {
+  return { ext };
+}
+
 async function getExtensionConfiguration(
   ctx: Context,
 ): Promise<Record<string, unknown> | undefined> {
@@ -47,6 +53,7 @@ export const extension: ServerExtension = {
   getExtensionConfiguration,
   getSafeAdminConfig,
   getExtensionAdminActionHandlers,
+  getScopes,
   getChecks: (): ExtensionCheckService[] => {
     return [
       {
