@@ -1,15 +1,30 @@
 import type React from 'react';
-import { Logos } from '../client.js';
+import { ServiceLogo } from '@curvenote/scms-core';
+import { getTextIntegrityManifest } from '../schema.js';
 
-export function TextIntegritySectionHeader({ tag }: { tag: React.ReactNode }) {
+export function TextIntegritySectionHeader({
+  tag,
+  action,
+  metadata,
+}: {
+  tag: React.ReactNode;
+  action?: React.ReactNode;
+  /** Latest run's `serviceData` — we read the snapshotted service manifest from it. */
+  metadata?: unknown;
+}) {
+  const manifest = getTextIntegrityManifest(metadata);
+  const title = manifest?.title;
   return (
     <div className="flex gap-2 items-center w-full">
-      <div className="flex gap-2 justify-between items-center w-full">
-        <div className="font-normal uppercase text-muted-foreground">Text Integrity Checks</div>
-        {tag}
-        <div className="grow" />
-        <Logos.TextIntegrityLogo className="self-end h-8" />
-      </div>
+      <ServiceLogo
+        logoUrl={manifest?.logo}
+        alt={title}
+        fallback={title ?? 'Text Integrity'}
+        className="h-4"
+      />
+      <div>{tag}</div>
+      <div className="grow" />
+      {action != null && <div className="flex justify-end">{action}</div>}
     </div>
   );
 }

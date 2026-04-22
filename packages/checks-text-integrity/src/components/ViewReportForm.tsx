@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useFetcher } from 'react-router';
-import { ui } from '@curvenote/scms-core';
-import { ServiceLogo } from './ServiceLogo.js';
+import { ui, ServiceLogo } from '@curvenote/scms-core';
 
 type ViewReportFetcherData = {
   success?: boolean;
@@ -53,8 +52,9 @@ export function ViewReportForm({
         <span className="flex gap-2 items-center">
           {busy ? <span>Opening report…</span> : <span>View report at</span>}
           <ServiceLogo
-            manifestLogoUrl={manifestLogoUrl}
-            manifestTitle={manifestTitle}
+            logoUrl={manifestLogoUrl}
+            alt={manifestTitle}
+            fallback={manifestTitle}
             className="h-3 invert brightness-10"
           />
         </span>

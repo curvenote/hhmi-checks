@@ -1,6 +1,6 @@
 import type { ExtensionCheckSectionSummaryTitleProps } from '@curvenote/scms-core';
+import { ServiceLogo } from '@curvenote/scms-core';
 import { extensionPackageTitle } from '../meta.js';
-import { ServiceLogo } from './ServiceLogo.js';
 import { getTextIntegrityManifest } from '../schema.js';
 
 export function TextIntegritySummaryTitle({ metadata }: ExtensionCheckSectionSummaryTitleProps) {
@@ -9,6 +9,6 @@ export function TextIntegritySummaryTitle({ metadata }: ExtensionCheckSectionSum
   const className = 'h-3 max-w-[9rem] object-contain object-left';
 
   return (
-    <ServiceLogo manifestLogoUrl={manifest?.logo} manifestTitle={logoAlt} className={className} />
+    <ServiceLogo logoUrl={manifest?.logo} alt={logoAlt} fallback={logoAlt} className={className} />
   );
 }

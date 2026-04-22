@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import type { ExtensionAdminCardProps } from '@curvenote/scms-core';
-import { ServiceLogo } from '../components/ServiceLogo.js';
+import { ServiceLogo, type ExtensionAdminCardProps } from '@curvenote/scms-core';
 import { TextIntegrityCredentialsForm } from './TextIntegrityCredentialsForm.js';
 import { TextIntegrityTestConnectionRow } from './TextIntegrityTestConnectionRow.js';
 import { TextIntegrityUpdateConfigurationForm } from './TextIntegrityUpdateConfigurationForm.js';
@@ -31,7 +30,12 @@ export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) 
     <div className="grid grid-cols-1 gap-6 max-w-3xl">
       <div className="flex gap-3 justify-between items-center min-w-0">
         <h2 className="text-xl font-semibold">Checks: {title}</h2>
-        <ServiceLogo manifestLogoUrl={manifestLogo} manifestTitle={title} className="h-4 shrink-0" />
+        <ServiceLogo
+          logoUrl={manifestLogo}
+          alt={title}
+          fallback={title}
+          className="h-4 shrink-0"
+        />
       </div>
       <TextIntegrityCredentialsForm
         displayConfig={displayConfig}
@@ -44,7 +48,9 @@ export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) 
         <TextIntegrityTestConnectionRow credentials={credentials} />
         <TextIntegrityUpdateConfigurationForm credentials={credentials} />
       </div>
-      <TextIntegritySettingsPanel storedServiceConfiguration={displayConfig.storedServiceConfiguration} />
+      <TextIntegritySettingsPanel
+        storedServiceConfiguration={displayConfig.storedServiceConfiguration}
+      />
     </div>
   );
 }

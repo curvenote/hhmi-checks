@@ -1,7 +1,6 @@
 import { useFetcher } from 'react-router';
 import { useEffect } from 'react';
-import { ui, useRevalidateOnInterval } from '@curvenote/scms-core';
-import { ServiceLogo } from './ServiceLogo.js';
+import { ui, useRevalidateOnInterval, ServiceLogo } from '@curvenote/scms-core';
 import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
 import { TextIntegrityProgressComponent } from './TextIntegrityProgressComponent.js';
 import { TextIntegrityResultsArea } from './TextIntegrityResultsArea.js';
@@ -45,8 +44,9 @@ export function TextIntegrityChecksSection({
       <CTAPlaceholderPanel
         logo={
           <ServiceLogo
-            manifestLogoUrl={manifestLogo}
-            manifestTitle={manifestTitle}
+            logoUrl={manifestLogo}
+            alt={manifestTitle}
+            fallback={manifestTitle}
             className="mb-4 h-16"
           />
         }
