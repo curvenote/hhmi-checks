@@ -22,7 +22,7 @@ export function ProofigCheckRunTimelineMount({
   checkKind,
   metadata,
   remoteStatusActionPath,
-  isLatestRunForKind,
+  defaultExpanded,
 }: ExtensionCheckRunTimelineMountProps) {
   const hydrateFetcher = useFetcher();
   const revalidator = useRevalidator();
@@ -33,7 +33,7 @@ export function ProofigCheckRunTimelineMount({
   useEffect(() => {
     if (checkKind !== 'proofig') return;
     if (hydrateRequestedRef.current) return;
-    if (!isLatestRunForKind) return;
+    if (!defaultExpanded) return;
     if (!remoteStatusActionPath || !workVersionId || !checkRunId) return;
     const parsed = proofigDataSchema.safeParse(metadata);
     if (!parsed.success || !parsed.data.stages) return;
@@ -47,7 +47,7 @@ export function ProofigCheckRunTimelineMount({
     hydrateFetcher.submit(fd, { method: 'post', action: remoteStatusActionPath });
   }, [
     checkKind,
-    isLatestRunForKind,
+    defaultExpanded,
     remoteStatusActionPath,
     workVersionId,
     checkRunId,
