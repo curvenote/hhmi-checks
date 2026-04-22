@@ -47,7 +47,7 @@ export function TextIntegrityChecksSection({
             logoUrl={manifestLogo}
             alt={manifestTitle}
             fallback={manifestTitle}
-            className="mb-4 h-16"
+            className="mb-4 h-8"
           />
         }
         title="No text integrity checks run yet"
