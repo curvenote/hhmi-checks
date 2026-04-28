@@ -167,8 +167,9 @@ export function applyWebhookEvent(
       s = setLinearStage(s, 'reportGeneration', 'pending', receivedAt);
       updatedStages = s;
 
-      const providerPayload = webhook.payload?.provider_payload;
-      const reportResult = SimilarityReportPayloadSchema.safeParse(providerPayload);
+      const rawSimilarity =
+        webhook.payload?.similarity_report ?? webhook.payload?.provider_payload;
+      const reportResult = SimilarityReportPayloadSchema.safeParse(rawSimilarity);
       if (reportResult.success) {
         summaryReport = toStoredSimilarityReport(reportResult.data);
       }

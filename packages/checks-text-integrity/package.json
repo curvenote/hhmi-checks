@@ -48,6 +48,7 @@
     "url": "https://github.com/curvenote/journals/issues"
   },
   "dependencies": {
+    "@curvenote/check-relay-types": "*",
     "@curvenote/common": "*",
     "@curvenote/scms-core": "*",
     "@curvenote/scms-db": "*",

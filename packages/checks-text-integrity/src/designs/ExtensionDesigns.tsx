@@ -132,12 +132,12 @@ export function ExtensionDesigns() {
 
       <DesignSection
         name="SimpleErrorArea"
-        description="Generic error alert plus error-state progress bar."
+        description="Error alert plus segmented bar: earlier stages green, failed segment red."
       >
         <SimpleErrorArea
-          step={1}
           numSteps={3}
-          message="Text integrity check failed."
+          segmentTones={['complete', 'error', 'muted']}
+          failedStageTitle="Processing"
           error="The remote service responded with HTTP 502 (Bad Gateway)."
         />
       </DesignSection>
