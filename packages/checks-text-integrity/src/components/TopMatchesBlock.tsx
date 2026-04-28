@@ -39,16 +39,23 @@ export function TopMatchesBlock({ report }: TopMatchesBlockProps) {
   const topMatches = report.topMatches ?? [];
 
   return (
-    <div className="px-4 py-2 rounded-lg border shadow-sm border-border bg-card">
-      {topMatches.length === 0 ? (
-        <div className="py-4 text-sm text-center text-muted-foreground">No matching sources</div>
-      ) : (
-        <div className="space-y-0">
-          {topMatches.map((match, i) => (
-            <MatchRow key={`${match.name}-${i}`} match={match} />
-          ))}
-        </div>
-      )}
+    <div className="space-y-4">
+      <h3 className="text-base font-semibold text-foreground">Top matches</h3>
+      <p className="text-sm text-muted-foreground">
+        The sources with the strongest overlap with your document, listed by match percentage.
+      </p>
+
+      <div className="px-4 py-2 rounded-lg border shadow-sm border-border bg-card">
+        {topMatches.length === 0 ? (
+          <div className="py-4 text-sm text-center text-muted-foreground">No matching sources</div>
+        ) : (
+          <div className="space-y-0">
+            {topMatches.map((match, i) => (
+              <MatchRow key={`${match.name}-${i}`} match={match} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

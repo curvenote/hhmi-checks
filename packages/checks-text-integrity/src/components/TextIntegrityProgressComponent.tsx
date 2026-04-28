@@ -1,11 +1,9 @@
 import type { TextIntegrityDataSchema } from '../schema.js';
 import { hasError, getErrorMessage, linearStageIsDone } from '../schema.js';
-import {
-  SimpleErrorArea,
-  SubmittingProgressArea,
-  SubmissionCompleteProgressArea,
-  ProcessingProgressArea,
-} from './ProgressAreas.js';
+import { ProcessingProgressArea } from './progress/ProcessingProgressArea.js';
+import { SimpleErrorArea } from './progress/SimpleErrorArea.js';
+import { SubmissionCompleteProgressArea } from './progress/SubmissionCompleteProgressArea.js';
+import { SubmittingProgressArea } from './progress/SubmittingProgressArea.js';
 
 interface TextIntegrityProgressComponentProps {
   metadata: TextIntegrityDataSchema | undefined;
