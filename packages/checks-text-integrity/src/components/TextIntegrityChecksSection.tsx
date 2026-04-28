@@ -12,6 +12,8 @@ interface TextIntegrityChecksSectionProps {
   remoteStatusActionPath?: string;
   workVersionId?: string;
   checkRunId?: string;
+  /** ISO `CheckServiceRun.date_modified` — used to decide when refresh / stale UI is shown. */
+  checkRunDateModified?: string;
 }
 
 export function TextIntegrityChecksSection({
@@ -19,6 +21,7 @@ export function TextIntegrityChecksSection({
   remoteStatusActionPath,
   workVersionId,
   checkRunId,
+  checkRunDateModified,
 }: TextIntegrityChecksSectionProps) {
   const fetcher = useFetcher();
   const hasData = !!metadata?.stages;
@@ -92,7 +95,13 @@ export function TextIntegrityChecksSection({
 
   return (
     <div>
-      <TextIntegrityProgressComponent metadata={metadata} />
+      <TextIntegrityProgressComponent
+        metadata={metadata}
+        actionPath={remoteStatusActionPath}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+        checkRunDateModified={checkRunDateModified}
+      />
     </div>
   );
 }

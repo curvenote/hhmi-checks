@@ -2,11 +2,17 @@ import { cn } from '@curvenote/scms-core';
 
 type ProgressState = 'default' | 'error' | 'success';
 
+/** Per-segment styling when showing pipeline outcome (e.g. error summary). */
+export type PipelineSegmentTone = 'complete' | 'error' | 'muted';
+
 interface SegmentedProgressBarProps {
-  progress: number;
   numSteps: number;
-  state?: ProgressState;
   className?: string;
+  /** Per-segment fills (length must equal `numSteps`). When set, `progress` / `state` are ignored. */
+  segmentTones?: PipelineSegmentTone[];
+  /** Legacy: 1-based index of the active step (animated / colored segment). */
+  progress?: number;
+  state?: ProgressState;
 }
 
 const stateColors: Record<ProgressState, { filled: string; empty: string }> = {
@@ -24,13 +30,44 @@ const stateColors: Record<ProgressState, { filled: string; empty: string }> = {
   },
 };
 
+const toneClass: Record<PipelineSegmentTone, string> = {
+  complete: 'bg-green-500',
+  error: 'bg-red-500',
+  muted: 'bg-gray-200 dark:bg-gray-700',
+};
+
 export function SegmentedProgressBar({
   progress,
   numSteps,
   state = 'default',
+  segmentTones,
   className,
 }: SegmentedProgressBarProps) {
-  const clampedProgress = Math.max(0, Math.min(progress, numSteps));
+  if (segmentTones != null) {
+    const tones: PipelineSegmentTone[] =
+      segmentTones.length >= numSteps
+        ? segmentTones.slice(0, numSteps)
+        : [
+            ...segmentTones,
+            ...Array.from({ length: numSteps - segmentTones.length }, () => 'muted' as const),
+          ];
+    return (
+      <div className={cn('flex gap-[3px]', className)}>
+        {tones.map((tone: PipelineSegmentTone, index) => (
+          <div
+            key={index}
+            className={cn(
+              'overflow-hidden relative flex-1 h-2 transition-colors duration-300',
+              toneClass[tone],
+            )}
+            aria-label={`Pipeline segment ${index + 1} of ${numSteps}`}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const clampedProgress = Math.max(0, Math.min(progress ?? 1, numSteps));
   const colors = stateColors[state];
   const completedColor = 'bg-green-500';
 

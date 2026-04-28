@@ -249,6 +249,49 @@ export function getErrorMessage(data: TextIntegrityDataSchema | undefined): stri
   return undefined;
 }
 
+/** 1-based pipeline segment index where `status === 'error'` (submission → processing → report). */
+export function getFailedPipelineStep(data: TextIntegrityDataSchema | undefined): 1 | 2 | 3 | null {
+  if (!data?.stages) return null;
+  if (data.stages.submission.status === 'error') return 1;
+  if (data.stages.processing?.status === 'error') return 2;
+  if (data.stages.reportGeneration?.status === 'error') return 3;
+  return null;
+}
+
+/** Display title for the segment that failed (alert copy). */
+export function getFailedStageDisplayTitle(step: 1 | 2 | 3): string {
+  switch (step) {
+    case 1:
+      return 'Submission';
+    case 2:
+      return 'Processing';
+    case 3:
+      return 'Report generation';
+  }
+}
+
+export type ErrorPipelineSegmentTone = 'complete' | 'error' | 'muted';
+
+/**
+ * Segment fills for the error summary bar: stages before the failure are complete (green),
+ * the failed segment is red, later segments muted.
+ */
+export function getErrorPipelineSegmentTones(
+  data: TextIntegrityDataSchema | undefined,
+  numSteps = 3,
+): ErrorPipelineSegmentTone[] {
+  const failed = getFailedPipelineStep(data);
+  if (failed == null) {
+    return Array.from({ length: numSteps }, () => 'muted' as const);
+  }
+  return Array.from({ length: numSteps }, (_, i) => {
+    const step = i + 1;
+    if (step < failed) return 'complete';
+    if (step === failed) return 'error';
+    return 'muted';
+  });
+}
+
 /** True when the processing stage is done and a summary report is available. */
 export function canShowResults(data: TextIntegrityDataSchema | undefined): boolean {
   if (!data?.stages) return false;

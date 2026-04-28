@@ -1,26 +1,57 @@
 import type { TextIntegrityDataSchema } from '../schema.js';
-import { hasError, getErrorMessage, linearStageIsDone } from '../schema.js';
+import {
+  hasError,
+  getErrorMessage,
+  linearStageIsDone,
+  getFailedPipelineStep,
+  getFailedStageDisplayTitle,
+  getErrorPipelineSegmentTones,
+} from '../schema.js';
 import { ProcessingProgressArea } from './progress/ProcessingProgressArea.js';
 import { SimpleErrorArea } from './progress/SimpleErrorArea.js';
 import { SubmissionCompleteProgressArea } from './progress/SubmissionCompleteProgressArea.js';
 import { SubmittingProgressArea } from './progress/SubmittingProgressArea.js';
 
+type ProgressRefreshProps = {
+  actionPath: string;
+  workVersionId: string;
+  checkRunId?: string;
+  checkRunDateModified?: string;
+};
+
 interface TextIntegrityProgressComponentProps {
   metadata: TextIntegrityDataSchema | undefined;
+  /** POST target for relay-status refresh (extension actions route). */
+  actionPath?: string;
+  workVersionId?: string;
+  checkRunId?: string;
+  /** ISO `CheckServiceRun.date_modified` from the platform. */
+  checkRunDateModified?: string;
 }
 
-export function TextIntegrityProgressComponent({ metadata }: TextIntegrityProgressComponentProps) {
+export function TextIntegrityProgressComponent({
+  metadata,
+  actionPath,
+  workVersionId,
+  checkRunId,
+  checkRunDateModified,
+}: TextIntegrityProgressComponentProps) {
   if (!metadata?.stages) return null;
 
   const { submission, processing } = metadata.stages;
+  const refreshProps: ProgressRefreshProps | undefined =
+    actionPath && workVersionId
+      ? { actionPath, workVersionId, checkRunId, checkRunDateModified }
+      : undefined;
 
   if (hasError(metadata)) {
+    const failedStep = getFailedPipelineStep(metadata) ?? 1;
     return (
       <div>
         <SimpleErrorArea
-          step={1}
           numSteps={3}
-          message="Text integrity check failed."
+          segmentTones={getErrorPipelineSegmentTones(metadata, 3)}
+          failedStageTitle={getFailedStageDisplayTitle(failedStep)}
           error={getErrorMessage(metadata)}
         />
       </div>
@@ -29,21 +60,21 @@ export function TextIntegrityProgressComponent({ metadata }: TextIntegrityProgre
   if (processing?.status === 'processing') {
     return (
       <div>
-        <ProcessingProgressArea />
+        <ProcessingProgressArea {...(refreshProps ?? {})} />
       </div>
     );
   }
   if (linearStageIsDone(submission.status)) {
     return (
       <div>
-        <SubmissionCompleteProgressArea />
+        <SubmissionCompleteProgressArea {...(refreshProps ?? {})} />
       </div>
     );
   }
 
   return (
     <div>
-      <SubmittingProgressArea />
+      <SubmittingProgressArea {...(refreshProps ?? {})} />
     </div>
   );
 }

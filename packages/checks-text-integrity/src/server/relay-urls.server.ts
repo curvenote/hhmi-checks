@@ -67,6 +67,16 @@ export function checksRelayReportPdfStartUrl(
   return `${baseServicesPath(relayBaseUrl, serviceName, instanceId)}/check/${encodeURIComponent(externalId)}/report/pdf/start`;
 }
 
+/** POST — returns {@link import('@curvenote/check-relay-types').RelayCheckStatusResponse} */
+export function checksRelayCheckStatusUrl(
+  relayBaseUrl: string,
+  serviceName: string,
+  instanceId: string,
+  externalId: string,
+): string {
+  return `${baseServicesPath(relayBaseUrl, serviceName, instanceId)}/check/${encodeURIComponent(externalId)}/status`;
+}
+
 export function checksRelayReportFetchUrl(
   relayBaseUrl: string,
   serviceName: string,

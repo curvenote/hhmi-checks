@@ -23,12 +23,15 @@ import type { TextIntegrityDataSchema } from '../schema.js';
 import { markSimilarityPdfJobRestarted, markSubmissionError } from './stateMachine.server.js';
 import { TEXT_INTEGRITY_SUBMIT } from './jobs/text-integrity-submit.server.js';
 import { getTextIntegrityConfigWithOverrides } from './config.server.js';
+import type { RelayNotifyEnvelope } from '@curvenote/check-relay-types';
 import {
+  checksRelayCheckStatusUrl,
   checksRelayReportPdfStartUrl,
   checksRelayReportViewerUrl,
   resolveRelayExternalCheckId,
   resolveRelayInstanceId,
 } from './relay-urls.server.js';
+import { applyRelayCheckStatusEnvelopes } from './relay-status-apply.server.js';
 
 type AppChecksConfig = {
   relayBaseUrl?: string;
@@ -93,6 +96,7 @@ const VIEWER_URL_DEFAULTS = {
  * Handle Text Integrity check actions.
  * Intent checks-text-integrity:execute creates a check run and enqueues TEXT_INTEGRITY_SUBMIT job.
  * Intent checks-text-integrity:refresh-viewer-url fetches a short-lived viewer URL from checks-relay.
+ * Intent checks-text-integrity:relay-status POSTs checks-relay check status and applies returned notify envelopes.
  */
 export async function handleTextIntegrityAction(
   args: ExtensionCheckHandleActionArgs,
@@ -314,6 +318,121 @@ export async function handleTextIntegrityAction(
     return { success: true, viewerUrl } as ExtensionCheckHandleActionResult & {
       viewerUrl: string;
     };
+  }
+
+  /** Poll checks-relay check status and apply notify-equivalent envelopes to this run. */
+  if (intent === 'relay-status') {
+    if (!ctx) {
+      return {
+        error: { type: 'general', message: 'relay-status requires a signed-in context' },
+        status: 401,
+      };
+    }
+    const checkRunId = formData?.get('checkRunId')?.toString()?.trim();
+    if (!checkRunId) {
+      return { error: { type: 'general', message: 'checkRunId is required' }, status: 400 };
+    }
+    if (!workVersionId) {
+      return { error: { type: 'general', message: 'workVersionId is required' }, status: 400 };
+    }
+
+    const prisma = await getPrismaClient();
+    const run = await prisma.checkServiceRun.findUnique({ where: { id: checkRunId } });
+    if (!run || run.work_version_id !== workVersionId) {
+      return { error: { type: 'general', message: 'Check run not found' }, status: 404 };
+    }
+
+    const serviceData = readServiceDataFromRunData(run.data);
+    const externalCheckId = resolveRelayExternalCheckId(serviceData);
+    if (!externalCheckId) {
+      return {
+        error: {
+          type: 'general',
+          message: 'No provider check id on this run yet; try again after upload completes',
+        },
+        status: 400,
+      };
+    }
+
+    const baseExt =
+      (ctx.$config?.app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};
+    const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
+    const checks = getAppChecks(ctx);
+
+    const relayBaseUrl = (checks?.relayBaseUrl ?? '').trim().replace(/\/$/, '');
+    const relayApiKey = (checks?.relayApiKey ?? '').trim();
+
+    if (!relayBaseUrl || !relayApiKey) {
+      return {
+        error: { type: 'general', message: 'Checks relay is not configured' },
+        status: 503,
+      };
+    }
+
+    const serviceName = resolveServiceName(mergedConfig);
+    const relayInstanceId = resolveRelayInstanceId(mergedConfig);
+    const statusUrl = checksRelayCheckStatusUrl(
+      relayBaseUrl,
+      serviceName,
+      relayInstanceId,
+      externalCheckId,
+    );
+
+    let relayResponse: Response;
+    try {
+      relayResponse = await fetch(statusUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${relayApiKey}`,
+        },
+        body: JSON.stringify({ client_id: checkRunId }),
+      });
+    } catch (e) {
+      return {
+        error: {
+          type: 'general',
+          message: e instanceof Error ? e.message : 'Failed to contact checks-relay',
+        },
+        status: 502,
+      };
+    }
+
+    const rawText = await relayResponse.text().catch(() => '');
+    let json: unknown;
+    try {
+      json = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      return {
+        error: { type: 'general', message: 'checks-relay returned invalid JSON' },
+        status: 502,
+      };
+    }
+
+    if (!relayResponse.ok) {
+      return {
+        error: {
+          type: 'general',
+          message: `Checks relay returned ${relayResponse.status}: ${rawText}`.trim(),
+        },
+        status: relayResponse.status >= 400 && relayResponse.status < 600 ? relayResponse.status : 502,
+      };
+    }
+
+    const envelopes = (json as { envelopes?: RelayNotifyEnvelope[] }).envelopes;
+    if (!Array.isArray(envelopes)) {
+      return {
+        error: { type: 'general', message: 'checks-relay status response missing envelopes array' },
+        status: 502,
+      };
+    }
+
+    const applied = await applyRelayCheckStatusEnvelopes(checkRunId, envelopes);
+    if (!applied.ok) {
+      return { error: { type: 'general', message: applied.message }, status: 400 };
+    }
+
+    return { success: true };
   }
 
   /** Report generation failed — restart similarity PDF via relay. */

@@ -1,36 +1,58 @@
-import { useEffect, useState } from 'react';
-import { cn, ui } from '@curvenote/scms-core';
+import { ui } from '@curvenote/scms-core';
+import { TextIntegrityRefreshRemoteStatusButton } from '../TextIntegrityRefreshRemoteStatusButton.js';
 import { StageProgressArea } from './StageProgressArea.js';
+import { useCheckRunStale } from './useCheckRunStale.js';
 
-const LEAVE_HINT_DELAY_MS = 10_000;
+export type ProcessingProgressAreaProps = {
+  actionPath?: string;
+  workVersionId?: string;
+  checkRunId?: string;
+  checkRunDateModified?: string;
+};
 
-export function ProcessingProgressArea() {
-  const [showLeaveHint, setShowLeaveHint] = useState(false);
+export function ProcessingProgressArea({
+  actionPath,
+  workVersionId,
+  checkRunId,
+  checkRunDateModified,
+}: ProcessingProgressAreaProps) {
+  const showStaleUi = useCheckRunStale(checkRunDateModified);
 
-  useEffect(() => {
-    const id = window.setTimeout(() => setShowLeaveHint(true), LEAVE_HINT_DELAY_MS);
-    return () => window.clearTimeout(id);
-  }, []);
+  const refreshSlot =
+    showStaleUi && actionPath && workVersionId ? (
+      <TextIntegrityRefreshRemoteStatusButton
+        actionPath={actionPath}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+      />
+    ) : undefined;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <ui.SimpleAlert
         type="info"
         message={
           <div>
-            <p className={cn('mt-0', { 'mb-0': false })}>
+            <p className="mt-0">
               <span className="font-bold">Processing your submission...</span> Your documents are
               being analysed and large files may take longer to process.
             </p>
-            {showLeaveHint ? (
-              <p className="mb-0">
-                You can leave this page and come back later to view the results.
+            {showStaleUi ? (
+              <p className="mb-0 mt-2 text-muted-foreground">
+                This run has not been updated recently. You can leave and return later; use{' '}
+                <span className="font-medium text-foreground">Refresh status</span> next to the
+                progress line if updates look stuck.
               </p>
             ) : null}
           </div>
         }
       />
-      <StageProgressArea step={3} numSteps={3} message="This may take several minutes…" />
+      <StageProgressArea
+        step={3}
+        numSteps={3}
+        message="This may take several minutes…"
+        trailingSlot={refreshSlot}
+      />
     </div>
   );
 }

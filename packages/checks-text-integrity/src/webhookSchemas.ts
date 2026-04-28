@@ -28,6 +28,8 @@ export const WebhookBodySchema = z.object({
   payload: z
     .object({
       status: z.enum(['PROCESSING', 'SUCCESS', 'FAILED']).optional(),
+      /** Canonical relay similarity snapshot (preferred over legacy provider_payload). */
+      similarity_report: z.unknown().optional(),
       provider_payload: z.unknown().optional(),
       error_message: z.string().optional(),
       report: z
