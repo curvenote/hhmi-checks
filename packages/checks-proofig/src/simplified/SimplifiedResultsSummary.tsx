@@ -22,14 +22,8 @@ export function SimplifiedResultsSummary({
   checkRunId?: string;
   remoteStatusActionPath?: string;
 }) {
-  const {
-    total,
-    matchesReview,
-    matchesNotBad,
-    matchesReport,
-    inspectsReport,
-    bad,
-  } = getProofigSummaryCounts(proofigData);
+  const { total, matchesReview, matchesNotBad, matchesReport, inspectsReport, bad } =
+    getProofigSummaryCounts(proofigData);
   const awaitingHumanReview = proofigIsAwaitingHumanReview(proofigData);
   const reportUrl = proofigData?.reportUrl;
   const deleted = proofigData?.deleted;
@@ -69,7 +63,7 @@ export function SimplifiedResultsSummary({
         {matchesNotBad > 0 && (
           <>
             {' · '}
-            {plural('Not accepted as (a|) problem(s)', matchesNotBad)}: {matchesNotBad}
+            {plural('Not confirmed as (a|) problem(s)', matchesNotBad)}: {matchesNotBad}
           </>
         )}
         {matchesReport > 0 && (
@@ -106,7 +100,7 @@ export function SimplifiedResultsSummary({
           <div className={`text-3xl font-medium ${REVIEW}`}>Awaiting review</div>
         </div>
         <div className="text-sm text-muted-foreground">
-          {`${plural('(An|Some) issue(s) (has|have) been flagged ', matchesReport)}`}by Proofig,
+          {`${plural('(An|Some) sub-image(s) (has|have) been flagged ', matchesReport)}`}by Proofig,
           these should be reviewed and any confirmed problems added to the report.
         </div>
       </div>
@@ -121,7 +115,9 @@ export function SimplifiedResultsSummary({
   } else if (matchesReview === 0 && matchesReport === 0 && inspectsReport > 0) {
     body = (
       <div className="space-y-1">
-        <div className={`text-3xl font-medium ${PROBLEM}`}>{plural('%s Problem(s)', inspectsReport)}</div>
+        <div className={`text-3xl font-medium ${PROBLEM}`}>
+          {plural('%s Problem(s)', inspectsReport)}
+        </div>
         <div className="text-base font-bold text-muted-foreground">
           {plural(
             'No issues found by Proofig but %s problem(s) found by manual inspection',
@@ -135,17 +131,20 @@ export function SimplifiedResultsSummary({
       <div className="space-y-1">
         <div className={`text-3xl font-medium ${CLEAR}`}>Confirmed All Clear</div>
         <div className="text-base font-bold text-muted-foreground">
-          Potential issues were flagged by Proofig but none were confirmed as problems during review.
+          Potential issues were flagged by Proofig but none were confirmed as problems during
+          review.
         </div>
       </div>
     );
   } else if (matchesReport > 0 && inspectsReport === 0) {
     body = (
       <div className="space-y-1">
-        <div className={`text-3xl font-medium ${PROBLEM}`}>{plural('%s Problem(s)', matchesReport)}</div>
+        <div className={`text-3xl font-medium ${PROBLEM}`}>
+          {plural('%s Problem(s)', matchesReport)}
+        </div>
         <div className={`text-base font-bold ${PROBLEM}`}>
           {plural(
-            '%s issue(s) flagged by Proofig (was|were) confirmed as having (a|) problem(s)',
+            '%s sub-image(s) flagged by Proofig (was|were) confirmed as having (a|) problem(s)',
             matchesReport,
           )}
         </div>
@@ -157,7 +156,7 @@ export function SimplifiedResultsSummary({
         <div className={`text-3xl font-medium ${PROBLEM}`}>{plural('%s Problem(s)', bad)}</div>
         <div className={`text-base font-bold ${PROBLEM}`}>
           {plural(
-            '%s issues(s) flagged by Proofig (was|were) confirmed as having (a|) problem(s)',
+            '%s sub-images(s) flagged by Proofig (was|were) confirmed as (a|) problem(s)',
             matchesReport,
           )}
           {inspectsReport > 0

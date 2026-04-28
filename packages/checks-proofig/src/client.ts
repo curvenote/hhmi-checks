@@ -15,6 +15,7 @@ import { ProofigCheckRunTimelineMount } from './components/ProofigCheckRunTimeli
 import { ProofigSummaryBadge } from './components/ProofigSummaryBadge.js';
 import { ProofigSummaryTitle } from './components/ProofigSummaryTitle.js';
 import ExtensionAdminCard from './admin/ExtensionAdminCard.js';
+import { ExtensionDesigns } from './designs/ExtensionDesigns.js';
 import { extensionPackageTitle } from './meta.js';
 
 export const id = 'checks-proofig';
@@ -75,6 +76,10 @@ export function getExtensionAdminCard() {
   return ExtensionAdminCard;
 }
 
+export function getDesigns() {
+  return ExtensionDesigns;
+}
+
 export const extension: ClientExtension = {
   id,
   name,
@@ -83,4 +88,5 @@ export const extension: ClientExtension = {
   getChecks,
   registerNavigation,
   getExtensionAdminCard,
+  getDesigns,
 } as const;

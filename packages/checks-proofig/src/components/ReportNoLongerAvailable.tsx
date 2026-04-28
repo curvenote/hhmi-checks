@@ -3,5 +3,7 @@
  * Single source of truth for the copy so it can be updated in one place.
  */
 export function ReportNoLongerAvailable() {
-  return <p className="text-sm text-muted-foreground">Report is no longer available on Proofig</p>;
+  return (
+    <p className="text-sm text-muted-foreground">The report is no longer available on Proofig</p>
+  );
 }

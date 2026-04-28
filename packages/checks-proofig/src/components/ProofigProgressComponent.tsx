@@ -1,12 +1,10 @@
 import type { ProofigDataSchema } from '../schema.js';
 import { ALL_PENDING_STAGES, getCurrentProofigStage } from '../schema.js';
-import {
-  DefaultArea,
-  InitialPostProgressArea,
-  SubimageDetectionProgressArea,
-  SubimageApprovalProgressArea,
-  IntegrityDetectionProgressArea,
-} from './ProgressAreas.js';
+import { DefaultArea } from './progress/DefaultArea.js';
+import { InitialPostProgressArea } from './progress/InitialPostProgressArea.js';
+import { IntegrityDetectionProgressArea } from './progress/IntegrityDetectionProgressArea.js';
+import { SubimageApprovalProgressArea } from './progress/SubimageApprovalProgressArea.js';
+import { SubimageDetectionProgressArea } from './progress/SubimageDetectionProgressArea.js';
 import { ResultsSummaryArea } from './ResultsSummaryArea.js';
 
 export const STAGE_LABELS = {

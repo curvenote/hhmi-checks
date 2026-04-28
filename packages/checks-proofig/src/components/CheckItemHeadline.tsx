@@ -57,7 +57,7 @@ export function CheckItemHeadline({
   matchesNotBad,
   matchedProblems,
   inspectedProblems,
-  countedItemPlural = 'panel(s)',
+  countedItemPlural = 'sub-image(s)',
 }: CheckItemHeadlineProps) {
   if (awaitingHumanReview) {
     return (
@@ -71,8 +71,8 @@ export function CheckItemHeadline({
           <div className={`text-3xl font-medium ${colors.review}`}>Awaiting review</div>
         </div>
         <div className="text-muted-foreground">
-          {`${plural('(An|Some) issue(s) (has|have) been flagged ', matchedProblems)}`}by Proofig,
-          these should be reviewed and any confirmed problems added to the report.
+          {`${plural('(An|Some) sub-image(s) (has|have) been flagged ', matchedProblems)}`}by
+          Proofig, these should be reviewed and any confirmed problems added to the report.
         </div>
       </div>
     );
@@ -125,7 +125,7 @@ export function CheckItemHeadline({
         </div>
         <div className="text-muted-foreground">
           {plural(
-            '%s issue(s) flagged by Proofig (was|were) confirmed as having (a|) problem(s)',
+            '%s sub-image(s) flagged by Proofig (was|were) confirmed as having (a|) problem(s)',
             matchedProblems,
           )}
           .
@@ -141,7 +141,7 @@ export function CheckItemHeadline({
       </div>
       <div className="text-muted-foreground">
         {plural(
-          '%s issues(s) flagged by Proofig (was|were) confirmed as having (a|) problem(s)',
+          '%s sub-image(s) flagged by Proofig (was|were) confirmed as having (a|) problem(s)',
           matchedProblems,
         )}
         , {plural('%s additional sub-image(s) (has|have) problems', inspectedProblems)} found by

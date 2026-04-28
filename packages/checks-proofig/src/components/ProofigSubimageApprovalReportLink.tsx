@@ -15,7 +15,7 @@ type RefreshFetcherData = {
  */
 const DEFAULT_FOLLOW_UP_TITLE = 'Proofig was opened for figure panel approval';
 const DEFAULT_FOLLOW_UP_DESCRIPTION =
-  'Figure panel (sub-image) approval was started at Proofig. If you approved all panels, press Continue below to close this dialog.';
+  'Figure sub-image approval was started at Proofig. If you approved all sub-images, press Continue below to close this dialog.';
 
 export function ProofigSubimageApprovalReportLink({
   reportUrl,

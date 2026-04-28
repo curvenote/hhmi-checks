@@ -64,11 +64,16 @@ export function ResultsSummaryArea({
   const deleted = proofigData?.deleted;
   const showViewReportButton = !!reportUrl && !deleted && matchesReview > 0;
 
+  /** Matches `CheckItemHeadline` “All Clear” branch: no flagged or confirmed issues. */
+  const isAllClear =
+    !awaitingHumanReview && matchesReview === 0 && matchedReport === 0 && inspectReport === 0;
+  const hidePunchcardAndLegend = isAllClear && total < 10;
+
   const punchcard = [
     {
       className: COLORS.bad.bg,
       count: inspectReport,
-      altText: 'Additional panels flagged as problems manually',
+      altText: 'Additional sub-images flagged as problems manually',
     },
     {
       className: COLORS.bad.bg,
@@ -93,7 +98,7 @@ export function ResultsSummaryArea({
   if (matchesReview > 0 || matchedReport > 0 || inspectReport > 0) {
     legend.push({
       value: total,
-      label: 'Number of figure panels',
+      label: 'Number of figure sub-images',
       textColor: COLORS.total.text,
       borderColor: COLORS.total.border,
     });
@@ -110,7 +115,7 @@ export function ResultsSummaryArea({
     if (matchesNotBad > 0) {
       legend.push({
         value: matchesNotBad,
-        label: plural('Issue(s) flagged by Proofig but not accepted', matchesNotBad),
+        label: plural('Sub-image(s) flagged by Proofig but not confirmed', matchesNotBad),
         textColor: COLORS.notBad.text,
         borderColor: COLORS.notBad.border,
       });
@@ -126,7 +131,7 @@ export function ResultsSummaryArea({
     if (inspectReport > 0) {
       legend.push({
         value: inspectReport,
-        label: plural('Panel(s) manually marked as (a|) problem(s)', inspectReport),
+        label: plural('Sub-image(s) manually marked as (a|) problem(s)', inspectReport),
         textColor: COLORS.bad.text,
         borderColor: COLORS.bad.border,
       });
@@ -149,8 +154,12 @@ export function ResultsSummaryArea({
           matchedProblems={matchedReport}
           inspectedProblems={inspectReport}
         />
-        <ui.CheckItemPunchcard stats={punchcard} />
-        <ui.CheckItemLegend stats={legend} />
+        {!hidePunchcardAndLegend ? (
+          <>
+            <ui.CheckItemPunchcard stats={punchcard} />
+            <ui.CheckItemLegend stats={legend} />
+          </>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap gap-2 items-center w-full min-w-0">
