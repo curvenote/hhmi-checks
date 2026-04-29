@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { cn, ui } from '@curvenote/scms-core';
 import type { ProofigStage } from '../../schema.js';
-import { ProofigProgressRefreshRow } from '../ProofigProgressRefreshRow.js';
+import { ProofigRefreshRemoteStatusButton } from '../ProofigRefreshRemoteStatusButton.js';
 import { SimpleErrorArea } from './SimpleErrorArea.js';
 import { StageProgressArea } from './StageProgressArea.js';
 
@@ -65,12 +65,20 @@ export function IntegrityDetectionProgressArea({
           </div>
         }
       />
-      <StageProgressArea step={4} numSteps={4} stageStartedAt={data.timestamp} />
-      <ProofigProgressRefreshRow
-        remoteStatusActionPath={remoteStatusActionPath}
-        workVersionId={workVersionId}
-        checkRunId={checkRunId}
-        buttonSize="sm"
+      <StageProgressArea
+        step={4}
+        numSteps={4}
+        stageStartedAt={data.timestamp}
+        trailingSlot={
+          remoteStatusActionPath && workVersionId ? (
+            <ProofigRefreshRemoteStatusButton
+              actionPath={remoteStatusActionPath}
+              workVersionId={workVersionId}
+              checkRunId={checkRunId}
+              buttonSize="sm"
+            />
+          ) : null
+        }
       />
     </div>
   );

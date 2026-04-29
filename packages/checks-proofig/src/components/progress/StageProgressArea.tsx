@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ui } from '@curvenote/scms-core';
 import { StageStartedRelative } from '../StageStartedRelative.js';
 
@@ -9,6 +10,7 @@ export function StageProgressArea({
   stageStartedAt,
   label,
   addSuffix,
+  trailingSlot,
 }: {
   step: number;
   numSteps: number;
@@ -18,6 +20,7 @@ export function StageProgressArea({
   stageStartedAt?: string;
   label?: string;
   addSuffix?: boolean;
+  trailingSlot?: ReactNode;
 }) {
   const subline =
     stageStartedAt != null && stageStartedAt !== '' ? (
@@ -30,8 +33,9 @@ export function StageProgressArea({
     <div className="space-y-1 w-full">
       <ui.SegmentedProgressBar progress={step} numSteps={numSteps} state={state} />
       {subline != null ? (
-        <div>
-          <div className="text-xs text-left text-muted-foreground">{subline}</div>
+        <div className={trailingSlot ? 'flex items-center justify-between gap-3' : undefined}>
+          <div className="text-xs text-left text-muted-foreground flex-1 min-w-0">{subline}</div>
+          {trailingSlot ? <div className="shrink-0 -my-1">{trailingSlot}</div> : null}
         </div>
       ) : null}
     </div>
