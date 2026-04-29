@@ -89,7 +89,7 @@ export function SimilarityPercentageBar({
   return (
     <div
       className={cn(
-        'overflow-hidden w-full rounded-full h-[2px] bg-muted',
+        'overflow-hidden w-full rounded-full h-[4px] bg-muted',
         trackClassName,
         className,
       )}
