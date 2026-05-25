@@ -109,6 +109,7 @@ async function getOrCreateTextIntegrityConfigObjectId(): Promise<string> {
       data: {},
       occ: 0,
     },
+    select: { id: true },
   });
   return id;
 }

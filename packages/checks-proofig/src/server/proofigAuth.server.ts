@@ -167,6 +167,7 @@ async function authenticateAndCache(
       data: dataJson,
       date_modified: nowIso,
     },
+    select: { id: true },
   });
 
   return json.access_token;
@@ -227,5 +228,6 @@ export async function invalidateProofingTokenCache(
       data: nextData as unknown as Prisma.InputJsonValue,
       date_modified: nowIso,
     },
+    select: { id: true },
   });
 }

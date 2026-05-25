@@ -93,6 +93,7 @@ export async function proofigSubmitHandler(
       job_id: job.id,
       work_version_id: payload.work_version_id,
     },
+    select: { id: true },
   });
 
   const workVersionPayload = workVersionToPayload(workVersionRow);

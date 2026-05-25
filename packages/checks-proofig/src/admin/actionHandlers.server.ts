@@ -28,6 +28,7 @@ async function getOrCreateProofigConfigObjectId(): Promise<string> {
       data: {},
       occ: 0,
     },
+    select: { id: true },
   });
   return id;
 }
