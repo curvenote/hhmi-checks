@@ -11,6 +11,7 @@ import type {
 import { TextIntegrityIcon, TextIntegrityLogo, TextIntegrityLogoMono } from './icons.js';
 import { TextIntegrityChecksSection } from './components/TextIntegrityChecksSection.js';
 import { TextIntegrityUploadCheckOption } from './components/TextIntegrityUploadCheckOption.js';
+import { isTextIntegrityUploadEligible } from './uploadEligibility.js';
 import { TextIntegritySectionHeader } from './components/TextIntegritySectionHeader.js';
 import { TextIntegritySummaryBadge } from './components/TextIntegritySummaryBadge.js';
 import { TextIntegritySummaryTitle } from './components/TextIntegritySummaryTitle.js';
@@ -64,6 +65,7 @@ export function getChecks(): ClientExtensionCheckService[] {
       sectionSummaryBadgeComponent: TextIntegritySummaryBadge,
       sectionSummaryTitleComponent: TextIntegritySummaryTitle,
       uploadCheckOptionComponent: TextIntegrityUploadCheckOption,
+      isUploadEligible: isTextIntegrityUploadEligible,
     },
   ];
 }

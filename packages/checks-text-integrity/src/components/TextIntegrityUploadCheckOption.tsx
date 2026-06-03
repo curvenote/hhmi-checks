@@ -9,7 +9,10 @@ import { Logos } from '../client.js';
 export function TextIntegrityUploadCheckOption({
   workVersionId,
   enabled,
+  disabled,
+  invalid,
   setEnabled,
+  toggleBusy = false,
   logoUrl,
 }: UploadCheckOptionProps) {
   const { dialogOpen, setDialogOpen, eulaPresentation, requestEnable, acceptEula, busy } =
@@ -30,7 +33,9 @@ export function TextIntegrityUploadCheckOption({
         description="Verify text in your work with similarity checking."
         infoLine="Multiple files allowed, DOCX or PDF, 100 MB maximum total size"
         enabled={enabled}
-        busy={busy || dialogOpen}
+        disabled={disabled}
+        invalid={invalid}
+        busy={busy || dialogOpen || toggleBusy}
         spinnerWhenBusy
         onRequestEnable={() => {
           requestEnable(() => {
