@@ -6,6 +6,9 @@ import type { PrismaClient } from '@curvenote/scms-db';
  */
 export const TEXT_INTEGRITY_CONFIG_OBJECT_TYPE = 'extension:text-integrity:config';
 
+/** Cached Turnitin EULA HTML and version metadata (large payload; not stored on config row). */
+export const TEXT_INTEGRITY_ITHEnticate_OBJECT_TYPE = 'extension:text-integrity:ithenticate';
+
 /** Admin-editable defaults (generation_settings + view_settings only). */
 export interface TextIntegrityDefaults {
   similarity?: {
@@ -45,7 +48,7 @@ export interface TextIntegrityStoredObject {
   features?: Record<string, unknown>;
   /** Webhooks list from relay service status. */
   webhooks?: unknown[];
-  /** Latest EULA info from relay service status. */
+  /** Legacy; omitted on new writes (EULA cache uses {@link TEXT_INTEGRITY_ITHEnticate_OBJECT_TYPE}). */
   eula?: Record<string, unknown>;
   /** Legacy; omitted on new writes. */
   defaults?: TextIntegrityDefaults;
@@ -86,7 +89,6 @@ export interface TextIntegrityConfigOverlay {
   manifest?: Record<string, unknown>;
   features?: Record<string, unknown>;
   webhooks?: unknown[];
-  eula?: Record<string, unknown>;
   defaults?: TextIntegrityDefaults;
   settings?: TextIntegrityServiceSettings;
 }
@@ -172,7 +174,6 @@ function parseOverlay(data: unknown): Partial<TextIntegrityConfigOverlay> {
   if (stored.manifest) overlay.manifest = stored.manifest;
   if (stored.features) overlay.features = stored.features;
   if (stored.webhooks) overlay.webhooks = stored.webhooks;
-  if (stored.eula) overlay.eula = stored.eula;
   if (stored.defaults) overlay.defaults = stored.defaults;
   if (stored.settings) overlay.settings = stored.settings;
   return overlay;
@@ -182,7 +183,6 @@ const ADMIN_SERVICE_CONFIGURATION_KEYS = [
   'manifest',
   'features',
   'webhooks',
-  'eula',
   'defaults',
   'settings',
   'serviceName',

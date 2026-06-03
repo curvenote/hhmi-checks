@@ -49,6 +49,22 @@ export function checksRelayStatusUrl(
   return `${baseServicesPath(relayBaseUrl, serviceName, instanceId)}/status`;
 }
 
+export function checksRelayTermsUrl(
+  relayBaseUrl: string,
+  serviceName: string,
+  instanceId: string,
+): string {
+  return `${baseServicesPath(relayBaseUrl, serviceName, instanceId)}/terms`;
+}
+
+export function checksRelayTermsAcceptUrl(
+  relayBaseUrl: string,
+  serviceName: string,
+  instanceId: string,
+): string {
+  return `${baseServicesPath(relayBaseUrl, serviceName, instanceId)}/terms/accept`;
+}
+
 export function checksRelayReportViewerUrl(
   relayBaseUrl: string,
   serviceName: string,

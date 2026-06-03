@@ -18,6 +18,7 @@ import {
   textIntegritySubmitHandler,
 } from './server/jobs/text-integrity-submit.server.js';
 import { TextIntegrityChecksSection } from './components/TextIntegrityChecksSection.js';
+import { TextIntegrityUploadCheckOption } from './components/TextIntegrityUploadCheckOption.js';
 import { registerRoutes } from './routes.js';
 import { TextIntegritySectionHeader } from './components/TextIntegritySectionHeader.js';
 import { getExtensionAdminActionHandlers } from './admin/actionHandlers.server.js';
@@ -65,6 +66,7 @@ export const extension: ServerExtension = {
         sectionActivityComponent: TextIntegrityChecksSection,
         handleAction: handleTextIntegrityAction,
         handleStatus: textIntegrityStatus,
+        uploadCheckOptionComponent: TextIntegrityUploadCheckOption,
       },
     ];
   },

@@ -21,6 +21,12 @@ import {
   type TextIntegrityServiceSettings,
 } from '../config.server.js';
 import { checksRelayUploadUrl, resolveRelayInstanceId } from '../relay-urls.server.js';
+import {
+  assertSubmitterEulaAccepted,
+  buildUploadEulaMetadata,
+  isEulaRequired,
+  refreshEulaCacheIfStale,
+} from '../eula.server.js';
 
 /** Job type for Text Integrity submit via checks-relay. */
 export const TEXT_INTEGRITY_SUBMIT = 'TEXT_INTEGRITY_SUBMIT';
@@ -263,6 +269,23 @@ export async function textIntegritySubmitHandler(
       );
     }
 
+    const eulaMessage = await assertSubmitterEulaAccepted(ctx);
+    if (eulaMessage) {
+      throw httpError(400, eulaMessage);
+    }
+
+    const cachedEula = await refreshEulaCacheIfStale(ctx, mergedConfig);
+    const submitterData = submitterUser
+      ? (
+          await prisma.user.findUnique({
+            where: { id: submitterUser.id },
+            select: { data: true },
+          })
+        )?.data
+      : undefined;
+    const eulaPayload = buildUploadEulaMetadata(submitterData, cachedEula);
+    const requireEula = isEulaRequired(mergedConfig);
+
     const serviceName = resolveServiceName(mergedConfig);
     const relayInstanceId = resolveRelayInstanceId(mergedConfig);
     const metadataRoot =
@@ -306,6 +329,8 @@ export async function textIntegritySubmitHandler(
         owner: userIdentity,
         submitter: userIdentity,
         relayContext: buildRelayContextEnvelope(mergedConfig.settings as TextIntegrityServiceSettings),
+        ...(requireEula ? { require_eula: true } : {}),
+        ...(eulaPayload ? { eula: eulaPayload } : {}),
       },
     };
 

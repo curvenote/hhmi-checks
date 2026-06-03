@@ -21,6 +21,13 @@ export async function registerRoutes(_appConfig: Config): Promise<RouteRegistrat
               'routes/v1.hooks.text-integrity.notify.$id/route.tsx',
             ),
           ),
+          route(
+            'text-integrity/eula-cache/refresh',
+            resolveRoutePath(
+              import.meta.url,
+              'routes/v1.hooks.text-integrity.eula-cache.refresh/route.tsx',
+            ),
+          ),
         ] satisfies RouteConfigEntry[],
     },
     {

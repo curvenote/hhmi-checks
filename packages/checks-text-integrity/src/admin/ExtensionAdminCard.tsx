@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ServiceLogo, type ExtensionAdminCardProps } from '@curvenote/scms-core';
 import { TextIntegrityCredentialsForm } from './TextIntegrityCredentialsForm.js';
 import { TextIntegrityTestConnectionRow } from './TextIntegrityTestConnectionRow.js';
+import { TextIntegrityRefreshEulaRow } from './TextIntegrityRefreshEulaRow.js';
 import { TextIntegrityUpdateConfigurationForm } from './TextIntegrityUpdateConfigurationForm.js';
 import { TextIntegritySettingsPanel } from './TextIntegritySettingsPanel.js';
 
@@ -46,6 +47,7 @@ export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) 
         className="flex gap-3 items-center min-w-0 scroll-mt-4"
       >
         <TextIntegrityTestConnectionRow credentials={credentials} />
+        <TextIntegrityRefreshEulaRow />
         <TextIntegrityUpdateConfigurationForm credentials={credentials} />
       </div>
       <TextIntegritySettingsPanel

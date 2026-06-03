@@ -10,6 +10,7 @@ import type {
 } from '@curvenote/scms-core';
 import { TextIntegrityIcon, TextIntegrityLogo, TextIntegrityLogoMono } from './icons.js';
 import { TextIntegrityChecksSection } from './components/TextIntegrityChecksSection.js';
+import { TextIntegrityUploadCheckOption } from './components/TextIntegrityUploadCheckOption.js';
 import { TextIntegritySectionHeader } from './components/TextIntegritySectionHeader.js';
 import { TextIntegritySummaryBadge } from './components/TextIntegritySummaryBadge.js';
 import { TextIntegritySummaryTitle } from './components/TextIntegritySummaryTitle.js';
@@ -62,6 +63,7 @@ export function getChecks(): ClientExtensionCheckService[] {
       sectionActivityComponent: TextIntegrityChecksSection,
       sectionSummaryBadgeComponent: TextIntegritySummaryBadge,
       sectionSummaryTitleComponent: TextIntegritySummaryTitle,
+      uploadCheckOptionComponent: TextIntegrityUploadCheckOption,
     },
   ];
 }

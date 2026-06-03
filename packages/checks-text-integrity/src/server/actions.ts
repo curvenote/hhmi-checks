@@ -32,6 +32,12 @@ import {
   resolveRelayInstanceId,
 } from './relay-urls.server.js';
 import { applyRelayCheckStatusEnvelopes } from './relay-status-apply.server.js';
+import {
+  acceptEulaAtProvider,
+  assertSubmitterEulaAccepted,
+  getEulaStatusForUser,
+  recordUserEulaAcceptance,
+} from './eula.server.js';
 
 type AppChecksConfig = {
   relayBaseUrl?: string;
@@ -106,6 +112,41 @@ export async function handleTextIntegrityAction(
     ? rawIntent.split(':', 2)[1]
     : rawIntent;
 
+  if (intent === 'eula-status' && ctx) {
+    try {
+      const status = await getEulaStatusForUser(ctx);
+      return {
+        success: true,
+        ...status,
+      };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load EULA status';
+      return { error: { type: 'general', message }, status: 500 };
+    }
+  }
+
+  if (intent === 'accept-eula' && ctx) {
+    const version = formData?.get('version')?.toString()?.trim();
+    const language = formData?.get('language')?.toString()?.trim() || 'en-US';
+    if (!version) {
+      return { error: { type: 'general', message: 'version is required' }, status: 400 };
+    }
+    try {
+      const acceptedAt = new Date().toISOString();
+      await acceptEulaAtProvider(ctx, version, language, acceptedAt);
+      await recordUserEulaAcceptance(ctx, {
+        version,
+        language,
+        acceptedAt,
+        shownAt: acceptedAt,
+      });
+      return { success: true, accepted: true, version, acceptedAt };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to accept EULA';
+      return { error: { type: 'general', message }, status: 500 };
+    }
+  }
+
   if (intent === 'execute' && ctx) {
     if (!workVersionId) {
       return {
@@ -114,6 +155,18 @@ export async function handleTextIntegrityAction(
           message: 'Work version ID is required for Text Integrity execute',
         },
         status: 400,
+      };
+    }
+
+    const eulaBlock = await assertSubmitterEulaAccepted(ctx);
+    if (eulaBlock) {
+      const status = await getEulaStatusForUser(ctx);
+      return {
+        error: { type: 'general', message: eulaBlock },
+        status: 400,
+        requiresEula: true,
+        requireEula: status.requireEula,
+        eula: status.eula,
       };
     }
 

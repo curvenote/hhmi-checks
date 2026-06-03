@@ -31,6 +31,10 @@ import {
   checksRelayStatusUrl,
   resolveRelayInstanceId,
 } from '../server/relay-urls.server.js';
+import {
+  runEulaCacheCronRefresh,
+  type TextIntegrityEulaContext,
+} from '../server/eula.server.js';
 
 type AppChecksConfig = {
   relayBaseUrl?: string;
@@ -474,9 +478,6 @@ function mergeStoredObjectWithCredentials(
   if (prev.webhooks != null) {
     next.webhooks = JSON.parse(JSON.stringify(prev.webhooks)) as unknown[];
   }
-  if (prev.eula != null) {
-    next.eula = cloneJsonObject(prev.eula);
-  }
   if (prev.defaults != null) {
     next.defaults = JSON.parse(JSON.stringify(prev.defaults)) as typeof prev.defaults;
   }
@@ -501,7 +502,6 @@ function parseRelayStatusForStorage(body: unknown):
       manifest?: Record<string, unknown>;
       features: Record<string, unknown>;
       webhooks: unknown[];
-      eula?: Record<string, unknown>;
     }
   | { ok: false; error: ActionError } {
   if (body == null || typeof body !== 'object' || Array.isArray(body)) {
@@ -541,17 +541,11 @@ function parseRelayStatusForStorage(body: unknown):
     m != null && typeof m === 'object' && !Array.isArray(m)
       ? cloneJsonObject(m as Record<string, unknown>)
       : undefined;
-  const e = o.eula;
-  const eula =
-    e != null && typeof e === 'object' && !Array.isArray(e)
-      ? cloneJsonObject(e as Record<string, unknown>)
-      : undefined;
   return {
     ok: true,
     manifest,
     features: f != null ? cloneJsonObject(f as Record<string, unknown>) : {},
     webhooks: JSON.parse(JSON.stringify(o.webhooks)) as unknown[],
-    eula,
   };
 }
 
@@ -591,11 +585,6 @@ async function performTextIntegrityConfigureAndPersist(
       stored.manifest = parsedStatus.manifest;
     } else if (prev.manifest != null) {
       stored.manifest = cloneJsonObject(prev.manifest);
-    }
-    if (parsedStatus.eula) {
-      stored.eula = parsedStatus.eula;
-    } else if (prev.eula != null) {
-      stored.eula = cloneJsonObject(prev.eula);
     }
     if (typeof prev.notifyBaseUrl === 'string') {
       stored.notifyBaseUrl = prev.notifyBaseUrl;
@@ -733,6 +722,30 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
               phase: 'relay',
             },
           };
+        }
+      },
+    },
+    {
+      name: 'text-integrity-refresh-eula',
+      handler: async (ctx: Context, _formData: FormData) => {
+        try {
+          const result = await runEulaCacheCronRefresh(ctx as TextIntegrityEulaContext);
+          if (!result.refreshed || !result.eula?.version) {
+            const detail = result.skipped ?? 'unknown';
+            return {
+              error: {
+                type: 'general',
+                message: `EULA cache was not refreshed (${detail}). Check relay configuration and provider terms.`,
+              },
+            };
+          }
+          return {
+            success: true,
+            eula: result.eula,
+          } as ExtensionCheckHandleActionResult;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to refresh EULA cache';
+          return { error: { type: 'general', message } };
         }
       },
     },

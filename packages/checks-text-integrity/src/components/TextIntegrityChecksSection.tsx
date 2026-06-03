@@ -1,6 +1,5 @@
-import { useFetcher } from 'react-router';
-import { useEffect } from 'react';
 import { ui, useRevalidateOnInterval, ServiceLogo } from '@curvenote/scms-core';
+import { TextIntegrityRunChecksButton } from './TextIntegrityRunChecksButton.js';
 import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
 import { TextIntegrityProgressComponent } from './TextIntegrityProgressComponent.js';
 import { TextIntegrityResultsArea } from './TextIntegrityResultsArea.js';
@@ -23,24 +22,16 @@ export function TextIntegrityChecksSection({
   checkRunId,
   checkRunDateModified,
 }: TextIntegrityChecksSectionProps) {
-  const fetcher = useFetcher();
   const hasData = !!metadata?.stages;
-  const isSubmitting = fetcher.state === 'submitting';
   const showResults = canShowResults(metadata);
   const manifest = getTextIntegrityManifest(metadata);
   const manifestLogo = manifest?.logo;
   const manifestTitle = manifest?.title;
 
   useRevalidateOnInterval({
-    enabled: (hasData && !showResults) || isSubmitting,
-    interval: isSubmitting && !hasData ? 1000 : 3000,
+    enabled: !hasData || (hasData && !showResults),
+    interval: !hasData ? 2000 : 3000,
   });
-
-  useEffect(() => {
-    if (fetcher.state !== 'idle' || hasData || !fetcher.data) return;
-    const err = (fetcher.data as { error?: { message?: string } }).error;
-    if (err?.message) ui.toastError(err.message);
-  }, [fetcher.state, fetcher.data, hasData]);
 
   if (!hasData) {
     return (
@@ -56,18 +47,12 @@ export function TextIntegrityChecksSection({
         title="No text integrity checks run yet"
         description="Run text integrity checks to verify text in your work."
         action={
-          <fetcher.Form method="post" action={remoteStatusActionPath}>
-            <input type="hidden" name="workVersionId" value={workVersionId ?? ''} />
-            <ui.StatefulButton
-              type="submit"
-              variant="default"
-              name="intent"
-              value="execute"
-              busy={isSubmitting}
-            >
-              Run checks now
-            </ui.StatefulButton>
-          </fetcher.Form>
+          workVersionId ? (
+            <TextIntegrityRunChecksButton
+              actionPath={remoteStatusActionPath}
+              workVersionId={workVersionId}
+            />
+          ) : null
         }
       />
     );
