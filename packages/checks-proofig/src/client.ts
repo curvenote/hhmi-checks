@@ -10,6 +10,7 @@ import type {
 } from '@curvenote/scms-core';
 import { Icon, LogoMono, Logo, LogoThemed } from './icons.js';
 import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSection.js';
+import { ProofigUploadCheckOption } from './components/ProofigUploadCheckOption.js';
 import { ImageIntegritySectionHeader } from './components/ImageIntegritySectionHeader.js';
 import { ProofigCheckRunTimelineMount } from './components/ProofigCheckRunTimelineMount.js';
 import { ProofigSummaryBadge } from './components/ProofigSummaryBadge.js';
@@ -64,6 +65,7 @@ export function getChecks(): ClientExtensionCheckService[] {
       sectionSummaryBadgeComponent: ProofigSummaryBadge,
       sectionSummaryTitleComponent: ProofigSummaryTitle,
       checkRunTimelineMountComponent: ProofigCheckRunTimelineMount,
+      uploadCheckOptionComponent: ProofigUploadCheckOption,
     },
   ];
 }

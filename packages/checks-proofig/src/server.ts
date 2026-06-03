@@ -20,6 +20,7 @@ import {
   proofigSubmitStreamHandler,
 } from './server/jobs/proofig-submit-stream.server.js';
 import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSection.js';
+import { ProofigUploadCheckOption } from './components/ProofigUploadCheckOption.js';
 import { registerRoutes } from './routes.js';
 import { ImageIntegritySectionHeader } from './components/ImageIntegritySectionHeader.js';
 import { getExtensionAdminActionHandlers } from './admin/actionHandlers.server.js';
@@ -71,6 +72,7 @@ export const extension: ServerExtension = {
         sectionActivityComponent: ImageIntegrityChecksSection,
         handleAction: handleProofigAction,
         handleStatus: proofigStatus,
+        uploadCheckOptionComponent: ProofigUploadCheckOption,
       },
     ];
   },
