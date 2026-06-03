@@ -35,6 +35,7 @@ import { applyRelayCheckStatusEnvelopes } from './relay-status-apply.server.js';
 import {
   acceptEulaAtProvider,
   assertSubmitterEulaAccepted,
+  buildViewerEulaPayload,
   getEulaStatusForUser,
   recordUserEulaAcceptance,
 } from './eula.server.js';
@@ -54,6 +55,42 @@ type CheckServiceRunData = {
   serviceData?: TextIntegrityDataSchema;
   serviceDataSchema?: Record<string, unknown>;
 };
+
+/** Persist a failed dispatch so checks/details pages can show the error. */
+async function recordTextIntegrityExecuteFailure(
+  ctx: NonNullable<ExtensionCheckHandleActionArgs['ctx']>,
+  workVersionId: string,
+  message: string,
+): Promise<void> {
+  const prisma = await getPrismaClient();
+  const baseExt =
+    (ctx.$config?.app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};
+  const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
+  const manifest = parseServiceManifestSnapshot(mergedConfig.manifest);
+  const serviceData = markSubmissionError(
+    {
+      ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+      ...(manifest ? { manifest } : {}),
+    },
+    message,
+  );
+  const timestamp = new Date().toISOString();
+  await prisma.checkServiceRun.create({
+    data: {
+      id: uuid(),
+      date_created: timestamp,
+      date_modified: timestamp,
+      kind: 'checks-text-integrity',
+      work_version_id: workVersionId,
+      created_by_id: ctx.user?.id ?? undefined,
+      data: {
+        status: 'error',
+        serviceDataSchema: {},
+        serviceData: serviceData as Prisma.JsonObject,
+      },
+    },
+  });
+}
 
 function readServiceDataFromRunData(runData: unknown): TextIntegrityDataSchema | undefined {
   if (runData == null || typeof runData !== 'object') return undefined;
@@ -160,6 +197,7 @@ export async function handleTextIntegrityAction(
 
     const eulaBlock = await assertSubmitterEulaAccepted(ctx);
     if (eulaBlock) {
+      await recordTextIntegrityExecuteFailure(ctx, workVersionId, eulaBlock);
       const status = await getEulaStatusForUser(ctx);
       return {
         error: { type: 'general', message: eulaBlock },
@@ -185,10 +223,13 @@ export async function handleTextIntegrityAction(
     const hasPdf = hasPdfInMetadata(metadata);
     const hasDocx = hasDocxInMetadata(metadata);
     if (!hasPdf && !hasDocx) {
+      const noFilesMessage =
+        'Text Integrity requires a PDF or a Word document (.docx) on this version.';
+      await recordTextIntegrityExecuteFailure(ctx, workVersionId, noFilesMessage);
       return {
         error: {
           type: 'general',
-          message: 'Text Integrity requires a PDF or a Word document (.docx) on this version.',
+          message: noFilesMessage,
         },
         status: 400,
       };
@@ -277,6 +318,20 @@ export async function handleTextIntegrityAction(
       };
     }
 
+    const eulaBlock = await assertSubmitterEulaAccepted(ctx);
+    if (eulaBlock) {
+      const status = await getEulaStatusForUser(ctx);
+      return {
+        error: { type: 'general', message: eulaBlock },
+        status: 400,
+        requiresEula: true,
+        requireEula: status.requireEula,
+        eula: status.eula,
+      };
+    }
+
+    const eulaPayload = await buildViewerEulaPayload(ctx);
+
     const prisma = await getPrismaClient();
     const run = await prisma.checkServiceRun.findUnique({ where: { id: checkRunId } });
     if (!run) {
@@ -334,6 +389,7 @@ export async function handleTextIntegrityAction(
         body: JSON.stringify({
           viewerUserId: ctx.user?.id ?? 'anonymous',
           ...VIEWER_URL_DEFAULTS,
+          ...(eulaPayload ? { eula: eulaPayload } : {}),
         }),
       });
     } catch (e) {
@@ -468,7 +524,8 @@ export async function handleTextIntegrityAction(
           type: 'general',
           message: `Checks relay returned ${relayResponse.status}: ${rawText}`.trim(),
         },
-        status: relayResponse.status >= 400 && relayResponse.status < 600 ? relayResponse.status : 502,
+        status:
+          relayResponse.status >= 400 && relayResponse.status < 600 ? relayResponse.status : 502,
       };
     }
 

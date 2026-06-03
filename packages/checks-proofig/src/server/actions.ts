@@ -210,10 +210,32 @@ export async function handleProofigAction(
     const hasPdf = hasPdfInMetadata(metadata);
     const hasDocx = hasDocxInMetadata(metadata);
     if (!hasPdf && !hasDocx) {
+      const noFilesMessage = 'Proofig requires a PDF or a Word document (.docx) on this version.';
+      const timestamp = new Date().toISOString();
+      const serviceData = markInitialPostError(
+        MINIMAL_PROOFIG_SERVICE_DATA,
+        noFilesMessage,
+        timestamp,
+      );
+      await prisma.checkServiceRun.create({
+        data: {
+          id: uuid(),
+          date_created: timestamp,
+          date_modified: timestamp,
+          kind: 'proofig',
+          work_version_id: workVersionId,
+          created_by_id: ctx.user?.id ?? undefined,
+          data: {
+            status: 'error',
+            serviceDataSchema: {},
+            serviceData: serviceData as Prisma.JsonObject,
+          },
+        },
+      });
       return {
         error: {
           type: 'general',
-          message: 'Proofig requires a PDF or a Word document (.docx) on this version.',
+          message: noFilesMessage,
         },
         status: 400,
       };

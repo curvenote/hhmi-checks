@@ -33,7 +33,9 @@ function getAppChecks(ctx: TextIntegrityEulaContext): AppChecksConfig | undefine
 }
 
 function getTextIntegrityExtensionConfig(ctx: TextIntegrityEulaContext): Record<string, unknown> {
-  const app = ctx.$config?.app as { extensions?: Record<string, Record<string, unknown>> } | undefined;
+  const app = ctx.$config?.app as
+    | { extensions?: Record<string, Record<string, unknown>> }
+    | undefined;
   return (app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};
 }
 
@@ -207,24 +209,17 @@ export async function runEulaCacheCronRefresh(ctx: TextIntegrityEulaContext): Pr
   return {
     refreshed,
     skipped,
-    eula: cached
-      ? { version: cached.version, date_fetched: cached.date_fetched }
-      : undefined,
+    eula: cached ? { version: cached.version, date_fetched: cached.date_fetched } : undefined,
   };
 }
 
-export function hasAcceptedLatestEula(
-  userData: unknown,
-  cached: CachedEula | undefined,
-): boolean {
+export function hasAcceptedLatestEula(userData: unknown, cached: CachedEula | undefined): boolean {
   if (!cached?.version) return false;
   const acceptance = readIthenticateEulaAcceptance(userData);
   return acceptance?.version === cached.version;
 }
 
-export async function getEulaStatusForUser(
-  ctx: TextIntegrityEulaContext,
-): Promise<{
+export async function getEulaStatusForUser(ctx: TextIntegrityEulaContext): Promise<{
   requireEula: boolean;
   accepted: boolean;
   eula?: { version: string; html?: string; url?: string };
@@ -341,9 +336,31 @@ export function buildUploadEulaMetadata(
   };
 }
 
-export async function assertSubmitterEulaAccepted(ctx: TextIntegrityEulaContext): Promise<string | undefined> {
+export async function assertSubmitterEulaAccepted(
+  ctx: TextIntegrityEulaContext,
+): Promise<string | undefined> {
   const status = await getEulaStatusForUser(ctx);
   if (!status.requireEula) return undefined;
   if (status.accepted) return undefined;
-  return 'You must accept the Turnitin EULA before running text integrity checks.';
+  return 'You must accept the Turnitin EULA before using text integrity.';
+}
+
+/** EULA metadata for TCA viewer-url requests (same shape as upload). */
+export async function buildViewerEulaPayload(
+  ctx: TextIntegrityEulaContext,
+): Promise<{ version: string; accepted_timestamp: string; language: string } | undefined> {
+  const baseExt = getTextIntegrityExtensionConfig(ctx);
+  const prisma = await getPrismaClient();
+  const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
+  if (!isEulaRequired(mergedConfig)) return undefined;
+
+  const cached = await refreshEulaCacheIfStale(ctx, mergedConfig);
+  const userId = ctx.user?.id;
+  if (!userId) return undefined;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { data: true },
+  });
+  return buildUploadEulaMetadata(user?.data, cached);
 }

@@ -30,7 +30,7 @@ export function TextIntegrityUploadCheckOption({
         description="Verify text in your work with similarity checking."
         infoLine="Multiple files allowed, DOCX or PDF, 100 MB maximum total size"
         enabled={enabled}
-        busy={busy}
+        busy={busy || dialogOpen}
         spinnerWhenBusy
         onRequestEnable={() => {
           requestEnable(() => {
@@ -42,6 +42,7 @@ export function TextIntegrityUploadCheckOption({
         <TextIntegrityEulaDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}
+          logoUrl={logoUrl}
           html={eulaPresentation.html}
           url={eulaPresentation.url}
           version={eulaPresentation.version}

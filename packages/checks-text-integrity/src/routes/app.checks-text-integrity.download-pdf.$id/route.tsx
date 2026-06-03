@@ -1,9 +1,10 @@
 import type { LoaderFunctionArgs } from 'react-router';
 import { error405, httpError } from '@curvenote/scms-core';
-import { getConfig, getPrismaClient } from '@curvenote/scms-server';
+import { getConfig, getPrismaClient, withAppContext } from '@curvenote/scms-server';
 import type { TextIntegrityDataSchema } from '../../schema.js';
 import { MINIMAL_TEXT_INTEGRITY_SERVICE_DATA } from '../../schema.js';
 import { getTextIntegrityConfigWithOverrides } from '../../server/config.server.js';
+import { assertSubmitterEulaAccepted } from '../../server/eula.server.js';
 import {
   checksRelayReportFetchUrl,
   resolveRelayExternalCheckId,
@@ -40,6 +41,12 @@ export async function action() {
 }
 
 export async function loader(args: LoaderFunctionArgs) {
+  const ctx = await withAppContext(args);
+  const eulaBlock = await assertSubmitterEulaAccepted(ctx);
+  if (eulaBlock) {
+    throw httpError(403, eulaBlock);
+  }
+
   const id = args.params.id;
   if (!id) {
     throw httpError(400, 'Missing check service run id');
@@ -72,7 +79,9 @@ export async function loader(args: LoaderFunctionArgs) {
     throw httpError(503, 'Checks relay is not configured (app.checks.relayBaseUrl / relayApiKey)');
   }
 
-  const appRoot = (appConfig as Record<string, unknown>)?.app as Record<string, unknown> | undefined;
+  const appRoot = (appConfig as Record<string, unknown>)?.app as
+    | Record<string, unknown>
+    | undefined;
   const extensions = appRoot?.extensions as Record<string, unknown> | undefined;
   const baseExt =
     (extensions?.['checks-text-integrity'] as Record<string, unknown> | undefined) ?? {};
@@ -109,10 +118,7 @@ export async function loader(args: LoaderFunctionArgs) {
       (typeof body.message === 'string' ? body.message : null) ??
       (typeof body.error === 'string' ? body.error : null) ??
       `Checks relay returned HTTP ${relayRes.status}`;
-    throw httpError(
-      relayRes.status >= 400 && relayRes.status < 600 ? relayRes.status : 502,
-      msg,
-    );
+    throw httpError(relayRes.status >= 400 && relayRes.status < 600 ? relayRes.status : 502, msg);
   }
 
   if (!relayRes.ok) {
@@ -125,8 +131,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const bytes = new Uint8Array(await relayRes.arrayBuffer());
   const outCt = ct && !ct.includes('json') ? ct : 'application/pdf';
   const cd =
-    relayRes.headers.get('content-disposition') ??
-    'attachment; filename="similarity-report.pdf"';
+    relayRes.headers.get('content-disposition') ?? 'attachment; filename="similarity-report.pdf"';
 
   return new Response(bytes, {
     status: 200,

@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { ui } from '@curvenote/scms-core';
+import { ServiceLogo, ui } from '@curvenote/scms-core';
+import { Logos } from '../client.js';
 
 export type TextIntegrityEulaDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  logoUrl?: string;
   html?: string;
   url?: string;
   version: string;
@@ -13,6 +15,8 @@ export type TextIntegrityEulaDialogProps = {
   busy?: boolean;
   onAccept: (params: { version: string; language: string }) => void;
 };
+
+const DIALOG_LOGO_CLASS = 'h-6 w-auto max-w-[120px] object-contai pb-[2px]';
 
 /** Wrap plain-text EULA (sandbox) in a minimal document for sandboxed srcDoc display. */
 function eulaSrcDoc(html: string): string {
@@ -30,6 +34,7 @@ function eulaSrcDoc(html: string): string {
 export function TextIntegrityEulaDialog({
   open,
   onOpenChange,
+  logoUrl,
   html,
   url,
   version,
@@ -50,8 +55,18 @@ export function TextIntegrityEulaDialog({
       open={open}
       variant="wide"
       onOpenChange={handleOpenChange}
-      title="Turnitin End User License Agreement"
-      description="You must read and accept the agreement before iThenticate checks can run."
+      title={
+        <span className="flex gap-3 items-center">
+          <ServiceLogo
+            logoUrl={logoUrl}
+            alt="Text Integrity"
+            fallback={<Logos.TextIntegrityLogo className={DIALOG_LOGO_CLASS} />}
+            className={DIALOG_LOGO_CLASS}
+          />
+          <span>End User License Agreement</span>
+        </span>
+      }
+      description="You must read and accept the agreement before using text integrity."
       footerButtons={[
         {
           label: 'Cancel',
@@ -68,7 +83,7 @@ export function TextIntegrityEulaDialog({
       <div className="space-y-4">
         {srcDoc ? (
           <iframe
-            title="Turnitin End User License Agreement"
+            title="End User License Agreement"
             sandbox=""
             srcDoc={srcDoc}
             className="w-full h-[min(60vh,480px)] border border-stone-200 rounded-sm bg-white"
@@ -78,7 +93,7 @@ export function TextIntegrityEulaDialog({
           <p className="text-sm text-muted-foreground">
             Cached agreement text is not available yet.{' '}
             <a href={url} target="_blank" rel="noopener noreferrer" className="underline">
-              Open the Turnitin EULA page
+              Open the EULA page
             </a>{' '}
             in a new tab, or try again after the cache has refreshed.
           </p>
@@ -95,7 +110,7 @@ export function TextIntegrityEulaDialog({
             disabled={busy}
           />
           <span className="text-sm leading-snug">
-            I confirm that I have read and that I accept the iThenticate End User License Agreement
+            I confirm that I have read and accept the End User License Agreement
           </span>
         </label>
       </div>

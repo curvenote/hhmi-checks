@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFetcher, useRevalidator } from 'react-router';
 import { ui } from '@curvenote/scms-core';
+import { TextIntegrityEulaDialog } from './TextIntegrityEulaDialog.js';
+import { useTextIntegrityEulaEnable } from './useTextIntegrityEulaEnable.js';
 
 export interface TextIntegrityPdfReportStatusProps {
   reportGenerationComplete: boolean;
@@ -29,6 +31,14 @@ export function TextIntegrityPdfReportStatus({
   const lastRetryRef = useRef<unknown>(undefined);
   const [retried, setRetried] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const {
+    dialogOpen,
+    setDialogOpen,
+    eulaPresentation,
+    requestEnable,
+    acceptEula,
+    busy: eulaBusy,
+  } = useTextIntegrityEulaEnable(workVersionId ?? '');
 
   useEffect(() => {
     if (retryFetcher.state !== 'idle' || !retryFetcher.data) return;
@@ -53,7 +63,7 @@ export function TextIntegrityPdfReportStatus({
     reportGenerationFailed && Boolean(actionPath?.trim()) && Boolean(checkRunId?.trim());
   const retryBusy = retryFetcher.state !== 'idle';
 
-  const handleDownload = useCallback(async () => {
+  const runDownload = useCallback(async () => {
     if (!downloadUrl) return;
     setDownloading(true);
     try {
@@ -84,10 +94,16 @@ export function TextIntegrityPdfReportStatus({
     }
   }, [downloadUrl]);
 
+  const handleDownload = useCallback(() => {
+    requestEnable(() => {
+      void runDownload();
+    });
+  }, [requestEnable, runDownload]);
+
   return (
     <div>
       {canDownload && (
-        <ui.Button variant="link" disabled={downloading} onClick={handleDownload}>
+        <ui.Button variant="link" disabled={downloading || eulaBusy} onClick={handleDownload}>
           {downloading ? 'Downloading…' : 'Download PDF report'}
         </ui.Button>
       )}
@@ -111,6 +127,17 @@ export function TextIntegrityPdfReportStatus({
           Waiting for PDF report…
         </span>
       )}
+      {eulaPresentation ? (
+        <TextIntegrityEulaDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          html={eulaPresentation.html}
+          url={eulaPresentation.url}
+          version={eulaPresentation.version}
+          busy={eulaBusy}
+          onAccept={acceptEula}
+        />
+      ) : null}
     </div>
   );
 }
