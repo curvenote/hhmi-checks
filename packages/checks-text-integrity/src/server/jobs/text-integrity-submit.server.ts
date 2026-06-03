@@ -16,7 +16,10 @@ import {
   startSubmission,
   markSubmissionError as markSubmissionErrorSM,
 } from '../stateMachine.server.js';
-import { getTextIntegrityConfigWithOverrides } from '../config.server.js';
+import {
+  getTextIntegrityConfigWithOverrides,
+  type TextIntegrityServiceSettings,
+} from '../config.server.js';
 import { checksRelayUploadUrl, resolveRelayInstanceId } from '../relay-urls.server.js';
 
 /** Job type for Text Integrity submit via checks-relay. */
@@ -35,11 +38,26 @@ type AppChecksConfig = {
 };
 
 const RELAY_SUBMIT_TIMEOUT_MS = 300_000;
+const RELAY_CONTEXT_MAX_BYTES = 64 * 1024;
 
 type ManuscriptFile = { url: string; filename: string; role: string };
 
 type MetadataWithFiles = {
   files?: Record<string, { signedUrl?: string; name?: string; path?: string; type?: string }>;
+};
+
+type AnonymousReportPayload = {
+  report: {
+    searchRepositories?: string[];
+    autoExcludeSelfMatchingScope?: 'NONE' | 'ALL';
+    addToIndex?: boolean;
+    view?: Record<string, boolean | number>;
+  };
+};
+
+type RelayContextEnvelope = {
+  v: 1;
+  payload: AnonymousReportPayload;
 };
 
 function getAppChecks(ctx: Context): AppChecksConfig | undefined {
@@ -51,6 +69,54 @@ function resolveServiceName(merged: Record<string, unknown>): string {
   const fromExt = merged.serviceName;
   if (typeof fromExt === 'string' && fromExt.trim() !== '') return fromExt.trim();
   return 'echo';
+}
+
+function mapViewSettingsToAnonymousPayload(
+  settings: TextIntegrityServiceSettings | undefined,
+): Record<string, boolean | number> | undefined {
+  const raw = settings?.similarity?.view_settings;
+  if (!raw || typeof raw !== 'object') return undefined;
+  const out: Record<string, boolean | number> = {};
+  const pairs: Array<[string, string]> = [
+    ['exclude_quotes', 'excludeQuotes'],
+    ['exclude_bibliography', 'excludeBibliography'],
+    ['exclude_abstract', 'excludeAbstract'],
+    ['exclude_methods', 'excludeMethods'],
+    ['exclude_small_matches', 'excludeSmallMatches'],
+    ['exclude_internet', 'excludeInternet'],
+    ['exclude_publications', 'excludePublications'],
+    ['exclude_citations', 'excludeCitations'],
+    ['exclude_preprints', 'excludePreprints'],
+    ['exclude_custom_sections', 'excludeCustomSections'],
+    ['exclude_submitted_works', 'excludeSubmittedWorks'],
+  ];
+  for (const [sourceKey, targetKey] of pairs) {
+    const v = raw[sourceKey];
+    if (typeof v === 'boolean' || typeof v === 'number') out[targetKey] = v;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function buildRelayContextEnvelope(
+  settings: TextIntegrityServiceSettings | undefined,
+): RelayContextEnvelope | undefined {
+  const report: AnonymousReportPayload['report'] = {};
+  const generation = settings?.similarity?.generation_settings;
+  if (Array.isArray(generation?.search_repositories)) {
+    report.searchRepositories = generation.search_repositories.filter(
+      (repo): repo is string => typeof repo === 'string' && repo.trim().length > 0,
+    );
+  }
+  if (generation?.auto_exclude_self_matching_scope != null) {
+    report.autoExcludeSelfMatchingScope = generation.auto_exclude_self_matching_scope;
+  }
+  if (settings?.indexing_settings?.add_to_index != null) {
+    report.addToIndex = settings.indexing_settings.add_to_index === true;
+  }
+  const view = mapViewSettingsToAnonymousPayload(settings);
+  if (view) report.view = view;
+  if (Object.keys(report).length === 0) return undefined;
+  return { v: 1, payload: { report } };
 }
 
 function pickManuscriptFromSignedMetadata(
@@ -239,8 +305,20 @@ export async function textIntegritySubmitHandler(
         title: workVersionRow.title,
         owner: userIdentity,
         submitter: userIdentity,
+        relayContext: buildRelayContextEnvelope(mergedConfig.settings as TextIntegrityServiceSettings),
       },
     };
+
+    const relayContextBytes = Buffer.byteLength(
+      JSON.stringify((body.metadata as Record<string, unknown>).relayContext ?? {}),
+      'utf8',
+    );
+    if (relayContextBytes > RELAY_CONTEXT_MAX_BYTES) {
+      throw httpError(
+        400,
+        `Text Integrity relay context exceeds ${RELAY_CONTEXT_MAX_BYTES} bytes; reduce configured options payload size`,
+      );
+    }
 
     const res = await fetch(submitUrl, {
       method: 'POST',
