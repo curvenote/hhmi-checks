@@ -27,7 +27,6 @@ import {
 } from '../schema.js';
 import { markInitialPostError, startInitialPostProcessing } from './stateMachine.server.js';
 import { PROOFIG_SUBMIT_STREAM } from './jobs/proofig-submit-stream.server.js';
-import { PROOFIG_SUBMIT } from './jobs/proofig-submit-service.server.js';
 import { getProofigConfigWithOverrides } from './config.server.js';
 import { postProofigRemoteStatus } from './proofigRemoteStatus.server.js';
 import { applyNotifyPayloadToCheckRun } from './applyNotifyPayloadToCheckRun.server.js';
@@ -258,15 +257,7 @@ export async function handleProofigAction(
       },
     });
     const checkRunId = run.id;
-    const extConfig = ctx.$config.app?.extensions?.['checks-proofig'] as
-      | { submitMode?: 'service' | 'stream' }
-      | undefined;
-    const submitMode =
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ((args as any).submitMode as 'service' | 'stream' | undefined) ??
-      extConfig?.submitMode ??
-      'stream';
-    const jobType = submitMode === 'stream' ? PROOFIG_SUBMIT_STREAM : PROOFIG_SUBMIT;
+    const jobType = PROOFIG_SUBMIT_STREAM;
     await safeCheckServiceRunDataUpdate(checkRunId, (runData?: Prisma.JsonValue) => {
       const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
       const nextServiceData = startInitialPostProcessing(

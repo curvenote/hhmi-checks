@@ -11,11 +11,6 @@ import { ext } from './scopes.js';
 import { handleProofigAction, proofigStatus } from './server/actions.js';
 import { getProofigConfigWithOverrides } from './server/config.server.js';
 import {
-  PROOFIG_SUBMIT,
-  PROOFIG_SUBMIT_SERVICE,
-  proofigSubmitHandler,
-} from './server/jobs/proofig-submit-service.server.js';
-import {
   PROOFIG_SUBMIT_STREAM,
   proofigSubmitStreamHandler,
 } from './server/jobs/proofig-submit-stream.server.js';
@@ -26,15 +21,13 @@ import { registerRoutes } from './routes.js';
 import { ImageIntegritySectionHeader } from './components/ImageIntegritySectionHeader.js';
 import { getExtensionAdminActionHandlers } from './admin/actionHandlers.server.js';
 
-export { PROOFIG_SUBMIT, PROOFIG_SUBMIT_SERVICE, PROOFIG_SUBMIT_STREAM };
+export { PROOFIG_SUBMIT_STREAM };
 export { getProofigConfigWithOverrides } from './server/config.server.js';
 
 function getSafeAdminConfig(config: Record<string, unknown>): Record<string, unknown> {
   return {
-    submitMode: config.submitMode,
     apiBaseUrl: config.apiBaseUrl,
     notifyBaseUrl: config.notifyBaseUrl,
-    submitTopic: config.submitTopic,
     clientId: config.clientId,
     clientSecret: config.clientSecret ? '****************' : undefined,
     // clientSecret is never exposed to the client
@@ -79,10 +72,6 @@ export const extension: ServerExtension = {
     ];
   },
   getJobs: (): JobRegistration[] => [
-    {
-      jobType: PROOFIG_SUBMIT,
-      handler: proofigSubmitHandler as JobRegistration['handler'],
-    },
     {
       jobType: PROOFIG_SUBMIT_STREAM,
       handler: proofigSubmitStreamHandler as JobRegistration['handler'],

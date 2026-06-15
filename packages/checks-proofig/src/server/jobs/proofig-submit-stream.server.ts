@@ -75,7 +75,7 @@ export type CreateProofigSubmitJobPayload = z.infer<typeof CreateProofigSubmitJo
 
 /**
  * PROOFIG_SUBMIT_STREAM job handler.
- * Same payload as PROOFIG_SUBMIT but runs the initial post synchronously by:
+ * Runs the initial Proofig post synchronously by:
  * - Loading and signing work version metadata
  * - Streaming the PDF (via signedUrl) directly into a multipart/form-data POST to Proofig
  * - Completing the job with the Proofig response.

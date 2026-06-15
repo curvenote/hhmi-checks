@@ -4,7 +4,7 @@ import { getProofigConfigWithOverrides, PROOFIG_CONFIG_OBJECT_TYPE } from './con
 
 describe('getProofigConfigWithOverrides', () => {
   it('returns base config when no object row exists', async () => {
-    const base = { apiBaseUrl: 'https://default.example.com', submitTopic: 'topic' };
+    const base = { apiBaseUrl: 'https://default.example.com' };
     const prisma = {
       object: {
         findFirst: vi.fn().mockResolvedValue(null),
@@ -39,7 +39,6 @@ describe('getProofigConfigWithOverrides', () => {
     const base = {
       apiBaseUrl: 'https://default.example.com',
       clientId: 'default-id',
-      submitTopic: 'topic',
     };
     const overlay = {
       apiBaseUrl: 'https://override.example.com',
@@ -54,7 +53,6 @@ describe('getProofigConfigWithOverrides', () => {
     expect(result.apiBaseUrl).toBe('https://override.example.com');
     expect(result.clientId).toBe('default-id');
     expect(result.clientSecret).toBe('override-secret');
-    expect(result.submitTopic).toBe('topic');
   });
 
   it('ignores non-string overlay values', async () => {
