@@ -46,6 +46,7 @@ export function TextIntegrityEulaDialog({
   const srcDoc = html?.trim() ? eulaSrcDoc(html) : undefined;
 
   const handleOpenChange = (next: boolean) => {
+    if (busy && !next) return;
     if (!next) setConfirmed(false);
     onOpenChange(next);
   };
@@ -55,6 +56,7 @@ export function TextIntegrityEulaDialog({
       open={open}
       variant="wide"
       onOpenChange={handleOpenChange}
+      showCloseButton={!busy}
       title={
         <span className="flex gap-3 items-center">
           <ServiceLogo
@@ -67,18 +69,26 @@ export function TextIntegrityEulaDialog({
         </span>
       }
       description="You must read and accept the agreement before using text integrity."
-      footerButtons={[
-        {
-          label: 'Cancel',
-          variant: 'outline',
-          onClick: () => handleOpenChange(false),
-        },
-        {
-          label: 'Accept',
-          disabled: !confirmed || busy,
-          onClick: () => onAccept({ version, language }),
-        },
-      ]}
+      footer={
+        <>
+          <ui.StatefulButton
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => handleOpenChange(false)}
+          >
+            Cancel
+          </ui.StatefulButton>
+          <ui.StatefulButton
+            type="button"
+            disabled={!confirmed}
+            busy={busy}
+            onClick={() => onAccept({ version, language })}
+          >
+            Accept
+          </ui.StatefulButton>
+        </>
+      }
     >
       <div className="space-y-4">
         {srcDoc ? (
@@ -103,10 +113,15 @@ export function TextIntegrityEulaDialog({
             message="EULA content is not available. Try again later."
           />
         )}
-        <label className="flex gap-2 items-start cursor-pointer">
+        <label
+          className={`flex gap-2 items-start ${busy ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+        >
           <ui.Checkbox
             checked={confirmed}
-            onCheckedChange={(v) => setConfirmed(v === true)}
+            onCheckedChange={(v) => {
+              if (busy) return;
+              setConfirmed(v === true);
+            }}
             disabled={busy}
           />
           <span className="text-sm leading-snug">

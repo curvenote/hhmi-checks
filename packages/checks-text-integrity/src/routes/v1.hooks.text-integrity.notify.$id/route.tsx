@@ -1,6 +1,10 @@
 import type { ActionFunctionArgs } from 'react-router';
 import { error405, httpError } from '@curvenote/scms-core';
-import { safeCheckServiceRunDataUpdate } from '@curvenote/scms-server';
+import {
+  getPrismaClient,
+  safeCheckServiceRunDataUpdate,
+  withAppContext,
+} from '@curvenote/scms-server';
 import type { Prisma } from '@curvenote/scms-db';
 import type { TextIntegrityDataSchema } from '../../schema.js';
 import {
@@ -9,7 +13,9 @@ import {
   parseNotifyWebhookJson,
   textIntegrityDataSchema,
 } from '../../schema.js';
+import { shouldEnqueuePersistPdfNotify } from '../../server/notify-persist-enqueue.server.js';
 import { applyWebhookEvent } from '../../server/stateMachine.server.js';
+import { enqueueTextIntegrityPersistPdfJob } from '../../server/enqueue-persist-pdf.server.js';
 
 type CheckServiceRunData<T extends object> = {
   status: string;
@@ -56,13 +62,16 @@ export async function action(args: ActionFunctionArgs) {
   const webhook = parsed.webhook;
   const receivedAt = new Date().toISOString();
 
+  let serviceDataAfterWebhook: TextIntegrityDataSchema | undefined;
+
   try {
     await safeCheckServiceRunDataUpdate(id, (runData?: Prisma.JsonValue) => {
       const current = (runData ?? {}) as CheckServiceRunData<TextIntegrityDataSchema>;
-      const parsed = textIntegrityDataSchema.safeParse(current.serviceData);
-      const currentServiceData = parsed.success ? parsed.data : MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+      const sd = textIntegrityDataSchema.safeParse(current.serviceData);
+      const currentServiceData = sd.success ? sd.data : MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
 
       const nextServiceData = applyWebhookEvent(currentServiceData, webhook, receivedAt);
+      serviceDataAfterWebhook = nextServiceData ?? currentServiceData;
 
       if (!nextServiceData) {
         return current as Prisma.JsonObject;
@@ -80,6 +89,23 @@ export async function action(args: ActionFunctionArgs) {
       { ok: false, error: err instanceof Error ? err.message : 'Failed to update run' },
       { status: 500 },
     );
+  }
+
+  if (serviceDataAfterWebhook && shouldEnqueuePersistPdfNotify(webhook, serviceDataAfterWebhook)) {
+    const prisma = await getPrismaClient();
+    const run = await prisma.checkServiceRun.findUnique({
+      where: { id },
+      select: { work_version_id: true, created_by_id: true },
+    });
+    if (run?.work_version_id) {
+      const ctx = await withAppContext(args);
+      await enqueueTextIntegrityPersistPdfJob(
+        ctx,
+        run.work_version_id,
+        id,
+        run.created_by_id ?? undefined,
+      );
+    }
   }
 
   return Response.json({ ok: true }, { status: 200 });

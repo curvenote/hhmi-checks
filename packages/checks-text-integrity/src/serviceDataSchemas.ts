@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FileMetadataSectionItemSchema } from '@curvenote/scms-core';
 import {
   WebhookEventSchema,
   type SimilarityReport as SimilarityReportPayload,
@@ -201,6 +202,16 @@ export const textIntegrityDataSchema = z.object({
    */
   reportPdfUrl: z.string().optional(),
 
+  /**
+   * Persisted similarity PDF on work version storage (slot `generated`).
+   * Keys are storage paths; values match work-version file metadata shape.
+   */
+  files: z.record(z.string(), FileMetadataSectionItemSchema).optional(),
+  /** True after the similarity PDF for `storedReportPdfId` was written to storage. */
+  similarityReportStored: z.boolean().optional(),
+  /** Provider PDF id that was persisted to `files` (used for idempotency on restart). */
+  storedReportPdfId: z.string().optional(),
+
   // --- Report data ---
   /** Summary report when processing is complete (camelCase stored shape). */
   summaryReport: StoredSimilarityReportSchema.optional(),
@@ -302,6 +313,11 @@ export function canShowResults(data: TextIntegrityDataSchema | undefined): boole
 export function canShowReportPdf(data: TextIntegrityDataSchema | undefined): boolean {
   if (!data?.stages) return false;
   return linearStageIsDone(data.stages.reportGeneration?.status);
+}
+
+/** True when the similarity PDF has been persisted to work storage for this run. */
+export function hasStoredSimilarityReport(data: TextIntegrityDataSchema | undefined): boolean {
+  return data?.similarityReportStored === true;
 }
 
 /** @deprecated Use hasError/canShowResults/canShowReportPdf instead. Kept for test compatibility. */

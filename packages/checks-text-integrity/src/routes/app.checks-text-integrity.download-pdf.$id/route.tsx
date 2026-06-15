@@ -1,40 +1,26 @@
 import type { LoaderFunctionArgs } from 'react-router';
 import { error405, httpError } from '@curvenote/scms-core';
-import { getConfig, getPrismaClient, withAppContext } from '@curvenote/scms-server';
+import {
+  getConfig,
+  getPrismaClient,
+  withAppContext,
+  File,
+  KnownBuckets,
+  StorageBackend,
+} from '@curvenote/scms-server';
 import type { TextIntegrityDataSchema } from '../../schema.js';
 import { MINIMAL_TEXT_INTEGRITY_SERVICE_DATA } from '../../schema.js';
 import { getTextIntegrityConfigWithOverrides } from '../../server/config.server.js';
 import { assertSubmitterEulaAccepted } from '../../server/eula.server.js';
-import {
-  checksRelayReportFetchUrl,
-  resolveRelayExternalCheckId,
-  resolveRelayInstanceId,
-} from '../../server/relay-urls.server.js';
+import { fetchSimilarityReportPdfFromRelay } from '../../server/fetch-similarity-report-from-relay.server.js';
+import { getAppChecksFromAppConfig, resolveServiceName } from '../../server/relay-config.server.js';
+import { resolveRelayInstanceId } from '../../server/relay-urls.server.js';
+import { resolveSimilarityReportDownloadSource } from '../../server/similarity-report-download.server.js';
 
 type CheckServiceRunData = {
   status: string;
   serviceData?: TextIntegrityDataSchema;
 };
-
-type AppChecksRelay = {
-  relayBaseUrl?: string;
-  relayApiKey?: string;
-};
-
-function readAppChecks(appConfig: unknown): AppChecksRelay | undefined {
-  if (appConfig == null || typeof appConfig !== 'object') return undefined;
-  const app = (appConfig as Record<string, unknown>).app;
-  if (app == null || typeof app !== 'object') return undefined;
-  const checks = (app as Record<string, unknown>).checks;
-  if (checks == null || typeof checks !== 'object') return undefined;
-  return checks as AppChecksRelay;
-}
-
-function resolveServiceName(merged: Record<string, unknown>): string {
-  const fromExt = merged.serviceName;
-  if (typeof fromExt === 'string' && fromExt.trim() !== '') return fromExt.trim();
-  return 'echo';
-}
 
 export async function action() {
   throw error405();
@@ -60,18 +46,39 @@ export async function loader(args: LoaderFunctionArgs) {
 
   const runData = run.data as CheckServiceRunData | null;
   const serviceData = runData?.serviceData ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+  const downloadSource = resolveSimilarityReportDownloadSource(serviceData);
+
+  if (downloadSource.kind === 'storage' && run.work_version_id) {
+    const workVersion = await prisma.workVersion.findUnique({
+      where: { id: run.work_version_id },
+      select: { cdn: true, cdn_key: true },
+    });
+    if (workVersion?.cdn?.trim() && workVersion.cdn_key?.trim()) {
+      const backend = new StorageBackend(ctx, [KnownBuckets.prv, KnownBuckets.pub]);
+      const bucket = backend.knownBucketFromCDN(workVersion.cdn);
+      if (bucket) {
+        const file = new File(backend, downloadSource.path, bucket);
+        if (await file.exists()) {
+          const stream = await file.readStream();
+          return new Response(stream as unknown as ReadableStream, {
+            status: 200,
+            headers: {
+              'Content-Type': downloadSource.contentType,
+              'Content-Disposition': `attachment; filename="${downloadSource.filename}"`,
+            },
+          });
+        }
+      }
+    }
+  }
+
   const pdfId = serviceData.reportPdfId ?? serviceData.latest?.reportPdfId;
   if (!pdfId) {
     throw httpError(400, 'No similarity PDF id stored for this run');
   }
 
-  const externalId = resolveRelayExternalCheckId(serviceData);
-  if (!externalId) {
-    throw httpError(400, 'No external check id stored for this run');
-  }
-
   const appConfig = await getConfig();
-  const checks = readAppChecks(appConfig);
+  const checks = getAppChecksFromAppConfig(appConfig);
   const relayBaseUrl =
     typeof checks?.relayBaseUrl === 'string' ? checks.relayBaseUrl.trim().replace(/\/$/, '') : '';
   const relayApiKey = typeof checks?.relayApiKey === 'string' ? checks.relayApiKey : '';
@@ -89,55 +96,18 @@ export async function loader(args: LoaderFunctionArgs) {
   const serviceName = resolveServiceName(mergedConfig);
   const relayInstanceId = resolveRelayInstanceId(mergedConfig);
 
-  const url = checksRelayReportFetchUrl(relayBaseUrl, serviceName, relayInstanceId, externalId);
+  const { bytes, contentType, contentDisposition } = await fetchSimilarityReportPdfFromRelay(
+    checks ?? {},
+    serviceName,
+    relayInstanceId,
+    serviceData,
+  );
 
-  let relayRes: Response;
-  try {
-    relayRes = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${relayApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ pdf_id: pdfId }),
-      signal: AbortSignal.timeout(60_000),
-    });
-  } catch (e) {
-    throw httpError(502, e instanceof Error ? e.message : 'Failed to fetch PDF via checks relay');
-  }
-
-  const ct = relayRes.headers.get('content-type') ?? '';
-  if (ct.includes('application/json')) {
-    let body: Record<string, unknown> = {};
-    try {
-      body = (await relayRes.json()) as Record<string, unknown>;
-    } catch {
-      throw httpError(502, 'Checks relay returned invalid JSON for PDF fetch');
-    }
-    const msg =
-      (typeof body.message === 'string' ? body.message : null) ??
-      (typeof body.error === 'string' ? body.error : null) ??
-      `Checks relay returned HTTP ${relayRes.status}`;
-    throw httpError(relayRes.status >= 400 && relayRes.status < 600 ? relayRes.status : 502, msg);
-  }
-
-  if (!relayRes.ok) {
-    throw httpError(
-      relayRes.status >= 400 && relayRes.status < 600 ? relayRes.status : 502,
-      `Checks relay returned HTTP ${relayRes.status}`,
-    );
-  }
-
-  const bytes = new Uint8Array(await relayRes.arrayBuffer());
-  const outCt = ct && !ct.includes('json') ? ct : 'application/pdf';
-  const cd =
-    relayRes.headers.get('content-disposition') ?? 'attachment; filename="similarity-report.pdf"';
-
-  return new Response(bytes, {
+  return new Response(Buffer.from(bytes), {
     status: 200,
     headers: {
-      'Content-Type': outCt,
-      'Content-Disposition': cd,
+      'Content-Type': contentType,
+      'Content-Disposition': contentDisposition,
       'Content-Length': String(bytes.byteLength),
     },
   });

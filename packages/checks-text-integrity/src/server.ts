@@ -13,10 +13,9 @@ import {
   buildStoredServiceConfigurationForAdmin,
   getTextIntegrityConfigWithOverrides,
 } from './server/config.server.js';
-import {
-  TEXT_INTEGRITY_SUBMIT,
-  textIntegritySubmitHandler,
-} from './server/jobs/text-integrity-submit.server.js';
+import { TEXT_INTEGRITY_SUBMIT } from './server/jobs/text-integrity-submit.server.js';
+import { TEXT_INTEGRITY_PERSIST_PDF } from './server/jobs/text-integrity-persist-pdf.server.js';
+import { TEXT_INTEGRITY_JOB_REGISTRATIONS } from './server/text-integrity-jobs.server.js';
 import { TextIntegrityChecksSection } from './components/TextIntegrityChecksSection.js';
 import { TextIntegrityUploadCheckOption } from './components/TextIntegrityUploadCheckOption.js';
 import { isTextIntegrityUploadEligible } from './uploadEligibility.js';
@@ -24,7 +23,7 @@ import { registerRoutes } from './routes.js';
 import { TextIntegritySectionHeader } from './components/TextIntegritySectionHeader.js';
 import { getExtensionAdminActionHandlers } from './admin/actionHandlers.server.js';
 
-export { TEXT_INTEGRITY_SUBMIT };
+export { TEXT_INTEGRITY_SUBMIT, TEXT_INTEGRITY_PERSIST_PDF };
 export { getTextIntegrityConfigWithOverrides } from './server/config.server.js';
 
 function getSafeAdminConfig(config: Record<string, unknown>): Record<string, unknown> {
@@ -72,11 +71,6 @@ export const extension: ServerExtension = {
       },
     ];
   },
-  getJobs: (): JobRegistration[] => [
-    {
-      jobType: TEXT_INTEGRITY_SUBMIT,
-      handler: textIntegritySubmitHandler as JobRegistration['handler'],
-    },
-  ],
+  getJobs: (): JobRegistration[] => TEXT_INTEGRITY_JOB_REGISTRATIONS,
   registerRoutes,
 };
