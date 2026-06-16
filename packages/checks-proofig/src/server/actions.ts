@@ -29,6 +29,7 @@ import {
 } from './stateMachine.server.js';
 import { applyDocumentPreparationFromConverterJob } from './applyDocumentPreparationFromConverterJob.server.js';
 import { PROOFIG_SUBMIT_STREAM } from './jobs/proofig-submit-stream.server.js';
+import { PROOFIG_SYNC_DOCUMENT_PREPARATION } from './jobs/proofig-sync-document-preparation.server.js';
 import { getProofigConfigWithOverrides } from './config.server.js';
 import { postProofigRemoteStatus } from './proofigRemoteStatus.server.js';
 import { applyNotifyPayloadToCheckRun } from './applyNotifyPayloadToCheckRun.server.js';
@@ -292,6 +293,7 @@ export async function handleProofigAction(
       } else {
         const exportJobId = uuid();
         const proofigJobId = uuid();
+        const syncDocumentPreparationJobId = uuid();
         await safeCheckServiceRunDataUpdate(checkRunId, (runData?: Prisma.JsonValue) => {
           const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
           const nextServiceData = beginProofigPipeline(
@@ -327,6 +329,14 @@ export async function handleProofigAction(
               trigger_on: 'success',
               activity_type: 'CHECK_STARTED',
               activity_data: { check: { kind: 'proofig' } },
+            },
+            {
+              job_id: syncDocumentPreparationJobId,
+              job_type: PROOFIG_SYNC_DOCUMENT_PREPARATION,
+              payload: {
+                proofig_run_id: checkRunId,
+              },
+              trigger_on: 'failure',
             },
           ],
         });
