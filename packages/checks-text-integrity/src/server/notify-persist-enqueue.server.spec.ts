@@ -55,4 +55,17 @@ describe('notify-persist-enqueue', () => {
     expect(after).toBe(current);
     expect(shouldEnqueuePersistPdfNotify(webhook, after)).toBe(true);
   });
+
+  it('enqueues when a regenerated PDF id differs from the stored id', () => {
+    const data = {
+      ...reportCompleteData('pdf-2'),
+      similarityReportStored: true,
+      storedReportPdfId: 'pdf-1',
+    };
+    const webhook = {
+      event: WebhookEvent.ReportGenerationComplete,
+      payload: { report: { report_id: 'pdf-2' } },
+    };
+    expect(shouldEnqueuePersistPdfNotify(webhook, data)).toBe(true);
+  });
 });

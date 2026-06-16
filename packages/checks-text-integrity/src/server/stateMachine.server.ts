@@ -160,7 +160,7 @@ export function applyWebhookEvent(
         stages.processing?.status === 'completed' ||
         stages.processing?.status === 'notify-skipped'
       ) {
-        // Viewer filter changes (SIMILARITY_UPDATED): refresh stored report only.
+        // Viewer filter changes (SIMILARITY_UPDATED): refresh stored report; PDF regen follows via REPORT_GENERATION_*.
         if (!reportResult.success) break;
         summaryReport = toStoredSimilarityReport(reportResult.data);
         updatedStages = stages;
@@ -222,12 +222,21 @@ export function applyWebhookEvent(
     }
 
     case WebhookEvent.ReportGenerationComplete: {
+      mergeReportPayload(webhook.payload?.report);
+
       if (
         stages.reportGeneration?.status === 'completed' ||
         stages.reportGeneration?.status === 'notify-skipped'
       ) {
+        const nextId = reportPdfId ?? current.reportPdfId;
+        const nextUrl = reportPdfUrl ?? current.reportPdfUrl;
+        if (nextId === current.reportPdfId && nextUrl === current.reportPdfUrl) {
+          break;
+        }
+        updatedStages = stages;
         break;
       }
+
       let s = stages;
       if (s.submission.status !== 'completed' && s.submission.status !== 'notify-skipped') {
         s = setLinearStage(s, 'submission', 'notify-skipped', receivedAt);
@@ -237,7 +246,6 @@ export function applyWebhookEvent(
       }
       updatedStages = setLinearStage(s, 'reportGeneration', 'completed', receivedAt);
 
-      mergeReportPayload(webhook.payload?.report);
       break;
     }
 

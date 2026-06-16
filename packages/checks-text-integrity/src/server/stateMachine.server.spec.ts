@@ -597,8 +597,40 @@ describe('Text Integrity State Machine', () => {
       expect(next).toBeNull();
     });
 
-    it('REPORT_GENERATION_COMPLETE when already completed', () => {
+    it('REPORT_GENERATION_COMPLETE when already completed refreshes pdf id for regeneration', () => {
       const initial: TextIntegrityDataSchema = {
+        reportPdfId: 'pdf-001',
+        reportPdfUrl: 'https://example.com/pdf-001',
+        similarityReportStored: true,
+        storedReportPdfId: 'pdf-001',
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'completed',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ReportGenerationComplete, {
+          report: {
+            report_id: 'pdf-002',
+            report_pdf_url: 'https://example.com/pdf-002',
+          },
+        }),
+      );
+      expect(next?.reportPdfId).toBe('pdf-002');
+      expect(next?.reportPdfUrl).toBe('https://example.com/pdf-002');
+      expect(next?.stages.reportGeneration?.status).toBe('completed');
+    });
+
+    it('REPORT_GENERATION_COMPLETE when already completed with same pdf id is a no-op', () => {
+      const initial: TextIntegrityDataSchema = {
+        reportPdfId: 'pdf-002',
+        reportPdfUrl: 'https://api.example.com/api/v1/submissions/sub-1/similarity/pdf/pdf-002',
         stages: {
           submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
           processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
