@@ -125,7 +125,6 @@ async function relaySimilarityPdfStart(
 const VIEWER_URL_DEFAULTS = {
   locale: 'en-US',
   permissionSet: 'EDITOR',
-  viewerPermissions: { may_view_submission_full_source: false },
   similarity: {
     default_mode: 'match_overview',
     modes: { match_overview: true, all_sources: true },
