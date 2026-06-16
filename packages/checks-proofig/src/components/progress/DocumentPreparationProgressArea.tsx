@@ -33,20 +33,6 @@ export function DocumentPreparationProgressArea({
           <StageProgressArea step={step} numSteps={numSteps} stageStartedAt={data.timestamp} />
         </div>
       );
-    case 'completed':
-      return (
-        <div className="flex flex-col gap-6">
-          <ui.SimpleAlert
-            type="info"
-            message={
-              <div>
-                <span className="font-bold">Document ready.</span> starting upload to Proofig.
-              </div>
-            }
-          />
-          <StageProgressArea step={step} numSteps={numSteps} stageStartedAt={data.timestamp} />
-        </div>
-      );
     case 'error':
       return (
         <SimpleErrorArea

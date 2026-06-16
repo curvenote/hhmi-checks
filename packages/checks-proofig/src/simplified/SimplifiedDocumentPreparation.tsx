@@ -18,15 +18,6 @@ export function SimplifiedDocumentPreparation({ data }: { data: ProofigStage }) 
           }
         />
       );
-    case 'completed':
-      return (
-        <ui.SimpleAlert
-          type="info"
-          message={
-            <SimplifiedProgressAlertMessage text="Document ready. Starting upload to Proofig…" />
-          }
-        />
-      );
     default:
       return (
         <ui.SimpleAlert type="info" message={<SimplifiedProgressAlertMessage text="Pending" />} />
