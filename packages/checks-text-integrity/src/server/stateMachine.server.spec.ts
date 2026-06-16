@@ -546,6 +546,9 @@ describe('Text Integrity State Machine', () => {
     it('PROCESSING_PHASE_COMPLETE when already completed refreshes summaryReport from similarity payload', () => {
       const initial: TextIntegrityDataSchema = {
         summaryReport: {
+          submissionId: 'sub-123',
+          status: 'COMPLETE',
+          timeRequested: '2025-01-01T00:00:00Z',
           overallMatchPercentage: 12,
           internetMatchPercentage: 5,
           publicationMatchPercentage: 3,
