@@ -56,7 +56,8 @@ export async function applyDocumentPreparationFromConverterJob(
 
   const job = await prisma.job.findUnique({ where: { id: converterJobId } });
   if (!job) {
-    return { ok: false, message: `Converter job ${converterJobId} not found.` };
+    // Job row may not be visible yet immediately after dispatch; poll again later.
+    return { ok: true, updated: false };
   }
 
   if (
