@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useFetcher } from 'react-router';
-import type { ExtensionAdminCardProps } from '@curvenote/scms-core';
-import { ui } from '@curvenote/scms-core';
+import type { CheckMaintenanceRecord, ExtensionAdminCardProps } from '@curvenote/scms-core';
+import { ui, CheckMaintenanceAdminPanel } from '@curvenote/scms-core';
 import { Logo } from '../icons.js';
 
 const INTENT_BASE_URL = 'proofig-set-baseurl';
@@ -141,6 +141,12 @@ function ExtensionAdminCard({ record }: ExtensionAdminCardProps) {
           />
         </div>
       </div>
+
+      <CheckMaintenanceAdminPanel
+        intent="proofig-set-maintenance"
+        maintenance={displayConfig.maintenance as CheckMaintenanceRecord | undefined}
+        serviceLabel="Proofig"
+      />
     </div>
   );
 }

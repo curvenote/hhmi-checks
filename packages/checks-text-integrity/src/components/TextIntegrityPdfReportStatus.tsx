@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFetcher, useRevalidator } from 'react-router';
-import { ui } from '@curvenote/scms-core';
+import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
 import { TextIntegrityEulaDialog } from './TextIntegrityEulaDialog.js';
 import { useTextIntegrityEulaEnable } from './useTextIntegrityEulaEnable.js';
 
@@ -39,6 +39,7 @@ export function TextIntegrityPdfReportStatus({
     acceptEula,
     busy: eulaBusy,
   } = useTextIntegrityEulaEnable(workVersionId ?? '');
+  const { blocked, message } = useCheckMaintenanceBlocked('checks-text-integrity');
 
   useEffect(() => {
     if (retryFetcher.state !== 'idle' || !retryFetcher.data) return;
@@ -60,7 +61,10 @@ export function TextIntegrityPdfReportStatus({
     : undefined;
   const canDownload = reportGenerationComplete && Boolean(downloadUrl);
   const canRetry =
-    reportGenerationFailed && Boolean(actionPath?.trim()) && Boolean(checkRunId?.trim());
+    reportGenerationFailed &&
+    Boolean(actionPath?.trim()) &&
+    Boolean(checkRunId?.trim()) &&
+    !blocked;
   const retryBusy = retryFetcher.state !== 'idle';
 
   const runDownload = useCallback(async () => {
@@ -113,14 +117,16 @@ export function TextIntegrityPdfReportStatus({
         </span>
       )}
       {canRetry && !retried && (
-        <retryFetcher.Form method="post" action={actionPath}>
-          <input type="hidden" name="intent" value="restart-similarity-pdf" />
-          <input type="hidden" name="workVersionId" value={workVersionId ?? ''} />
-          <input type="hidden" name="checkRunId" value={checkRunId ?? ''} />
-          <ui.Button type="submit" variant="link" disabled={retryBusy}>
-            {retryBusy ? 'Retrying…' : 'Retry PDF generation'}
-          </ui.Button>
-        </retryFetcher.Form>
+        <ui.MaintenanceTooltip enabled={blocked} message={message}>
+          <retryFetcher.Form method="post" action={actionPath}>
+            <input type="hidden" name="intent" value="restart-similarity-pdf" />
+            <input type="hidden" name="workVersionId" value={workVersionId ?? ''} />
+            <input type="hidden" name="checkRunId" value={checkRunId ?? ''} />
+            <ui.Button type="submit" variant="link" disabled={retryBusy || blocked}>
+              {retryBusy ? 'Retrying…' : 'Retry PDF generation'}
+            </ui.Button>
+          </retryFetcher.Form>
+        </ui.MaintenanceTooltip>
       )}
       {(waitingForReport || retried) && (
         <span className="text-sm font-normal opacity-50 animate-pulse text-primary">

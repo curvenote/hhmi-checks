@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { ServiceLogo, type ExtensionAdminCardProps } from '@curvenote/scms-core';
+import {
+  ServiceLogo,
+  CheckMaintenanceAdminPanel,
+  type CheckMaintenanceRecord,
+  type ExtensionAdminCardProps,
+} from '@curvenote/scms-core';
 import { TextIntegrityCredentialsForm } from './TextIntegrityCredentialsForm.js';
 import { TextIntegrityTestConnectionRow } from './TextIntegrityTestConnectionRow.js';
 import { TextIntegrityRefreshEulaRow } from './TextIntegrityRefreshEulaRow.js';
@@ -52,6 +57,11 @@ export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) 
       </div>
       <TextIntegritySettingsPanel
         storedServiceConfiguration={displayConfig.storedServiceConfiguration}
+      />
+      <CheckMaintenanceAdminPanel
+        intent="text-integrity-set-maintenance"
+        maintenance={displayConfig.maintenance as CheckMaintenanceRecord | undefined}
+        serviceLabel={title}
       />
     </div>
   );

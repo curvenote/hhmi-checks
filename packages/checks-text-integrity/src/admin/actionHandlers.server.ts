@@ -798,5 +798,37 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
         }
       },
     },
+    {
+      name: 'text-integrity-set-maintenance',
+      handler: async (ctx: Context, formData: FormData) => {
+        try {
+          const enabled = formData.get('enabled') === 'true';
+          const message = (formData.get('message') ?? '').toString().trim();
+          const objectId = await getOrCreateTextIntegrityConfigObjectId();
+          await safeObjectDataUpdate<TextIntegrityStoredObject & Prisma.JsonObject>(
+            objectId,
+            (current) => {
+              const prev = coerceTextIntegrityStoredObject(coerceToObject(current));
+              const next: TextIntegrityStoredObject = { ...prev };
+              if (enabled) {
+                next.maintenance = {
+                  enabled: true,
+                  ...(message ? { message } : {}),
+                  updatedAt: new Date().toISOString(),
+                  ...(ctx.user?.id ? { updatedByUserId: ctx.user.id } : {}),
+                };
+              } else {
+                delete next.maintenance;
+              }
+              return next as TextIntegrityStoredObject & Prisma.JsonObject;
+            },
+          );
+          return { success: true };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to save maintenance settings';
+          return { error: { type: 'general', message } };
+        }
+      },
+    },
   ];
 }

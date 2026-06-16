@@ -9,9 +9,11 @@ import {
   type ExtensionCheckHandleActionArgs,
   type ExtensionCheckHandleActionResult,
   type ExtensionCheckStatusArgs,
+  checkMaintenanceActionError,
   hasDocxInMetadata,
   hasPdfInMetadata,
   KnownJobTypes,
+  maintenanceGuardFromConfig,
 } from '@curvenote/scms-core';
 import type { Prisma } from '@curvenote/scms-db';
 import {
@@ -184,6 +186,18 @@ export async function handleProofigAction(
   args: ExtensionCheckHandleActionArgs,
 ): Promise<ExtensionCheckHandleActionResult> {
   const { intent, workVersionId, ctx } = args;
+
+  if (ctx && intent !== 'apply-notify-payload') {
+    const prisma = await getPrismaClient();
+    const base =
+      (ctx.$config.app?.extensions?.['checks-proofig'] as Record<string, unknown> | undefined) ??
+      {};
+    const mergedConfig = await getProofigConfigWithOverrides(base, prisma);
+    const maintenanceBlock = maintenanceGuardFromConfig(mergedConfig);
+    if (maintenanceBlock) {
+      return checkMaintenanceActionError(maintenanceBlock.error?.message);
+    }
+  }
 
   // ----- Execute path: upload flow or checks page with job creation -----
   if (intent === 'execute' && ctx) {

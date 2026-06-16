@@ -1,5 +1,5 @@
 import type { ExtensionCheckRunTimelineMountProps } from '@curvenote/scms-core';
-import { ui } from '@curvenote/scms-core';
+import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
 import { useEffect, useRef } from 'react';
 import { useFetcher, useRevalidator } from 'react-router';
 import {
@@ -27,6 +27,7 @@ export function ProofigDocumentPreparationHydrateMount({
 }: ProofigDocumentPreparationHydrateMountProps) {
   const hydrateFetcher = useFetcher();
   const { submit: hydrateSubmit, state: hydrateState } = hydrateFetcher;
+  const { blocked } = useCheckMaintenanceBlocked('proofig');
   const hydrateStateRef = useRef(hydrateState);
   hydrateStateRef.current = hydrateState;
   const revalidator = useRevalidator();
@@ -41,6 +42,7 @@ export function ProofigDocumentPreparationHydrateMount({
 
   useEffect(() => {
     if (checkKind !== 'proofig') return;
+    if (blocked) return;
     if (!awaitingPrep) return;
     if (!remoteStatusActionPath || !workVersionId || !checkRunId) return;
 
@@ -64,7 +66,7 @@ export function ProofigDocumentPreparationHydrateMount({
         pollIntervalRef.current = undefined;
       }
     };
-  }, [awaitingPrep, checkKind, checkRunId, hydrateSubmit, remoteStatusActionPath, workVersionId]);
+  }, [awaitingPrep, blocked, checkKind, checkRunId, hydrateSubmit, remoteStatusActionPath, workVersionId]);
 
   useEffect(() => {
     if (hydrateFetcher.state !== 'idle' || !hydrateFetcher.data) return;

@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react';
 import { useEffect, useRef } from 'react';
 import { useFetcher, useRevalidator } from 'react-router';
-import { ui } from '@curvenote/scms-core';
+import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
 
 type RefreshFetcherData = {
   success?: boolean;
@@ -24,6 +24,7 @@ export function TextIntegrityRefreshRemoteStatusButton({
   const fetcher = useFetcher<RefreshFetcherData>();
   const revalidator = useRevalidator();
   const lastHandledFetcherDataRef = useRef<unknown>(undefined);
+  const { blocked, message } = useCheckMaintenanceBlocked('checks-text-integrity');
 
   useEffect(() => {
     if (fetcher.state !== 'idle' || !fetcher.data) return;
@@ -54,8 +55,17 @@ export function TextIntegrityRefreshRemoteStatusButton({
   };
 
   return (
-    <ui.StatefulButton variant="link" busy={busy} onClick={refresh} overlayBusy size={buttonSize}>
-      Refresh status
-    </ui.StatefulButton>
+    <ui.MaintenanceTooltip enabled={blocked} message={message}>
+      <ui.StatefulButton
+        variant="link"
+        busy={busy}
+        disabled={blocked}
+        onClick={refresh}
+        overlayBusy
+        size={buttonSize}
+      >
+        Refresh status
+      </ui.StatefulButton>
+    </ui.MaintenanceTooltip>
   );
 }

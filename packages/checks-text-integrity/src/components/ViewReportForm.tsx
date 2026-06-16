@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useFetcher } from 'react-router';
-import { ui, ServiceLogo } from '@curvenote/scms-core';
+import { ui, ServiceLogo, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
 import { TextIntegrityEulaDialog } from './TextIntegrityEulaDialog.js';
 import { useTextIntegrityEulaEnable } from './useTextIntegrityEulaEnable.js';
 
@@ -38,6 +38,7 @@ export function ViewReportForm({
     acceptEula,
     busy: eulaBusy,
   } = useTextIntegrityEulaEnable(workVersionId ?? '');
+  const { blocked, message } = useCheckMaintenanceBlocked('checks-text-integrity');
 
   const submitViewerUrlRequest = useCallback(() => {
     if (!formRef.current) return;
@@ -59,7 +60,8 @@ export function ViewReportForm({
   }, [fetcher.state, fetcher.data]);
 
   const busy = fetcher.state !== 'idle' || eulaBusy;
-  const canOpen = Boolean(actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim());
+  const canOpen =
+    Boolean(actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim()) && !blocked;
 
   return (
     <>
@@ -67,24 +69,26 @@ export function ViewReportForm({
         <input type="hidden" name="intent" value="refresh-viewer-url" />
         <input type="hidden" name="workVersionId" value={workVersionId ?? ''} />
         <input type="hidden" name="checkRunId" value={checkRunId ?? ''} />
-        <ui.Button
-          type="button"
-          variant="default"
-          disabled={!canOpen || busy}
-          onClick={() => {
-            requestEnable(submitViewerUrlRequest);
-          }}
-        >
-          <span className="flex gap-2 items-center">
-            {busy ? <span>Opening report…</span> : <span>View report at</span>}
-            <ServiceLogo
-              logoUrl={manifestLogoUrl}
-              alt={manifestTitle}
-              fallback={manifestTitle}
-              className="h-3 invert brightness-10"
-            />
-          </span>
-        </ui.Button>
+        <ui.MaintenanceTooltip enabled={blocked} message={message}>
+          <ui.Button
+            type="button"
+            variant="default"
+            disabled={!canOpen || busy}
+            onClick={() => {
+              requestEnable(submitViewerUrlRequest);
+            }}
+          >
+            <span className="flex gap-2 items-center">
+              {busy ? <span>Opening report…</span> : <span>View report at</span>}
+              <ServiceLogo
+                logoUrl={manifestLogoUrl}
+                alt={manifestTitle}
+                fallback={manifestTitle}
+                className="h-3 invert brightness-10"
+              />
+            </span>
+          </ui.Button>
+        </ui.MaintenanceTooltip>
       </fetcher.Form>
       {eulaPresentation ? (
         <TextIntegrityEulaDialog

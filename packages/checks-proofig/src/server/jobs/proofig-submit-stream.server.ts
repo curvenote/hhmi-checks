@@ -13,6 +13,7 @@ import {
   jobs,
   safeCheckServiceRunDataUpdate,
 } from '@curvenote/scms-server';
+import { maintenanceGuardFromConfig } from '@curvenote/scms-core';
 import { getProofigConfigWithOverrides } from '../config.server.js';
 import { getProofingToken, invalidateProofingTokenCache } from '../proofigAuth.server.js';
 import {
@@ -146,6 +147,16 @@ export async function proofigSubmitStreamHandler(
   const baseConfig =
     (ctx.$config.app?.extensions?.['checks-proofig'] as Record<string, unknown>) ?? {};
   const mergedConfig = await getProofigConfigWithOverrides(baseConfig, prisma);
+  const maintenanceBlock = maintenanceGuardFromConfig(mergedConfig);
+  if (maintenanceBlock) {
+    await handleProofigSubmitJobFailure(
+      job.id,
+      payload.proofig_run_id,
+      maintenanceBlock.error?.message ?? 'Image integrity is under maintenance',
+      rollingLog,
+    );
+    return;
+  }
   const apiBaseUrl =
     (mergedConfig.apiBaseUrl as string | undefined) ?? process.env.PROOFIG_API_BASE_URL;
   if (!apiBaseUrl?.trim()) {

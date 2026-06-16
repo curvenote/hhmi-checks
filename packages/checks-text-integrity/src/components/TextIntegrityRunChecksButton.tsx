@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useFetcher } from 'react-router';
-import { ui } from '@curvenote/scms-core';
+import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
 import { TextIntegrityEulaDialog } from './TextIntegrityEulaDialog.js';
 import { useTextIntegrityEulaEnable } from './useTextIntegrityEulaEnable.js';
 
@@ -16,6 +16,7 @@ export function TextIntegrityRunChecksButton({
   workVersionId,
 }: TextIntegrityRunChecksButtonProps) {
   const executeFetcher = useFetcher();
+  const { blocked, message } = useCheckMaintenanceBlocked('checks-text-integrity');
   const { dialogOpen, setDialogOpen, eulaPresentation, requestEnable, acceptEula, busy } =
     useTextIntegrityEulaEnable(workVersionId);
 
@@ -34,16 +35,19 @@ export function TextIntegrityRunChecksButton({
 
   return (
     <>
-      <ui.StatefulButton
-        type="button"
-        variant="default"
-        busy={busy || executeFetcher.state === 'submitting'}
-        onClick={() => {
-          requestEnable(runExecute);
-        }}
-      >
-        Run checks now
-      </ui.StatefulButton>
+      <ui.MaintenanceTooltip enabled={blocked} message={message}>
+        <ui.StatefulButton
+          type="button"
+          variant="default"
+          busy={busy || executeFetcher.state === 'submitting'}
+          disabled={blocked}
+          onClick={() => {
+            requestEnable(runExecute);
+          }}
+        >
+          Run checks now
+        </ui.StatefulButton>
+      </ui.MaintenanceTooltip>
       {eulaPresentation ? (
         <TextIntegrityEulaDialog
           open={dialogOpen}

@@ -2,7 +2,12 @@ import type { CreateJob, CheckServiceRunData } from '@curvenote/scms-core';
 import type { Context } from '@curvenote/scms-server';
 import { JobStatus } from '@curvenote/scms-db';
 import type { Prisma } from '@curvenote/scms-db';
-import { httpError, coerceToObject, WORK_VERSION_DOCX_MIME } from '@curvenote/scms-core';
+import {
+  httpError,
+  coerceToObject,
+  WORK_VERSION_DOCX_MIME,
+  maintenanceGuardFromConfig,
+} from '@curvenote/scms-core';
 import { z } from 'zod';
 import { uuidv7 } from 'uuidv7';
 import {
@@ -268,6 +273,13 @@ export async function textIntegritySubmitHandler(
     const baseExt =
       (ctx.$config?.app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};
     const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
+    const maintenanceBlock = maintenanceGuardFromConfig(mergedConfig);
+    if (maintenanceBlock) {
+      throw httpError(
+        maintenanceBlock.status ?? 503,
+        maintenanceBlock.error?.message ?? 'Text integrity is under maintenance',
+      );
+    }
     const checks = getAppChecks(ctx);
 
     const relayBaseUrl = (checks?.relayBaseUrl ?? '').trim().replace(/\/$/, '');

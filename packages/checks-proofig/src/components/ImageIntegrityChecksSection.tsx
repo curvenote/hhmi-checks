@@ -1,7 +1,7 @@
 import { useFetcher } from 'react-router';
 import { useEffect } from 'react';
 import type { ExtensionCheckSectionActivityProps } from '@curvenote/scms-core';
-import { ui, useRevalidateOnInterval } from '@curvenote/scms-core';
+import { ui, useCheckMaintenanceBlocked, useRevalidateOnInterval } from '@curvenote/scms-core';
 import { Logos } from '../client.js';
 import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
 import { ProofigProgressComponent } from './ProofigProgressComponent.js';
@@ -23,6 +23,7 @@ export function ImageIntegrityChecksSection({
   remoteStatusActionPath,
 }: ImageIntegrityChecksSectionProps) {
   const fetcher = useFetcher();
+  const { blocked, message } = useCheckMaintenanceBlocked('proofig');
 
   // Check if we need to dispatch the initial POST
   // If proofig is enabled and has a status object, show progress
@@ -65,18 +66,21 @@ export function ImageIntegrityChecksSection({
           title="No image integrity checks run yet"
           description="Run image integrity checks to detect potential issues with images in your work."
           action={
-            <fetcher.Form method="post" action={remoteStatusActionPath}>
-              <input type="hidden" name="workVersionId" value={workVersionId} />
-              <ui.StatefulButton
-                type="submit"
-                variant="default"
-                name="intent"
-                value="execute"
-                busy={isSubmitting}
-              >
-                Run checks now
-              </ui.StatefulButton>
-            </fetcher.Form>
+            <ui.MaintenanceTooltip enabled={blocked} message={message}>
+              <fetcher.Form method="post" action={remoteStatusActionPath}>
+                <input type="hidden" name="workVersionId" value={workVersionId} />
+                <ui.StatefulButton
+                  type="submit"
+                  variant="default"
+                  name="intent"
+                  value="execute"
+                  busy={isSubmitting}
+                  disabled={blocked}
+                >
+                  Run checks now
+                </ui.StatefulButton>
+              </fetcher.Form>
+            </ui.MaintenanceTooltip>
           }
         />
       )}

@@ -57,6 +57,13 @@ export interface TextIntegrityStoredObject {
    * Mirrors report-related slices of the provider API (indexing + similarity generation/view settings).
    */
   settings?: TextIntegrityServiceSettings;
+  /** When enabled, user-facing check actions that call third-party APIs are blocked. */
+  maintenance?: {
+    enabled: boolean;
+    message?: string;
+    updatedAt?: string;
+    updatedByUserId?: string;
+  };
 }
 
 /** Persisted admin settings for text integrity (Object row + merged extension config). */
@@ -88,6 +95,7 @@ export interface TextIntegrityConfigOverlay {
   webhooks?: unknown[];
   defaults?: TextIntegrityDefaults;
   settings?: TextIntegrityServiceSettings;
+  maintenance?: TextIntegrityStoredObject['maintenance'];
 }
 
 export function cloneJsonObject(v: Record<string, unknown>): Record<string, unknown> {
@@ -159,6 +167,16 @@ export function coerceTextIntegrityStoredObject(data: unknown): TextIntegritySto
     out.serviceName = raw.serviceName;
   }
 
+  if (raw.maintenance != null && typeof raw.maintenance === 'object' && !Array.isArray(raw.maintenance)) {
+    const m = raw.maintenance as Record<string, unknown>;
+    out.maintenance = {
+      enabled: m.enabled === true,
+      ...(typeof m.message === 'string' && m.message.trim() !== '' ? { message: m.message.trim() } : {}),
+      ...(typeof m.updatedAt === 'string' ? { updatedAt: m.updatedAt } : {}),
+      ...(typeof m.updatedByUserId === 'string' ? { updatedByUserId: m.updatedByUserId } : {}),
+    };
+  }
+
   return out;
 }
 
@@ -173,6 +191,7 @@ function parseOverlay(data: unknown): Partial<TextIntegrityConfigOverlay> {
   if (stored.webhooks) overlay.webhooks = stored.webhooks;
   if (stored.defaults) overlay.defaults = stored.defaults;
   if (stored.settings) overlay.settings = stored.settings;
+  if (stored.maintenance) overlay.maintenance = stored.maintenance;
   return overlay;
 }
 

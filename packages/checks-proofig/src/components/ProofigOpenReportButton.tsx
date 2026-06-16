@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useFetcher } from 'react-router';
-import { ui } from '@curvenote/scms-core';
+import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
 
 export type ProofigOpenReportFetcherData = {
   success?: boolean;
@@ -33,15 +33,19 @@ export function ProofigOpenReportButton({
   /** Runs after a successful open (e.g. sub-image flow shows the refresh dialog). */
   onOpenedProofig?: () => void;
 }) {
+  const { blocked, message } = useCheckMaintenanceBlocked('proofig');
   const canServerOpen = Boolean(actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim());
+  const isDisabled = disabled || blocked;
 
   if (!canServerOpen) {
     return (
-      <ui.Button variant={variant} asChild disabled={disabled || !reportUrl.trim()}>
-        <a href={reportUrl} target="_blank" rel="noopener noreferrer">
-          {children}
-        </a>
-      </ui.Button>
+      <ui.MaintenanceTooltip enabled={blocked} message={message}>
+        <ui.Button variant={variant} asChild disabled={isDisabled || !reportUrl.trim()}>
+          <a href={reportUrl} target="_blank" rel="noopener noreferrer">
+            {children}
+          </a>
+        </ui.Button>
+      </ui.MaintenanceTooltip>
     );
   }
 
@@ -66,19 +70,21 @@ export function ProofigOpenReportButton({
   const busy = fetcher.state !== 'idle';
 
   return (
-    <ui.Button
-      type="button"
-      variant={variant}
-      disabled={disabled || !reportUrl.trim() || busy}
-      onClick={() => {
-        const fd = new FormData();
-        fd.set('intent', 'refresh-report-url');
-        fd.set('workVersionId', workVersionId!.trim());
-        fd.set('checkRunId', checkRunId!.trim());
-        fetcher.submit(fd, { method: 'post', action: actionPath!.trim() });
-      }}
-    >
-      {children}
-    </ui.Button>
+    <ui.MaintenanceTooltip enabled={blocked} message={message}>
+      <ui.Button
+        type="button"
+        variant={variant}
+        disabled={isDisabled || !reportUrl.trim() || busy}
+        onClick={() => {
+          const fd = new FormData();
+          fd.set('intent', 'refresh-report-url');
+          fd.set('workVersionId', workVersionId!.trim());
+          fd.set('checkRunId', checkRunId!.trim());
+          fetcher.submit(fd, { method: 'post', action: actionPath!.trim() });
+        }}
+      >
+        {children}
+      </ui.Button>
+    </ui.MaintenanceTooltip>
   );
 }

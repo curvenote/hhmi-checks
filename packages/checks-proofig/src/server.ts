@@ -34,6 +34,7 @@ function getSafeAdminConfig(config: Record<string, unknown>): Record<string, unk
     notifyBaseUrl: config.notifyBaseUrl,
     clientId: config.clientId,
     clientSecret: config.clientSecret ? '****************' : undefined,
+    maintenance: config.maintenance,
     // clientSecret is never exposed to the client
   };
 }

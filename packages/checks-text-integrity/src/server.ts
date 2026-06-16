@@ -31,6 +31,7 @@ function getSafeAdminConfig(config: Record<string, unknown>): Record<string, unk
     serviceName: config.serviceName,
     relayInstanceId: config.relayInstanceId,
     storedServiceConfiguration: buildStoredServiceConfigurationForAdmin(config),
+    maintenance: config.maintenance,
   };
 }
 

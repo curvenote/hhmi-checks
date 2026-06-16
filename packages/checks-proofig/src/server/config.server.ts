@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@curvenote/scms-db';
+import type { CheckMaintenanceRecord } from '@curvenote/scms-core';
 
 /**
  * Object table type for Proofig config overrides.
@@ -12,15 +13,35 @@ export interface ProofigConfigOverlay {
   apiBaseUrl?: string;
   clientId?: string;
   clientSecret?: string;
+  maintenance?: CheckMaintenanceRecord;
 }
 
-const OVERLAY_KEYS: (keyof ProofigConfigOverlay)[] = ['apiBaseUrl', 'clientId', 'clientSecret'];
+const OVERLAY_KEYS: (keyof ProofigConfigOverlay)[] = [
+  'apiBaseUrl',
+  'clientId',
+  'clientSecret',
+  'maintenance',
+];
 
 function parseOverlay(data: unknown): Partial<ProofigConfigOverlay> {
   if (data == null || typeof data !== 'object') return {};
   const raw = data as Record<string, unknown>;
   const overlay: Partial<ProofigConfigOverlay> = {};
   for (const key of OVERLAY_KEYS) {
+    if (key === 'maintenance') {
+      if (raw.maintenance != null && typeof raw.maintenance === 'object' && !Array.isArray(raw.maintenance)) {
+        const m = raw.maintenance as Record<string, unknown>;
+        overlay.maintenance = {
+          enabled: m.enabled === true,
+          ...(typeof m.message === 'string' && m.message.trim() !== ''
+            ? { message: m.message.trim() }
+            : {}),
+          ...(typeof m.updatedAt === 'string' ? { updatedAt: m.updatedAt } : {}),
+          ...(typeof m.updatedByUserId === 'string' ? { updatedByUserId: m.updatedByUserId } : {}),
+        };
+      }
+      continue;
+    }
     const v = raw[key];
     if (typeof v === 'string') overlay[key] = v;
   }

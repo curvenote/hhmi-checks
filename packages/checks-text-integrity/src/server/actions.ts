@@ -8,8 +8,10 @@ import {
   type ExtensionCheckHandleActionArgs,
   type ExtensionCheckHandleActionResult,
   type ExtensionCheckStatusArgs,
+  checkMaintenanceActionError,
   hasDocxInMetadata,
   hasPdfInMetadata,
+  maintenanceGuardFromConfig,
 } from '@curvenote/scms-core';
 import type { Prisma } from '@curvenote/scms-db';
 import {
@@ -157,6 +159,24 @@ export async function handleTextIntegrityAction(
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load EULA status';
       return { error: { type: 'general', message }, status: 500 };
+    }
+  }
+
+  const outboundIntents = new Set([
+    'accept-eula',
+    'execute',
+    'refresh-viewer-url',
+    'relay-status',
+    'restart-similarity-pdf',
+  ]);
+  if (ctx && outboundIntents.has(intent)) {
+    const prisma = await getPrismaClient();
+    const baseExt =
+      (ctx.$config?.app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};
+    const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
+    const maintenanceBlock = maintenanceGuardFromConfig(mergedConfig);
+    if (maintenanceBlock) {
+      return checkMaintenanceActionError(maintenanceBlock.error?.message);
     }
   }
 
