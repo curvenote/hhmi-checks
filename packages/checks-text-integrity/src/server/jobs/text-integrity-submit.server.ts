@@ -26,7 +26,9 @@ import {
   assertSubmitterEulaAccepted,
   buildUploadEulaMetadata,
   isEulaRequired,
+  isRelayEulaNotAccepted,
   refreshEulaCacheIfStale,
+  resolveEulaSubmitFailureMessage,
 } from '../eula.server.js';
 
 /** Job type for Text Integrity submit via checks-relay. */
@@ -172,8 +174,22 @@ type RelaySubmitResponse = {
     externalId?: string;
     submissionId?: string;
     externalRef?: string;
+    error?: string;
+    statusCode?: number;
+    code?: string;
   };
 };
+
+function relaySubmitErrorDetail(relayJson: RelaySubmitResponse, httpStatus: number): string {
+  return (
+    relayJson.message ??
+    relayJson.error ??
+    (typeof relayJson.result === 'object' && relayJson.result && 'error' in relayJson.result
+      ? String((relayJson.result as { error?: string }).error)
+      : null) ??
+    `checks-relay upload failed (HTTP ${httpStatus})`
+  );
+}
 
 async function readRelaySubmitResponse(res: Response): Promise<RelaySubmitResponse> {
   const text = await res.text();
@@ -360,13 +376,16 @@ export async function textIntegritySubmitHandler(
     const relayJson = await readRelaySubmitResponse(res);
 
     if (!res.ok || relayJson.status === 'error') {
-      const detail =
-        relayJson.message ??
-        relayJson.error ??
-        (typeof relayJson.result === 'object' && relayJson.result && 'error' in relayJson.result
-          ? String((relayJson.result as { error?: string }).error)
-          : null) ??
-        `checks-relay upload failed (HTTP ${res.status})`;
+      const detail = relaySubmitErrorDetail(relayJson, res.status);
+      if (
+        isRelayEulaNotAccepted({
+          httpStatus: res.status,
+          result: relayJson.result,
+        })
+      ) {
+        const userMessage = await resolveEulaSubmitFailureMessage(ctx, mergedConfig, detail);
+        throw httpError(400, userMessage);
+      }
       throw httpError(res.status >= 400 && res.status < 600 ? res.status : 502, detail);
     }
 

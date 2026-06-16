@@ -345,6 +345,56 @@ export async function assertSubmitterEulaAccepted(
   return 'You must accept the Turnitin EULA before using text integrity.';
 }
 
+export const EULA_VERSION_STALE_USER_MESSAGE =
+  'Turnitin updated their terms. Please review and accept the new EULA, then run the check again.';
+
+export function isRelayEulaNotAccepted(params: {
+  httpStatus: number;
+  result?: { code?: string; statusCode?: number };
+}): boolean {
+  if (params.httpStatus === 451) return true;
+  const result = params.result;
+  if (result?.code === 'EULA_NOT_ACCEPTED') return true;
+  if (result?.statusCode === 451) return true;
+  return false;
+}
+
+/**
+ * After checks-relay/TCA returns EULA-not-accepted, force-refresh cached terms and return a
+ * user-facing message (version drift vs provider rejection).
+ */
+export async function resolveEulaSubmitFailureMessage(
+  ctx: TextIntegrityEulaContext,
+  mergedConfig: Record<string, unknown>,
+  providerMessage?: string,
+): Promise<string> {
+  await refreshEulaCache(ctx, mergedConfig, { force: true });
+
+  if (!isEulaRequired(mergedConfig)) {
+    const trimmed = providerMessage?.trim();
+    return trimmed || 'Submitter has not accepted the required Turnitin EULA.';
+  }
+
+  const prisma = await getPrismaClient();
+  const user = ctx.user?.id
+    ? await prisma.user.findUnique({
+        where: { id: ctx.user.id },
+        select: { data: true },
+      })
+    : null;
+  const cached = await loadCachedEula(prisma);
+
+  if (!hasAcceptedLatestEula(user?.data, cached)) {
+    return EULA_VERSION_STALE_USER_MESSAGE;
+  }
+
+  const trimmed = providerMessage?.trim();
+  return (
+    trimmed ||
+    'Submitter has not accepted the required Turnitin EULA. Please accept the terms and run the check again.'
+  );
+}
+
 /** EULA metadata for TCA viewer-url requests (same shape as upload). */
 export async function buildViewerEulaPayload(
   ctx: TextIntegrityEulaContext,
