@@ -1,21 +1,43 @@
 import { ui } from '@curvenote/scms-core';
-import type { ProofigStage } from '../../schema.js';
+import type { ProofigDataSchema, ProofigStage, ProofigStages } from '../../schema.js';
+import {
+  ALL_PENDING_STAGES,
+  getStageProgressStep,
+  shouldShowDocxPreparationCompleteNote,
+} from '../../schema.js';
 import { ProofigRefreshRemoteStatusButton } from '../ProofigRefreshRemoteStatusButton.js';
+import { DocxPreparationCompleteNote } from './DocxPreparationCompleteNote.js';
 import { DefaultArea } from './DefaultArea.js';
 import { SimpleErrorArea } from './SimpleErrorArea.js';
 import { StageProgressArea } from './StageProgressArea.js';
 
 export function InitialPostProgressArea({
   data,
+  allStages = ALL_PENDING_STAGES,
+  preparation,
   workVersionId,
   checkRunId,
   remoteStatusActionPath,
 }: {
   data: ProofigStage;
+  allStages?: ProofigStages;
+  preparation?: ProofigDataSchema['preparation'];
   workVersionId?: string;
   checkRunId?: string;
   remoteStatusActionPath?: string;
 }) {
+  const { step, numSteps } = getStageProgressStep('initialPost', allStages, preparation);
+  const showPrepNote = shouldShowDocxPreparationCompleteNote(preparation, allStages);
+  const refreshButton =
+    remoteStatusActionPath && workVersionId ? (
+      <ProofigRefreshRemoteStatusButton
+        actionPath={remoteStatusActionPath}
+        workVersionId={workVersionId}
+        checkRunId={checkRunId}
+        buttonSize="sm"
+      />
+    ) : null;
+
   switch (data.status) {
     case 'pending':
       return (
@@ -30,20 +52,12 @@ export function InitialPostProgressArea({
             }
           />
           <StageProgressArea
-            step={1}
-            numSteps={4}
+            step={step}
+            numSteps={numSteps}
             stageStartedAt={data.timestamp}
-            trailingSlot={
-              remoteStatusActionPath && workVersionId ? (
-                <ProofigRefreshRemoteStatusButton
-                  actionPath={remoteStatusActionPath}
-                  workVersionId={workVersionId}
-                  checkRunId={checkRunId}
-                  buttonSize="sm"
-                />
-              ) : null
-            }
+            trailingSlot={refreshButton}
           />
+          {showPrepNote ? <DocxPreparationCompleteNote /> : null}
         </div>
       );
     case 'processing':
@@ -59,20 +73,12 @@ export function InitialPostProgressArea({
             }
           />
           <StageProgressArea
-            step={1}
-            numSteps={4}
+            step={step}
+            numSteps={numSteps}
             stageStartedAt={data.timestamp}
-            trailingSlot={
-              remoteStatusActionPath && workVersionId ? (
-                <ProofigRefreshRemoteStatusButton
-                  actionPath={remoteStatusActionPath}
-                  workVersionId={workVersionId}
-                  checkRunId={checkRunId}
-                  buttonSize="sm"
-                />
-              ) : null
-            }
+            trailingSlot={refreshButton}
           />
+          {showPrepNote ? <DocxPreparationCompleteNote /> : null}
         </div>
       );
     case 'completed':
@@ -88,24 +94,18 @@ export function InitialPostProgressArea({
             }
           />
           <StageProgressArea
-            step={1}
-            numSteps={4}
+            step={step}
+            numSteps={numSteps}
             stageStartedAt={data.timestamp}
-            trailingSlot={
-              remoteStatusActionPath && workVersionId ? (
-                <ProofigRefreshRemoteStatusButton
-                  actionPath={remoteStatusActionPath}
-                  workVersionId={workVersionId}
-                  checkRunId={checkRunId}
-                  buttonSize="sm"
-                />
-              ) : null
-            }
+            trailingSlot={refreshButton}
           />
+          {showPrepNote ? <DocxPreparationCompleteNote /> : null}
         </div>
       );
     case 'error':
-      return <SimpleErrorArea step={1} numSteps={4} message="Upload failed." data={data} />;
+      return (
+        <SimpleErrorArea step={step} numSteps={numSteps} message="Upload failed." data={data} />
+      );
   }
   return <DefaultArea />;
 }

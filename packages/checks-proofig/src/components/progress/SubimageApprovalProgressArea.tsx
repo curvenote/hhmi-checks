@@ -1,6 +1,7 @@
 import { ui } from '@curvenote/scms-core';
 import { Logos } from '../../client.js';
-import type { ProofigStage } from '../../schema.js';
+import type { ProofigDataSchema, ProofigStage, ProofigStages } from '../../schema.js';
+import { ALL_PENDING_STAGES, getStageProgressStep } from '../../schema.js';
 import { MissingReportUrlIcon } from '../MissingReportUrlIcon.js';
 import { ProofigProgressRefreshRow } from '../ProofigProgressRefreshRow.js';
 import { ProofigSubimageApprovalReportLink } from '../ProofigSubimageApprovalReportLink.js';
@@ -10,6 +11,8 @@ import { StageProgressArea } from './StageProgressArea.js';
 
 export function SubimageApprovalProgressArea({
   data,
+  allStages = ALL_PENDING_STAGES,
+  preparation,
   reportUrl,
   deleted,
   workVersionId,
@@ -17,15 +20,23 @@ export function SubimageApprovalProgressArea({
   remoteStatusActionPath,
 }: {
   data: ProofigStage;
+  allStages?: ProofigStages;
+  preparation?: ProofigDataSchema['preparation'];
   reportUrl?: string;
   deleted?: boolean;
   workVersionId?: string;
   checkRunId?: string;
   remoteStatusActionPath?: string;
 }) {
+  const { step, numSteps } = getStageProgressStep('subimageSelection', allStages, preparation);
   if (data.status === 'error')
     return (
-      <SimpleErrorArea step={3} numSteps={4} message="Subimage selection failed." data={data} />
+      <SimpleErrorArea
+        step={step}
+        numSteps={numSteps}
+        message="Subimage selection failed."
+        data={data}
+      />
     );
   if (data.status === 'notify-skipped') {
     return (
@@ -39,7 +50,7 @@ export function SubimageApprovalProgressArea({
             </div>
           }
         />
-        <StageProgressArea step={3} numSteps={4} stageStartedAt={data.timestamp} />
+        <StageProgressArea step={step} numSteps={numSteps} stageStartedAt={data.timestamp} />
       </div>
     );
   }
@@ -62,8 +73,8 @@ export function SubimageApprovalProgressArea({
         }
       />
       <StageProgressArea
-        step={2}
-        numSteps={4}
+        step={step}
+        numSteps={numSteps}
         state="success"
         stageStartedAt={data.timestamp}
         label="Updated"

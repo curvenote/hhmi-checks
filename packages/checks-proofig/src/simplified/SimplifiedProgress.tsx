@@ -1,5 +1,6 @@
 import type { ProofigDataSchema } from '../schema.js';
 import { ALL_PENDING_STAGES, getCurrentProofigStage } from '../schema.js';
+import { SimplifiedDocumentPreparation } from './SimplifiedDocumentPreparation.js';
 import { SimplifiedInitialPost } from './SimplifiedInitialPost.js';
 import { SimplifiedSubimageDetection } from './SimplifiedSubimageDetection.js';
 import { SimplifiedSubimageApproval } from './SimplifiedSubimageApproval.js';
@@ -23,10 +24,15 @@ export function SimplifiedProgress({
   const stages = { ...ALL_PENDING_STAGES, ...proofigData?.stages };
   const { currentStage } = getCurrentProofigStage(stages);
 
+  if (currentStage === 'documentPreparation' && stages.documentPreparation) {
+    return <SimplifiedDocumentPreparation data={stages.documentPreparation} />;
+  }
   if (currentStage === 'initialPost') {
     return (
       <SimplifiedInitialPost
         data={stages.initialPost}
+        allStages={stages}
+        preparation={proofigData?.preparation}
         workVersionId={workVersionId}
         checkRunId={checkRunId}
         remoteStatusActionPath={remoteStatusActionPath}

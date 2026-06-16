@@ -1,16 +1,22 @@
-import type { ProofigStage } from '../schema.js';
+import type { ProofigDataSchema, ProofigStage, ProofigStages } from '../schema.js';
+import { ALL_PENDING_STAGES, shouldShowDocxPreparationCompleteNote } from '../schema.js';
 import { ui } from '@curvenote/scms-core';
+import { DocxPreparationCompleteNote } from '../components/progress/DocxPreparationCompleteNote.js';
 import { ProofigProgressRefreshRow } from '../components/ProofigProgressRefreshRow.js';
 import { SimplifiedError } from './SimplifiedError.js';
 import { SimplifiedProgressAlertMessage } from './SimplifiedProgressAlertMessage.js';
 
 export function SimplifiedInitialPost({
   data,
+  allStages = ALL_PENDING_STAGES,
+  preparation,
   workVersionId,
   checkRunId,
   remoteStatusActionPath,
 }: {
   data: ProofigStage;
+  allStages?: ProofigStages;
+  preparation?: ProofigDataSchema['preparation'];
   workVersionId?: string;
   checkRunId?: string;
   remoteStatusActionPath?: string;
@@ -18,6 +24,7 @@ export function SimplifiedInitialPost({
   if (data.status === 'error') {
     return <SimplifiedError data={data} message="Upload failed" />;
   }
+  const showPrepNote = shouldShowDocxPreparationCompleteNote(preparation, allStages);
   const refresh = (
     <ProofigProgressRefreshRow
       remoteStatusActionPath={remoteStatusActionPath}
@@ -29,8 +36,12 @@ export function SimplifiedInitialPost({
     case 'pending':
       return (
         <div className="space-y-2">
-          <ui.SimpleAlert type="info" message={<SimplifiedProgressAlertMessage text="Connecting…" />} />
+          <ui.SimpleAlert
+            type="info"
+            message={<SimplifiedProgressAlertMessage text="Connecting…" />}
+          />
           {refresh}
+          {showPrepNote ? <DocxPreparationCompleteNote /> : null}
         </div>
       );
     case 'processing':
@@ -41,6 +52,7 @@ export function SimplifiedInitialPost({
             message={<SimplifiedProgressAlertMessage text="Uploading to Proofig…" />}
           />
           {refresh}
+          {showPrepNote ? <DocxPreparationCompleteNote /> : null}
         </div>
       );
     case 'completed':
@@ -48,6 +60,7 @@ export function SimplifiedInitialPost({
         <div className="space-y-2">
           <ui.SimpleAlert type="info" message="Upload complete." />
           {refresh}
+          {showPrepNote ? <DocxPreparationCompleteNote /> : null}
         </div>
       );
 

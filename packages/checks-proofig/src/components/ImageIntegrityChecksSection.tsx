@@ -6,6 +6,7 @@ import { Logos } from '../client.js';
 import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
 import { ProofigProgressComponent } from './ProofigProgressComponent.js';
 import type { ProofigDataSchema } from '../schema.js';
+import { ALL_PENDING_STAGES, isProofigAwaitingDocumentPreparationInUi } from '../schema.js';
 
 // Re-export types that might be needed by consumers
 // Note: ProofigDataSchema is exported from schema.js, so we don't re-export it here to avoid duplicates
@@ -27,11 +28,19 @@ export function ImageIntegrityChecksSection({
   // If proofig is enabled and has a status object, show progress
   const checkedAvailableOrInProgress = !!metadata;
   const isSubmitting = fetcher.state === 'submitting';
+  const stages = metadata?.stages ? { ...ALL_PENDING_STAGES, ...metadata.stages } : null;
+  const awaitingDocumentPreparation =
+    stages != null && isProofigAwaitingDocumentPreparationInUi(stages);
 
-  // Poll when we have check data, or while waiting for first response after submit
+  // Poll when we have check data, while waiting for first response after submit, or during DOCX prep
   useRevalidateOnInterval({
-    enabled: checkedAvailableOrInProgress || isSubmitting,
-    interval: isSubmitting && !checkedAvailableOrInProgress ? 1000 : 3000,
+    enabled: checkedAvailableOrInProgress || isSubmitting || awaitingDocumentPreparation,
+    interval:
+      isSubmitting && !checkedAvailableOrInProgress
+        ? 1000
+        : awaitingDocumentPreparation
+          ? 2000
+          : 3000,
   });
 
   // Show toast on initial fetcher error when still on CTA (no check data yet)

@@ -282,7 +282,11 @@ export default function ManuscriptChecksPage({ loaderData }: { loaderData: Loade
                 {draftFetcher.state === 'submitting' || draftFetcher.state === 'loading' ? (
                   <p className="flex justify-between items-center gap-3 text-sm text-muted-foreground">
                     <span>Preparing upload…</span>
-                    <LoadingSpinner className="shrink-0 text-muted-foreground" size={22} thickness={3} />
+                    <LoadingSpinner
+                      className="shrink-0 text-muted-foreground"
+                      size={22}
+                      thickness={3}
+                    />
                   </p>
                 ) : draftData && !draftData.success && draftData.error ? (
                   <ui.SimpleAlert type="error" message={draftData.error} />

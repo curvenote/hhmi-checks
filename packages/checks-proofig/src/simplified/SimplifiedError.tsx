@@ -10,6 +10,13 @@ export function SimplifiedError({
 }) {
   const text = data?.error ?? message;
   return (
-    <ui.SimpleAlert type="error" message={<><span className="font-bold">Error:</span> {text}</>} />
+    <ui.SimpleAlert
+      type="error"
+      message={
+        <>
+          <span className="font-bold">Error:</span> {text}
+        </>
+      }
+    />
   );
 }

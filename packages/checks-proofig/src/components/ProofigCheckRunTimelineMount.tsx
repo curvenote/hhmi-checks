@@ -7,6 +7,7 @@ import {
   isProofigAwaitingSubimageApprovalInUi,
   proofigDataSchema,
 } from '../schema.js';
+import { ProofigDocumentPreparationHydrateMount } from './ProofigDocumentPreparationHydrateMount.js';
 
 /**
  * Headless work-details timeline mount: POST hydrate intent when this run is the latest Proofig run
@@ -71,5 +72,15 @@ export function ProofigCheckRunTimelineMount({
     // render; with fetcher success data still present, that would re-fire this effect and spam revalidate.
   }, [hydrateFetcher.state, hydrateFetcher.data]);
 
-  return null;
+  return (
+    <>
+      <ProofigDocumentPreparationHydrateMount
+        checkKind={checkKind}
+        checkRunId={checkRunId}
+        workVersionId={workVersionId}
+        metadata={metadata}
+        remoteStatusActionPath={remoteStatusActionPath}
+      />
+    </>
+  );
 }

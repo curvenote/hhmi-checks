@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { cn, ui } from '@curvenote/scms-core';
-import type { ProofigStage } from '../../schema.js';
+import type { ProofigDataSchema, ProofigStage, ProofigStages } from '../../schema.js';
+import { ALL_PENDING_STAGES, getStageProgressStep } from '../../schema.js';
 import { ProofigRefreshRemoteStatusButton } from '../ProofigRefreshRemoteStatusButton.js';
 import { SimpleErrorArea } from './SimpleErrorArea.js';
 import { StageProgressArea } from './StageProgressArea.js';
@@ -9,15 +10,20 @@ const FOLLOW_UP_DELAY_MS = 5000;
 
 export function IntegrityDetectionProgressArea({
   data,
+  allStages = ALL_PENDING_STAGES,
+  preparation,
   workVersionId,
   checkRunId,
   remoteStatusActionPath,
 }: {
   data: ProofigStage;
+  allStages?: ProofigStages;
+  preparation?: ProofigDataSchema['preparation'];
   workVersionId?: string;
   checkRunId?: string;
   remoteStatusActionPath?: string;
 }) {
+  const { step, numSteps } = getStageProgressStep('integrityDetection', allStages, preparation);
   const [showFollowUp, setShowFollowUp] = useState(false);
   useEffect(() => {
     setShowFollowUp(false);
@@ -27,7 +33,12 @@ export function IntegrityDetectionProgressArea({
 
   if (data.status === 'error')
     return (
-      <SimpleErrorArea step={4} numSteps={4} message="Integrity detection failed." data={data} />
+      <SimpleErrorArea
+        step={step}
+        numSteps={numSteps}
+        message="Integrity detection failed."
+        data={data}
+      />
     );
   if (data.status === 'notify-skipped') {
     return (
@@ -41,7 +52,7 @@ export function IntegrityDetectionProgressArea({
             </div>
           }
         />
-        <StageProgressArea step={4} numSteps={4} stageStartedAt={data.timestamp} />
+        <StageProgressArea step={step} numSteps={numSteps} stageStartedAt={data.timestamp} />
       </div>
     );
   }
@@ -66,8 +77,8 @@ export function IntegrityDetectionProgressArea({
         }
       />
       <StageProgressArea
-        step={4}
-        numSteps={4}
+        step={step}
+        numSteps={numSteps}
         stageStartedAt={data.timestamp}
         trailingSlot={
           remoteStatusActionPath && workVersionId ? (

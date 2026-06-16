@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { cn, ui } from '@curvenote/scms-core';
-import type { ProofigStage } from '../../schema.js';
+import type { ProofigDataSchema, ProofigStage, ProofigStages } from '../../schema.js';
+import { ALL_PENDING_STAGES, getStageProgressStep } from '../../schema.js';
 import { ProofigRefreshRemoteStatusButton } from '../ProofigRefreshRemoteStatusButton.js';
 import { SimpleErrorArea } from './SimpleErrorArea.js';
 import { StageProgressArea } from './StageProgressArea.js';
@@ -9,15 +10,20 @@ const FOLLOW_UP_DELAY_MS = 5000;
 
 export function SubimageDetectionProgressArea({
   data,
+  allStages = ALL_PENDING_STAGES,
+  preparation,
   workVersionId,
   checkRunId,
   remoteStatusActionPath,
 }: {
   data: ProofigStage;
+  allStages?: ProofigStages;
+  preparation?: ProofigDataSchema['preparation'];
   workVersionId?: string;
   checkRunId?: string;
   remoteStatusActionPath?: string;
 }) {
+  const { step, numSteps } = getStageProgressStep('subimageDetection', allStages, preparation);
   const [showFollowUp, setShowFollowUp] = useState(false);
   useEffect(() => {
     setShowFollowUp(false);
@@ -27,7 +33,12 @@ export function SubimageDetectionProgressArea({
 
   if (data.status === 'error')
     return (
-      <SimpleErrorArea step={2} numSteps={4} message="Subimage detection failed." data={data} />
+      <SimpleErrorArea
+        step={step}
+        numSteps={numSteps}
+        message="Subimage detection failed."
+        data={data}
+      />
     );
   if (data.status === 'pending') {
     return (
@@ -42,8 +53,8 @@ export function SubimageDetectionProgressArea({
           }
         />
         <StageProgressArea
-          step={1}
-          numSteps={4}
+          step={step}
+          numSteps={numSteps}
           stageStartedAt={data.timestamp}
           label="Waiting for"
           addSuffix={false}
@@ -74,8 +85,8 @@ export function SubimageDetectionProgressArea({
           }
         />
         <StageProgressArea
-          step={2}
-          numSteps={4}
+          step={step}
+          numSteps={numSteps}
           stageStartedAt={data.timestamp}
           label="Completed"
         />
@@ -102,8 +113,8 @@ export function SubimageDetectionProgressArea({
         }
       />
       <StageProgressArea
-        step={2}
-        numSteps={4}
+        step={step}
+        numSteps={numSteps}
         stageStartedAt={data.timestamp}
         trailingSlot={
           remoteStatusActionPath && workVersionId ? (
