@@ -24,7 +24,7 @@ properties:
   notifyBaseUrl:
     type: string
     description: >-
-      Optional absolute base for Text Integrity webhook notify URLs (no trailing slash). When unset, submit uses `{request-origin}/v1/hooks/text-integrity/notify`. Provider API keys belong in object store only, not here.
+      Required absolute base for Text Integrity webhook notify URLs (no trailing slash), e.g. https://host/v1/hooks/text-integrity/notify. Provider API keys belong in object store only, not here.
   eulaCronSecret:
     type: string
     secret: true

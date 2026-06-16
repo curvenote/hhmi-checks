@@ -3,7 +3,6 @@ import { error405, httpError } from '@curvenote/scms-core';
 import {
   getPrismaClient,
   safeCheckServiceRunDataUpdate,
-  withAppContext,
 } from '@curvenote/scms-server';
 import type { Prisma } from '@curvenote/scms-db';
 import type { TextIntegrityDataSchema } from '../../schema.js';
@@ -98,9 +97,7 @@ export async function action(args: ActionFunctionArgs) {
       select: { work_version_id: true, created_by_id: true },
     });
     if (run?.work_version_id) {
-      const ctx = await withAppContext(args);
       await enqueueTextIntegrityPersistPdfJob(
-        ctx,
         run.work_version_id,
         id,
         run.created_by_id ?? undefined,

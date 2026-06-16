@@ -78,7 +78,7 @@ export async function textIntegrityPersistPdfHandler(
     throw httpError(422, `Work version ${payload.work_version_id} has no cdn / cdn_key`);
   }
 
-  const job = await jobs.dbCreateJob({ ...data, status: JobStatus.QUEUED });
+  const job = await jobs.dbStartJob({ ...data, status: JobStatus.RUNNING });
   await jobs.dbUpdateJob(job.id, {
     status: JobStatus.RUNNING,
     message: 'Text integrity persist similarity PDF',

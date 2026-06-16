@@ -1,11 +1,9 @@
 import { uuidv7 as uuid } from 'uuidv7';
 import {
+  enqueueAndDispatchJob,
   getPrismaClient,
-  jobs,
-  registerExtensionJobs,
   safeCheckServiceRunDataUpdate,
 } from '@curvenote/scms-server';
-import type { Context as ServerContext } from '@curvenote/scms-server';
 import {
   type ExtensionCheckHandleActionArgs,
   type ExtensionCheckHandleActionResult,
@@ -144,7 +142,7 @@ const VIEWER_URL_DEFAULTS = {
 export async function handleTextIntegrityAction(
   args: ExtensionCheckHandleActionArgs,
 ): Promise<ExtensionCheckHandleActionResult | Response> {
-  const { intent: rawIntent, workVersionId, ctx, serverExtensions, formData } = args;
+  const { intent: rawIntent, workVersionId, ctx, formData } = args;
   const intent = rawIntent.startsWith('checks-text-integrity:')
     ? rawIntent.split(':', 2)[1]
     : rawIntent;
@@ -262,23 +260,18 @@ export async function handleTextIntegrityAction(
     });
     const checkRunId = run.id;
 
-    const extensionJobs = registerExtensionJobs(serverExtensions ?? []);
     try {
-      await jobs.invoke(
-        ctx as ServerContext,
-        {
-          id: uuid(),
-          job_type: TEXT_INTEGRITY_SUBMIT,
-          payload: {
-            work_version_id: workVersionId,
-            check_service_run_id: checkRunId,
-          },
-          invoked_by_id: ctx.user?.id,
-          activity_type: 'CHECK_STARTED',
-          activity_data: { check: { kind: 'checks-text-integrity' } },
+      await enqueueAndDispatchJob({
+        job_id: uuid(),
+        job_type: TEXT_INTEGRITY_SUBMIT,
+        payload: {
+          work_version_id: workVersionId,
+          check_service_run_id: checkRunId,
         },
-        extensionJobs,
-      );
+        invoked_by_id: ctx.user?.id,
+        activity_type: 'CHECK_STARTED',
+        activity_data: { check: { kind: 'checks-text-integrity' } },
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Text Integrity submit job failed';
       console.error('TEXT_INTEGRITY_SUBMIT job create failed', err);

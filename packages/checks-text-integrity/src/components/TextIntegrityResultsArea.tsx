@@ -1,5 +1,5 @@
 import type { TextIntegrityDataSchema } from '../schema.js';
-import { getTextIntegrityManifest } from '../schema.js';
+import { getTextIntegrityManifest, isWaitingForPdfReport } from '../schema.js';
 import { SimilarityScoresBlock } from './SimilarityScoresBlock.js';
 import { TextIntegrityPdfReportStatus } from './TextIntegrityPdfReportStatus.js';
 import { TopMatchesBlock } from './TopMatchesBlock.js';
@@ -21,7 +21,7 @@ export function TextIntegrityResultsArea({
   const { summaryReport, stages } = metadata;
   const manifest = getTextIntegrityManifest(metadata);
   const reportGenStatus = stages?.reportGeneration?.status;
-  const waitingForReport = reportGenStatus === 'processing' || reportGenStatus === 'pending';
+  const waitingForReport = isWaitingForPdfReport(metadata);
   const reportGenerationComplete = reportGenStatus === 'completed';
   const reportGenerationFailed = reportGenStatus === 'error';
 

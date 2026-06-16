@@ -315,6 +315,12 @@ export function canShowReportPdf(data: TextIntegrityDataSchema | undefined): boo
   return linearStageIsDone(data.stages.reportGeneration?.status);
 }
 
+/** True while the similarity PDF report is still being generated (results UI waiting state). */
+export function isWaitingForPdfReport(data: TextIntegrityDataSchema | undefined): boolean {
+  const status = data?.stages?.reportGeneration?.status;
+  return status === 'processing' || status === 'pending';
+}
+
 /** True when the similarity PDF has been persisted to work storage for this run. */
 export function hasStoredSimilarityReport(data: TextIntegrityDataSchema | undefined): boolean {
   return data?.similarityReportStored === true;

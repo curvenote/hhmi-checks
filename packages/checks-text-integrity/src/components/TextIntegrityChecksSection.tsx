@@ -4,7 +4,7 @@ import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
 import { TextIntegrityProgressComponent } from './TextIntegrityProgressComponent.js';
 import { TextIntegrityResultsArea } from './TextIntegrityResultsArea.js';
 import type { TextIntegrityDataSchema } from '../schema.js';
-import { canShowResults, getTextIntegrityManifest } from '../schema.js';
+import { canShowResults, getTextIntegrityManifest, isWaitingForPdfReport } from '../schema.js';
 
 interface TextIntegrityChecksSectionProps {
   metadata: TextIntegrityDataSchema | undefined;
@@ -24,13 +24,17 @@ export function TextIntegrityChecksSection({
 }: TextIntegrityChecksSectionProps) {
   const hasData = !!metadata?.stages;
   const showResults = canShowResults(metadata);
+  /** Run row exists but submit job has not stamped `stages` yet (brief post-dispatch window). */
+  const awaitingInitialStages = !hasData && Boolean(checkRunId?.trim());
   const manifest = getTextIntegrityManifest(metadata);
   const manifestLogo = manifest?.logo;
   const manifestTitle = manifest?.title;
 
+  const waitingForPdfReport = showResults && isWaitingForPdfReport(metadata);
+
   useRevalidateOnInterval({
-    enabled: !hasData || (hasData && !showResults),
-    interval: !hasData ? 2000 : 3000,
+    enabled: awaitingInitialStages || (hasData && !showResults) || waitingForPdfReport,
+    interval: awaitingInitialStages ? 2000 : 3000,
   });
 
   if (!hasData) {

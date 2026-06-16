@@ -81,10 +81,7 @@ export interface TextIntegrityConfigOverlay {
   serviceName?: string;
   /** Relay URL instance segment; merged from extension yaml and Object row. */
   relayInstanceId?: string;
-  /**
-   * Absolute base for Text Integrity webhook URLs (no trailing slash).
-   * Default: `{request-origin}/v1/hooks/text-integrity/notify` when running the submit job.
-   */
+  /** Absolute base for Text Integrity webhook URLs (no trailing slash). Required at submit time. */
   notifyBaseUrl?: string;
   manifest?: Record<string, unknown>;
   features?: Record<string, unknown>;

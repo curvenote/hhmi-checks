@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { uuidv7 } from 'uuidv7';
 import {
   getPrismaClient,
+  hooksNotifyBaseUrl,
   jobs,
   safeCheckServiceRunDataUpdate,
   signFilesInMetadata,
@@ -217,7 +218,7 @@ export async function textIntegritySubmitHandler(
     if (row) submitterUser = row;
   }
 
-  const job = await jobs.dbCreateJob({ ...data, status: JobStatus.QUEUED });
+  const job = await jobs.dbStartJob({ ...data, status: JobStatus.RUNNING });
   await jobs.dbUpdateJob(job.id, {
     status: JobStatus.RUNNING,
     message: 'Text integrity submit',
@@ -305,10 +306,9 @@ export async function textIntegritySubmitHandler(
       payload.work_version_id,
     );
 
-    const notifyBase =
-      (typeof mergedConfig.notifyBaseUrl === 'string' && mergedConfig.notifyBaseUrl.trim() !== ''
-        ? mergedConfig.notifyBaseUrl.trim().replace(/\/$/, '')
-        : `${new URL(ctx.request.url).origin}/v1/hooks/text-integrity/notify`) ?? '';
+    const notifyBaseUrlOverride =
+      typeof mergedConfig.notifyBaseUrl === 'string' ? mergedConfig.notifyBaseUrl : undefined;
+    const notifyBase = hooksNotifyBaseUrl('text-integrity/notify', notifyBaseUrlOverride);
     const notifyUrl = `${notifyBase}/${payload.check_service_run_id}`;
 
     const submitUrl = checksRelayUploadUrl(relayBaseUrl, serviceName, relayInstanceId);
@@ -328,7 +328,9 @@ export async function textIntegritySubmitHandler(
         title: workVersionRow.title,
         owner: userIdentity,
         submitter: userIdentity,
-        relayContext: buildRelayContextEnvelope(mergedConfig.settings as TextIntegrityServiceSettings),
+        relayContext: buildRelayContextEnvelope(
+          mergedConfig.settings as TextIntegrityServiceSettings,
+        ),
         ...(requireEula ? { require_eula: true } : {}),
         ...(eulaPayload ? { eula: eulaPayload } : {}),
       },
