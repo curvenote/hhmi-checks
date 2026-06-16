@@ -6,26 +6,26 @@ import { z } from 'zod';
 import { jobs } from '@curvenote/scms-server';
 import { applyDocumentPreparationFromConverterJob } from '../applyDocumentPreparationFromConverterJob.server.js';
 
-/** Sync check run documentPreparation from a terminal CONVERTER_TASK (failure path). */
-export const PROOFIG_SYNC_DOCUMENT_PREPARATION = 'PROOFIG_SYNC_DOCUMENT_PREPARATION';
+/** Terminal cleanup when a DOCX CONVERTER_TASK parent fails. */
+export const PROOFIG_CONVERTER_FAILURE_CLEANUP = 'PROOFIG_CONVERTER_FAILURE_CLEANUP';
 
-const CreateProofigSyncDocumentPreparationPayloadSchema = z.object({
+const CreateProofigConverterFailureCleanupPayloadSchema = z.object({
   proofig_run_id: z.string().min(1, 'proofig_run_id is required'),
 });
 
-export type CreateProofigSyncDocumentPreparationPayload = z.infer<
-  typeof CreateProofigSyncDocumentPreparationPayloadSchema
+export type CreateProofigConverterFailureCleanupPayload = z.infer<
+  typeof CreateProofigConverterFailureCleanupPayloadSchema
 >;
 
 /**
  * Promoted when a DOCX CONVERTER_TASK parent fails. Marks the linked Proofig check run
  * error state without requiring client-side hydrate polling.
  */
-export async function proofigSyncDocumentPreparationHandler(_ctx: Context, data: CreateJob) {
-  const parseResult = CreateProofigSyncDocumentPreparationPayloadSchema.safeParse(data.payload);
+export async function proofigConverterFailureCleanupHandler(_ctx: Context, data: CreateJob) {
+  const parseResult = CreateProofigConverterFailureCleanupPayloadSchema.safeParse(data.payload);
   if (!parseResult.success) {
     const msg = parseResult.error.issues.map((e) => e.message).join('; ');
-    throw httpError(400, `Invalid ${PROOFIG_SYNC_DOCUMENT_PREPARATION} payload: ${msg}`);
+    throw httpError(400, `Invalid ${PROOFIG_CONVERTER_FAILURE_CLEANUP} payload: ${msg}`);
   }
 
   const applyResult = await applyDocumentPreparationFromConverterJob(
@@ -41,8 +41,8 @@ export async function proofigSyncDocumentPreparationHandler(_ctx: Context, data:
   return jobs.dbUpdateJob(data.id, {
     status: JobStatus.COMPLETED,
     message: applyResult.updated
-      ? 'Proofig document preparation synced from converter job'
-      : 'Proofig document preparation already synced',
+      ? 'Proofig check run marked error after converter failure'
+      : 'Proofig check run already terminal after converter failure',
     results: { updated: applyResult.updated },
   });
 }

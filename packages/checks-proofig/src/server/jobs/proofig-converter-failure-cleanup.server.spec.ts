@@ -22,47 +22,47 @@ vi.mock('@curvenote/scms-server', async (importOriginal) => {
 });
 
 import {
-  PROOFIG_SYNC_DOCUMENT_PREPARATION,
-  proofigSyncDocumentPreparationHandler,
-} from './proofig-sync-document-preparation.server.js';
+  PROOFIG_CONVERTER_FAILURE_CLEANUP,
+  proofigConverterFailureCleanupHandler,
+} from './proofig-converter-failure-cleanup.server.js';
 
-describe('proofigSyncDocumentPreparationHandler', () => {
+describe('proofigConverterFailureCleanupHandler', () => {
   beforeEach(() => {
     mockApplyDocumentPreparationFromConverterJob.mockReset();
     mockDbUpdateJob.mockReset();
     mockDbUpdateJob.mockImplementation(async (id, update) => ({ id, ...update }));
   });
 
-  it('marks the job COMPLETED when document preparation is synced', async () => {
+  it('marks the job COMPLETED when the check run is updated', async () => {
     mockApplyDocumentPreparationFromConverterJob.mockResolvedValue({ ok: true, updated: true });
 
-    await proofigSyncDocumentPreparationHandler({} as any, {
-      id: 'sync-job-1',
-      job_type: PROOFIG_SYNC_DOCUMENT_PREPARATION,
+    await proofigConverterFailureCleanupHandler({} as any, {
+      id: 'cleanup-job-1',
+      job_type: PROOFIG_CONVERTER_FAILURE_CLEANUP,
       payload: { proofig_run_id: 'run-1' },
     });
 
     expect(mockApplyDocumentPreparationFromConverterJob).toHaveBeenCalledWith('run-1');
-    expect(mockDbUpdateJob).toHaveBeenCalledWith('sync-job-1', {
+    expect(mockDbUpdateJob).toHaveBeenCalledWith('cleanup-job-1', {
       status: JobStatus.COMPLETED,
-      message: 'Proofig document preparation synced from converter job',
+      message: 'Proofig check run marked error after converter failure',
       results: { updated: true },
     });
   });
 
-  it('marks the job FAILED when sync returns an error', async () => {
+  it('marks the job FAILED when cleanup returns an error', async () => {
     mockApplyDocumentPreparationFromConverterJob.mockResolvedValue({
       ok: false,
       message: 'Converter job missing',
     });
 
-    await proofigSyncDocumentPreparationHandler({} as any, {
-      id: 'sync-job-2',
-      job_type: PROOFIG_SYNC_DOCUMENT_PREPARATION,
+    await proofigConverterFailureCleanupHandler({} as any, {
+      id: 'cleanup-job-2',
+      job_type: PROOFIG_CONVERTER_FAILURE_CLEANUP,
       payload: { proofig_run_id: 'run-2' },
     });
 
-    expect(mockDbUpdateJob).toHaveBeenCalledWith('sync-job-2', {
+    expect(mockDbUpdateJob).toHaveBeenCalledWith('cleanup-job-2', {
       status: JobStatus.FAILED,
       message: 'Converter job missing',
     });

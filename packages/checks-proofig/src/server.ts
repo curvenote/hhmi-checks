@@ -15,9 +15,9 @@ import {
   proofigSubmitStreamHandler,
 } from './server/jobs/proofig-submit-stream.server.js';
 import {
-  PROOFIG_SYNC_DOCUMENT_PREPARATION,
-  proofigSyncDocumentPreparationHandler,
-} from './server/jobs/proofig-sync-document-preparation.server.js';
+  PROOFIG_CONVERTER_FAILURE_CLEANUP,
+  proofigConverterFailureCleanupHandler,
+} from './server/jobs/proofig-converter-failure-cleanup.server.js';
 import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSection.js';
 import { ProofigUploadCheckOption } from './components/ProofigUploadCheckOption.js';
 import { isProofigUploadEligible } from './uploadEligibility.js';
@@ -81,8 +81,8 @@ export const extension: ServerExtension = {
       handler: proofigSubmitStreamHandler as JobRegistration['handler'],
     },
     {
-      jobType: PROOFIG_SYNC_DOCUMENT_PREPARATION,
-      handler: proofigSyncDocumentPreparationHandler as JobRegistration['handler'],
+      jobType: PROOFIG_CONVERTER_FAILURE_CLEANUP,
+      handler: proofigConverterFailureCleanupHandler as JobRegistration['handler'],
     },
   ],
   registerRoutes,
