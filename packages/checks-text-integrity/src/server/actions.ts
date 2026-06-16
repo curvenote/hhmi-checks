@@ -129,6 +129,7 @@ const VIEWER_URL_DEFAULTS = {
   similarity: {
     default_mode: 'match_overview',
     modes: { match_overview: true, all_sources: true },
+    view_settings: { save_changes: true },
   },
   sidebar: { default_mode: 'similarity' },
 };

@@ -524,7 +524,7 @@ describe('Text Integrity State Machine', () => {
       expect(next).toBeNull();
     });
 
-    it('PROCESSING_PHASE_COMPLETE when already completed', () => {
+    it('PROCESSING_PHASE_COMPLETE when already completed without report payload is a no-op', () => {
       const initial: TextIntegrityDataSchema = {
         stages: {
           submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
@@ -536,8 +536,46 @@ describe('Text Integrity State Machine', () => {
           },
         },
       };
-      const next = applyWebhookEvent(initial, processingCompleteWebhook());
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ProcessingPhaseComplete, { completed: true }),
+      );
       expect(next).toBeNull();
+    });
+
+    it('PROCESSING_PHASE_COMPLETE when already completed refreshes summaryReport from similarity payload', () => {
+      const initial: TextIntegrityDataSchema = {
+        summaryReport: {
+          overallMatchPercentage: 12,
+          internetMatchPercentage: 5,
+          publicationMatchPercentage: 3,
+          submittedWorksMatchPercentage: 4,
+          topMatches: [],
+          timeGenerated: '2025-01-01T00:01:00Z',
+          topSourceLargestMatchedWordCount: 100,
+        },
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'completed',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ProcessingPhaseComplete, {
+          similarity_report: {
+            ...SAMPLE_SIMILARITY_REPORT,
+            overall_match_percentage: 7,
+          },
+        }),
+      );
+      expect(next?.stages.processing?.status).toBe('completed');
+      expect(next?.summaryReport?.overallMatchPercentage).toBe(7);
+      expect(next?.latest?.overallMatchPercentage).toBe(7);
     });
 
     it('REPORT_GENERATION_STARTED when already processing', () => {

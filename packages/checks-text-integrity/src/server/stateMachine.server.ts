@@ -152,10 +152,18 @@ export function applyWebhookEvent(
     }
 
     case WebhookEvent.ProcessingPhaseComplete: {
+      const rawSimilarity =
+        webhook.payload?.similarity_report ?? webhook.payload?.provider_payload;
+      const reportResult = SimilarityReportPayloadSchema.safeParse(rawSimilarity);
+
       if (
         stages.processing?.status === 'completed' ||
         stages.processing?.status === 'notify-skipped'
       ) {
+        // Viewer filter changes (SIMILARITY_UPDATED): refresh stored report only.
+        if (!reportResult.success) break;
+        summaryReport = toStoredSimilarityReport(reportResult.data);
+        updatedStages = stages;
         break;
       }
 
@@ -167,9 +175,6 @@ export function applyWebhookEvent(
       s = setLinearStage(s, 'reportGeneration', 'pending', receivedAt);
       updatedStages = s;
 
-      const rawSimilarity =
-        webhook.payload?.similarity_report ?? webhook.payload?.provider_payload;
-      const reportResult = SimilarityReportPayloadSchema.safeParse(rawSimilarity);
       if (reportResult.success) {
         summaryReport = toStoredSimilarityReport(reportResult.data);
       }
