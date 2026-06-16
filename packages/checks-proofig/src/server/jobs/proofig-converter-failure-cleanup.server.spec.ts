@@ -50,11 +50,8 @@ describe('proofigConverterFailureCleanupHandler', () => {
     });
   });
 
-  it('marks the job FAILED when cleanup returns an error', async () => {
-    mockApplyDocumentPreparationFromConverterJob.mockResolvedValue({
-      ok: false,
-      message: 'Converter job missing',
-    });
+  it('marks the job COMPLETED when the check run is already terminal', async () => {
+    mockApplyDocumentPreparationFromConverterJob.mockResolvedValue({ ok: true, updated: false });
 
     await proofigConverterFailureCleanupHandler({} as any, {
       id: 'cleanup-job-2',
@@ -62,9 +59,29 @@ describe('proofigConverterFailureCleanupHandler', () => {
       payload: { proofig_run_id: 'run-2' },
     });
 
+    expect(mockApplyDocumentPreparationFromConverterJob).toHaveBeenCalledWith('run-2');
     expect(mockDbUpdateJob).toHaveBeenCalledWith('cleanup-job-2', {
+      status: JobStatus.COMPLETED,
+      message: 'Proofig check run already terminal after converter failure',
+      results: { updated: false },
+    });
+  });
+
+  it('marks the job FAILED when the check run is not found', async () => {
+    mockApplyDocumentPreparationFromConverterJob.mockResolvedValue({
+      ok: false,
+      message: 'Proofig check run not found.',
+    });
+
+    await proofigConverterFailureCleanupHandler({} as any, {
+      id: 'cleanup-job-3',
+      job_type: PROOFIG_CONVERTER_FAILURE_CLEANUP,
+      payload: { proofig_run_id: 'run-missing' },
+    });
+
+    expect(mockDbUpdateJob).toHaveBeenCalledWith('cleanup-job-3', {
       status: JobStatus.FAILED,
-      message: 'Converter job missing',
+      message: 'Proofig check run not found.',
     });
   });
 });
