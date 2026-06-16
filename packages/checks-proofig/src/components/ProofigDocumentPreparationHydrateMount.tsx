@@ -1,4 +1,5 @@
 import type { ExtensionCheckRunTimelineMountProps } from '@curvenote/scms-core';
+import { ui } from '@curvenote/scms-core';
 import { useEffect, useRef } from 'react';
 import { useFetcher, useRevalidator } from 'react-router';
 import {
@@ -30,6 +31,8 @@ export function ProofigDocumentPreparationHydrateMount({
   hydrateStateRef.current = hydrateState;
   const revalidator = useRevalidator();
   const lastHandledFetcherDataRef = useRef<unknown>(undefined);
+  const pollStoppedRef = useRef(false);
+  const pollIntervalRef = useRef<number | undefined>(undefined);
 
   const parsed = proofigDataSchema.safeParse(metadata);
   const stages =
@@ -41,7 +44,10 @@ export function ProofigDocumentPreparationHydrateMount({
     if (!awaitingPrep) return;
     if (!remoteStatusActionPath || !workVersionId || !checkRunId) return;
 
+    pollStoppedRef.current = false;
+
     const submitHydrate = () => {
+      if (pollStoppedRef.current) return;
       if (hydrateStateRef.current !== 'idle') return;
       const fd = new FormData();
       fd.set('intent', 'hydrate-document-preparation-status');
@@ -51,15 +57,33 @@ export function ProofigDocumentPreparationHydrateMount({
     };
 
     submitHydrate();
-    const interval = window.setInterval(submitHydrate, HYDRATE_INTERVAL_MS);
-    return () => window.clearInterval(interval);
+    pollIntervalRef.current = window.setInterval(submitHydrate, HYDRATE_INTERVAL_MS);
+    return () => {
+      if (pollIntervalRef.current != null) {
+        window.clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = undefined;
+      }
+    };
   }, [awaitingPrep, checkKind, checkRunId, hydrateSubmit, remoteStatusActionPath, workVersionId]);
 
   useEffect(() => {
     if (hydrateFetcher.state !== 'idle' || !hydrateFetcher.data) return;
     if (lastHandledFetcherDataRef.current === hydrateFetcher.data) return;
     lastHandledFetcherDataRef.current = hydrateFetcher.data;
-    const d = hydrateFetcher.data as { success?: boolean; updated?: boolean };
+    const d = hydrateFetcher.data as {
+      error?: { message?: string };
+      success?: boolean;
+      updated?: boolean;
+    };
+    if (d.error?.message) {
+      pollStoppedRef.current = true;
+      if (pollIntervalRef.current != null) {
+        window.clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = undefined;
+      }
+      ui.toastError(d.error.message);
+      return;
+    }
     if (d.success === true && d.updated === true && revalidator.state === 'idle') {
       revalidator.revalidate();
     }
