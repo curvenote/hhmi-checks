@@ -50,9 +50,7 @@ export async function getDraftForManuscriptChecks(ctx: SecureContext): Promise<G
     const singleVersionDrafts = draftWorks.filter(
       (w) => w.versions.length === 1 && w.versions[0].draft === true,
     );
-    const validDraft = singleVersionDrafts.find((w) =>
-      hasChecksInMetadata(w.versions[0].metadata),
-    );
+    const validDraft = singleVersionDrafts.find((w) => hasChecksInMetadata(w.versions[0].metadata));
     const existing = validDraft ?? null;
 
     let workId: string;

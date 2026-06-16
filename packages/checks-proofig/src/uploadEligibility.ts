@@ -1,7 +1,4 @@
-import {
-  getFilesForSlot,
-  isDocxOrPdfFile,
-} from '@curvenote/scms-core';
+import { getFilesForSlot, isDocxOrPdfFile } from '@curvenote/scms-core';
 
 const PROOFIG_MAX_BYTES = 50 * 1024 * 1024;
 const MANUSCRIPT_SLOT = 'manuscript';

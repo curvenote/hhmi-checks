@@ -5,7 +5,9 @@ import { KnownState, proofigDataSchema } from '../schema.js';
  * True when this check run has already recorded a Proofig "Deleted" notification.
  * Later notifies for the same run are ignored at the webhook (no message row, no state updates).
  */
-export async function proofigCheckRunAlreadyMarkedDeleted(checkServiceRunId: string): Promise<boolean> {
+export async function proofigCheckRunAlreadyMarkedDeleted(
+  checkServiceRunId: string,
+): Promise<boolean> {
   const prisma = await getPrismaClient();
   const row = await prisma.checkServiceRun.findUnique({
     where: { id: checkServiceRunId },

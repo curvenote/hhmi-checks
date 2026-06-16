@@ -12,13 +12,19 @@ import {
   KnownState,
   linearStageIsDone,
   MINIMAL_PROOFIG_SERVICE_DATA,
+  ALL_PENDING_STAGES,
 } from '../schema.js';
 
 const HISTORY_LIMIT = 20;
 
 function setLinearStage(
   stages: ProofigStages,
-  key: 'initialPost' | 'subimageDetection' | 'subimageSelection' | 'integrityDetection',
+  key:
+    | 'documentPreparation'
+    | 'initialPost'
+    | 'subimageDetection'
+    | 'subimageSelection'
+    | 'integrityDetection',
   status: ProofigStageStatus,
   receivedAt: string,
   error?: string,
@@ -106,6 +112,90 @@ function catchUpStagesForLateProofigNotify(
     s = setLinearStage(s, 'integrityDetection', 'notify-skipped', receivedAt);
   }
   return s;
+}
+
+export type ProofigSourceFormat = 'pdf' | 'docx';
+
+/**
+ * Initialize every Proofig run with a `documentPreparation` stage.
+ * PDF uploads mark prep completed synchronously and start upload; DOCX waits on CONVERTER_TASK.
+ */
+export function beginProofigPipeline(
+  options: { sourceFormat: ProofigSourceFormat; converterJobId?: string },
+  current?: ProofigDataSchema,
+  receivedAt: string = new Date().toISOString(),
+): ProofigDataSchema {
+  const base = current ?? MINIMAL_PROOFIG_SERVICE_DATA;
+  const stages = { ...ALL_PENDING_STAGES, ...(base.stages ?? MINIMAL_PROOFIG_SERVICE_DATA.stages) };
+
+  if (options.sourceFormat === 'pdf') {
+    let updatedStages = setLinearStage(stages, 'documentPreparation', 'completed', receivedAt);
+    updatedStages = setLinearStage(updatedStages, 'initialPost', 'processing', receivedAt);
+    return {
+      ...base,
+      preparation: { sourceFormat: 'pdf' },
+      stages: updatedStages,
+    };
+  }
+
+  const converterJobId = options.converterJobId?.trim();
+  if (!converterJobId) {
+    throw new Error('converterJobId is required when sourceFormat is docx');
+  }
+
+  let updatedStages = setLinearStage(stages, 'documentPreparation', 'processing', receivedAt);
+  updatedStages = setLinearStage(updatedStages, 'initialPost', 'pending', receivedAt);
+  return {
+    ...base,
+    preparation: { converterJobId, sourceFormat: 'docx' },
+    stages: updatedStages,
+  };
+}
+
+/**
+ * Helper used when a DOCX upload begins: mark document preparation in progress and store the
+ * converter job id. Leaves `initialPost` pending until PDF conversion completes.
+ */
+export function startDocumentPreparation(
+  converterJobId: string,
+  current?: ProofigDataSchema,
+  receivedAt: string = new Date().toISOString(),
+): ProofigDataSchema {
+  return beginProofigPipeline({ sourceFormat: 'docx', converterJobId }, current, receivedAt);
+}
+
+/**
+ * Helper used when the CONVERTER_TASK job completes successfully.
+ */
+export function completeDocumentPreparation(
+  current?: ProofigDataSchema,
+  receivedAt: string = new Date().toISOString(),
+): ProofigDataSchema {
+  const base = current ?? MINIMAL_PROOFIG_SERVICE_DATA;
+  const stages = base.stages ?? MINIMAL_PROOFIG_SERVICE_DATA.stages;
+  if (!stages.documentPreparation) return base;
+  const updatedStages = setLinearStage(stages, 'documentPreparation', 'completed', receivedAt);
+  return {
+    ...base,
+    stages: updatedStages,
+  };
+}
+
+/**
+ * Helper used when DOCX→PDF conversion fails or is cancelled.
+ */
+export function markDocumentPreparationError(
+  current?: ProofigDataSchema,
+  message?: string,
+  receivedAt: string = new Date().toISOString(),
+): ProofigDataSchema {
+  const base = current ?? MINIMAL_PROOFIG_SERVICE_DATA;
+  const stages = { ...ALL_PENDING_STAGES, ...(base.stages ?? MINIMAL_PROOFIG_SERVICE_DATA.stages) };
+  const updatedStages = setLinearStage(stages, 'documentPreparation', 'error', receivedAt, message);
+  return {
+    ...base,
+    stages: updatedStages,
+  };
 }
 
 /**

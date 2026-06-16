@@ -696,3 +696,91 @@ describe('Proofig Workflow', () => {
     });
   });
 });
+
+describe('Proofig pipeline initialization', () => {
+  it('beginProofigPipeline (pdf) completes prep and starts upload', async () => {
+    const { beginProofigPipeline } = await import('./stateMachine.server.js');
+    const { getCurrentProofigStage } = await import('../schema.js');
+    const next = beginProofigPipeline(
+      { sourceFormat: 'pdf' },
+      undefined,
+      '2026-01-01T00:00:00.000Z',
+    );
+    expect(next.preparation?.sourceFormat).toBe('pdf');
+    expect(next.stages.documentPreparation?.status).toBe('completed');
+    expect(next.stages.initialPost.status).toBe('processing');
+    const { currentStage } = getCurrentProofigStage(next.stages);
+    expect(currentStage).toBe('initialPost');
+  });
+
+  it('beginProofigPipeline (docx) sets prep processing and leaves initialPost pending', async () => {
+    const { beginProofigPipeline } = await import('./stateMachine.server.js');
+    const { getCurrentProofigStage } = await import('../schema.js');
+    const jobId = uuid();
+    const next = beginProofigPipeline(
+      { sourceFormat: 'docx', converterJobId: jobId },
+      undefined,
+      '2026-01-01T00:00:00.000Z',
+    );
+    expect(next.preparation?.converterJobId).toBe(jobId);
+    expect(next.preparation?.sourceFormat).toBe('docx');
+    expect(next.stages.documentPreparation?.status).toBe('processing');
+    expect(next.stages.initialPost.status).toBe('pending');
+    const { currentStage } = getCurrentProofigStage(next.stages);
+    expect(currentStage).toBe('documentPreparation');
+  });
+
+  it('startDocumentPreparation delegates to beginProofigPipeline', async () => {
+    const { startDocumentPreparation } = await import('./stateMachine.server.js');
+    const jobId = uuid();
+    const next = startDocumentPreparation(jobId, undefined, '2026-01-01T00:00:00.000Z');
+    expect(next.preparation?.converterJobId).toBe(jobId);
+    expect(next.stages.documentPreparation?.status).toBe('processing');
+  });
+
+  it('completeDocumentPreparation marks prep completed', async () => {
+    const { beginProofigPipeline, completeDocumentPreparation } =
+      await import('./stateMachine.server.js');
+    const started = beginProofigPipeline(
+      { sourceFormat: 'docx', converterJobId: uuid() },
+      undefined,
+      '2026-01-01T00:00:00.000Z',
+    );
+    const done = completeDocumentPreparation(started, '2026-01-02T00:00:00.000Z');
+    expect(done.stages.documentPreparation?.status).toBe('completed');
+  });
+});
+
+describe('Proofig progress step counts', () => {
+  it('pdf upload counts initialPost as step 1 of 4 (no visible prep step)', async () => {
+    const { beginProofigPipeline } = await import('./stateMachine.server.js');
+    const { getStageProgressStep } = await import('../schema.js');
+    const next = beginProofigPipeline(
+      { sourceFormat: 'pdf' },
+      undefined,
+      '2026-01-01T00:00:00.000Z',
+    );
+    expect(getStageProgressStep('initialPost', next.stages, next.preparation)).toEqual({
+      step: 1,
+      numSteps: 4,
+    });
+  });
+
+  it('docx upload counts document preparation as step 1 of 5 while converting', async () => {
+    const { beginProofigPipeline } = await import('./stateMachine.server.js');
+    const { getStageProgressStep } = await import('../schema.js');
+    const next = beginProofigPipeline(
+      { sourceFormat: 'docx', converterJobId: uuid() },
+      undefined,
+      '2026-01-01T00:00:00.000Z',
+    );
+    expect(getStageProgressStep('documentPreparation', next.stages, next.preparation)).toEqual({
+      step: 1,
+      numSteps: 5,
+    });
+    expect(getStageProgressStep('initialPost', next.stages, next.preparation)).toEqual({
+      step: 2,
+      numSteps: 5,
+    });
+  });
+});

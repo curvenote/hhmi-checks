@@ -118,16 +118,25 @@ export const ProofigSummarySchema = z.object({
   receivedAt: z.string(),
 });
 
+export const ProofigPreparationSchema = z.object({
+  /** Platform CONVERTER_TASK job id when source is DOCX. */
+  converterJobId: z.string().optional(),
+  sourceFormat: z.enum(['docx', 'pdf']).optional(),
+});
+
 /**
  * Proofig-specific status tracking schema.
- * Tracks the 6-stage Proofig workflow plus a denormalized `summary`.
+ * Tracks the Proofig workflow (optional document prep + Proofig stages) plus `summary`.
  */
 export const proofigDataSchema = z.object({
   reportId: z.string().optional(), // Proofig report ID from initial POST / notifications
   reportUrl: z.string().optional(), // Latest Proofig UI URL from notifications
   deleted: z.boolean().optional(), // Set true if Proofig sends Deleted
   summary: ProofigSummarySchema.optional(),
+  preparation: ProofigPreparationSchema.optional(),
   stages: z.object({
+    /** DOCX-only: converting manuscript to PDF before Proofig upload. */
+    documentPreparation: LinearStageSchema.optional(),
     initialPost: LinearStageSchema,
     subimageDetection: LinearStageSchema.optional(),
     subimageSelection: LinearStageSchema.optional(),
@@ -167,6 +176,7 @@ export const ALL_PENDING_STAGES: ProofigStages = {
 };
 
 export const STAGE_ORDER: (keyof ProofigStages)[] = [
+  'documentPreparation',
   'initialPost',
   'subimageDetection',
   'subimageSelection',
@@ -174,22 +184,65 @@ export const STAGE_ORDER: (keyof ProofigStages)[] = [
   'resultsReview',
 ];
 
+const LINEAR_STAGE_KEYS = new Set<keyof ProofigStages>([
+  'documentPreparation',
+  'initialPost',
+  'subimageDetection',
+  'subimageSelection',
+  'integrityDetection',
+]);
+
+/** DOCX uploads count document preparation in the progress bar; PDF skips it (prep is instant). */
+export function countsDocumentPreparationInProgress(
+  stages: ProofigStages,
+  preparation?: ProofigDataSchema['preparation'],
+): boolean {
+  return preparation?.sourceFormat === 'docx' && stages.documentPreparation != null;
+}
+
+/** Ordered progress-bar stages (excludes results review). */
+export function getProofigProgressStageOrder(
+  stages: ProofigStages,
+  preparation?: ProofigDataSchema['preparation'],
+): (keyof ProofigStages)[] {
+  const base: (keyof ProofigStages)[] = [
+    'initialPost',
+    'subimageDetection',
+    'subimageSelection',
+    'integrityDetection',
+  ];
+  if (countsDocumentPreparationInProgress(stages, preparation)) {
+    return ['documentPreparation', ...base];
+  }
+  return base;
+}
+
+export function getStageProgressStep(
+  stageKey: keyof ProofigStages,
+  stages: ProofigStages,
+  preparation?: ProofigDataSchema['preparation'],
+): { step: number; numSteps: number } {
+  const order = getProofigProgressStageOrder(stages, preparation);
+  const idx = order.indexOf(stageKey);
+  return { step: idx >= 0 ? idx + 1 : 1, numSteps: order.length };
+}
+
 export function getCurrentProofigStage(stages: ProofigStages) {
   // Find the current active stage
   let currentStageIndex = 0;
   let currentStage: keyof ProofigStages = 'initialPost';
   let currentStageData: ProofigStages[keyof ProofigStages] = stages['initialPost'];
 
-  for (let i = 0; i < STAGE_ORDER.length; i++) {
-    const stage = STAGE_ORDER[i];
+  const stageOrder = STAGE_ORDER.filter(
+    (key) => key !== 'documentPreparation' || stages.documentPreparation != null,
+  );
+
+  for (let i = 0; i < stageOrder.length; i++) {
+    const stage = stageOrder[i];
     const stageData = stages[stage];
     const stageStatus = stageData?.status ?? 'pending';
 
-    const isLinearStage =
-      stage === 'initialPost' ||
-      stage === 'subimageDetection' ||
-      stage === 'subimageSelection' ||
-      stage === 'integrityDetection';
+    const isLinearStage = LINEAR_STAGE_KEYS.has(stage);
 
     if (isLinearStage) {
       if (stageStatus === 'processing' || stageStatus === 'pending' || stageStatus === 'error') {
@@ -210,7 +263,7 @@ export function getCurrentProofigStage(stages: ProofigStages) {
 
     // If we get here, this stage is "finished" (completed/skipped/clean/flagged/etc).
     // If this was the last stage, keep it as the current stage.
-    if (i === STAGE_ORDER.length - 1) {
+    if (i === stageOrder.length - 1) {
       currentStageIndex = i;
       currentStage = stage;
       currentStageData = stageData;
@@ -231,4 +284,21 @@ export function isProofigAwaitingSubimageApprovalInUi(stages: ProofigStages): bo
   const sel = merged.subimageSelection;
   if (!sel) return false;
   return sel.status !== 'error' && sel.status !== 'notify-skipped';
+}
+
+/** True while DOCX→PDF conversion is in flight and should be hydrated from the converter job. */
+export function isProofigAwaitingDocumentPreparationInUi(stages: ProofigStages): boolean {
+  const prep = stages.documentPreparation;
+  if (!prep) return false;
+  return prep.status === 'processing' || prep.status === 'pending';
+}
+
+/** True when upload UI should note that Word conversion already finished. */
+export function shouldShowDocxPreparationCompleteNote(
+  preparation: ProofigDataSchema['preparation'],
+  stages: ProofigStages,
+): boolean {
+  return (
+    preparation?.sourceFormat === 'docx' && linearStageIsDone(stages.documentPreparation?.status)
+  );
 }

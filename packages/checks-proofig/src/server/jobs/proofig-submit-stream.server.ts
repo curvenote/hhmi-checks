@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { uuidv7 } from 'uuidv7';
 import {
   getPrismaClient,
+  hooksNotifyBaseUrl,
   signFilesInMetadata,
   jobs,
   safeCheckServiceRunDataUpdate,
@@ -25,7 +26,9 @@ import {
 import { MINIMAL_PROOFIG_SERVICE_DATA, type ProofigDataSchema } from '../../schema.js';
 import {
   completeInitialPostAndSetSubimageDetectionPending,
+  completeDocumentPreparation,
   markInitialPostError,
+  startInitialPostProcessing,
 } from '../stateMachine.server.js';
 
 function getErrorMessage(err: unknown): string {
@@ -109,8 +112,8 @@ export async function proofigSubmitStreamHandler(
   }
   rollingLog.push(rollingLogEntry('work version loaded', workVersionRow.id));
 
-  const job = await jobs.dbCreateJob({ ...data, status: JobStatus.QUEUED });
-  rollingLog.push(rollingLogEntry('job created', job.id));
+  const job = await jobs.dbStartJob({ ...data, status: JobStatus.RUNNING });
+  rollingLog.push(rollingLogEntry('job started', job.id));
 
   await prisma.linkedJob.create({
     data: {
@@ -152,9 +155,9 @@ export async function proofigSubmitStreamHandler(
     );
   }
 
-  const notifyBaseUrl =
-    (mergedConfig.notifyBaseUrl as string | undefined)?.replace(/\/$/, '') ??
-    new URL(ctx.request.url).origin + '/v1/hooks/proofig/notify';
+  const notifyBaseUrlOverride =
+    typeof mergedConfig.notifyBaseUrl === 'string' ? mergedConfig.notifyBaseUrl : undefined;
+  const notifyBaseUrl = hooksNotifyBaseUrl('proofig/notify', notifyBaseUrlOverride);
   const notify_url = `${notifyBaseUrl}/${payload.proofig_run_id}`;
 
   const submitPayload = {
@@ -172,6 +175,21 @@ export async function proofigSubmitStreamHandler(
     },
   });
   rollingLog.push(rollingLogEntry('job marked RUNNING', runningJob.id));
+
+  const submitStartedAt = new Date().toISOString();
+  await safeCheckServiceRunDataUpdate(payload.proofig_run_id, (runData?: Prisma.JsonValue) => {
+    const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
+    let serviceData = current.serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA;
+    if (serviceData.stages?.documentPreparation?.status === 'processing') {
+      serviceData = completeDocumentPreparation(serviceData, submitStartedAt);
+    }
+    const nextServiceData = startInitialPostProcessing(serviceData, submitStartedAt);
+    return {
+      ...current,
+      status: 'healthy',
+      serviceData: nextServiceData,
+    } satisfies CheckServiceRunData<ProofigDataSchema>;
+  });
 
   async function fetchPdfForSubmit(): Promise<Response> {
     rollingLog.push(rollingLogEntry('downloading PDF via signedUrl', { signedUrl }));

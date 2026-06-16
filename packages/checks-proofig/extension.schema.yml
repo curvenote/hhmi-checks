@@ -2,6 +2,8 @@
 title: 'Image Integrity Checks Extension Module'
 description: 'Image Integrity Checks Extension Module Configuration'
 type: 'object'
+required:
+  - notifyBaseUrl
 properties:
   task:
     type: boolean
@@ -17,7 +19,7 @@ properties:
     default: true
   notifyBaseUrl:
     type: string
-    description: Base URL for Proofig webhook notifications (e.g. https://host/v1/hooks/proofig/notify). Used to build notify_url in submit payload.
+    description: Required base URL for Proofig webhook notifications (e.g. https://host/v1/hooks/proofig/notify). Used to build notify_url in submit payload.
   apiBaseUrl:
     type: string
     description: Base URL for the Proofig API (e.g. https://proofig.example.com). PROOFIG_SUBMIT_STREAM jobs post directly to this API.
