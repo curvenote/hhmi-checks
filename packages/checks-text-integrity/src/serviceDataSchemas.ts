@@ -321,6 +321,26 @@ export function isWaitingForPdfReport(data: TextIntegrityDataSchema | undefined)
   return status === 'processing' || status === 'pending';
 }
 
+/** True after dispatch while the check run row exists but `serviceData.stages` is not stamped yet. */
+export function isAwaitingInitialTextIntegrityStages(
+  metadata: TextIntegrityDataSchema | undefined,
+  checkRunId: string | undefined,
+): boolean {
+  return !metadata?.stages && Boolean(checkRunId?.trim());
+}
+
+/** Whether the checks section should poll remote status (loader revalidation). */
+export function shouldPollTextIntegrityChecks(
+  metadata: TextIntegrityDataSchema | undefined,
+  checkRunId: string | undefined,
+): boolean {
+  const hasData = !!metadata?.stages;
+  const showResults = canShowResults(metadata);
+  const awaitingInitialStages = isAwaitingInitialTextIntegrityStages(metadata, checkRunId);
+  const waitingForPdfReport = showResults && isWaitingForPdfReport(metadata);
+  return awaitingInitialStages || (hasData && !showResults) || waitingForPdfReport;
+}
+
 /** True when the similarity PDF has been persisted to work storage for this run. */
 export function hasStoredSimilarityReport(data: TextIntegrityDataSchema | undefined): boolean {
   return data?.similarityReportStored === true;
