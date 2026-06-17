@@ -176,6 +176,15 @@ export interface ChecksMetadataSection {
 //   checks?: ChecksMetadataSection['checks'];
 // };
 
+// Intents that trigger outbound calls to Proofig and must be blocked during maintenance.
+const OUTBOUND_INTENTS = new Set([
+  'execute',
+  'fetch-remote-status',
+  'refresh-remote-status',
+  'refresh-report-url',
+  'hydrate-subimage-approval-status',
+]);
+
 /**
  * Handle Proofig check actions.
  *
@@ -187,14 +196,7 @@ export async function handleProofigAction(
 ): Promise<ExtensionCheckHandleActionResult> {
   const { intent, workVersionId, ctx } = args;
 
-  const outboundIntents = new Set([
-    'execute',
-    'fetch-remote-status',
-    'refresh-remote-status',
-    'refresh-report-url',
-    'hydrate-subimage-approval-status',
-  ]);
-  if (ctx && outboundIntents.has(intent)) {
+  if (ctx && OUTBOUND_INTENTS.has(intent)) {
     const prisma = await getPrismaClient();
     const base =
       (ctx.$config.app?.extensions?.['checks-proofig'] as Record<string, unknown> | undefined) ??
