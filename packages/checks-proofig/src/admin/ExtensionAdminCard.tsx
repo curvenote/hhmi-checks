@@ -143,11 +143,13 @@ function ExtensionAdminCard({ record }: ExtensionAdminCardProps) {
         </div>
       </div>
 
-      <CheckMaintenanceAdminPanel
-        intent="proofig-set-maintenance"
-        maintenance={displayConfig.maintenance as CheckMaintenanceRecord | undefined}
-        serviceLabel="Proofig"
-      />
+      <div className="md:col-span-2">
+        <CheckMaintenanceAdminPanel
+          intent="proofig-set-maintenance"
+          maintenance={displayConfig.maintenance as CheckMaintenanceRecord | undefined}
+          serviceLabel="Proofig"
+        />
+      </div>
 
       <ProofigFailedRunsAdminPanel />
     </div>
