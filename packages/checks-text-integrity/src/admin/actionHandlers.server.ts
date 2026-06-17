@@ -32,7 +32,7 @@ import {
   resolveRelayInstanceId,
 } from '../server/relay-urls.server.js';
 import { runEulaCacheCronRefresh, type TextIntegrityEulaContext } from '../server/eula.server.js';
-import { loadTextIntegrityFailedRuns } from './loadFailedRuns.server.js';
+import { loadTextIntegrityFailedRunsPage } from './loadFailedRuns.server.js';
 import {
   retryTextIntegrityCheckRun,
   retryTextIntegrityFailedRunsBulk,
@@ -842,10 +842,12 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
     },
     {
       name: 'text-integrity-list-failed-runs',
-      handler: async () => {
+      handler: async (_ctx: Context, formData: FormData) => {
         try {
-          const runs = await loadTextIntegrityFailedRuns();
-          return { success: true, runs };
+          const page = Number(formData.get('page') ?? 1);
+          const pageSize = Number(formData.get('pageSize') ?? 20);
+          const result = await loadTextIntegrityFailedRunsPage({ page, pageSize });
+          return { success: true, ...result };
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Failed to load failed runs';
           return { error: { type: 'general', message } };

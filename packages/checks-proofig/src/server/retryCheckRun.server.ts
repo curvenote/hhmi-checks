@@ -4,6 +4,10 @@ import type {
 } from '@curvenote/scms-core';
 import { getPrismaClient } from '@curvenote/scms-server';
 import { isProofigRunFailed } from './isRunFailed.server.js';
+import {
+  isProofigRunSupersededByRetry,
+  markProofigSourceRunSupersededByRetry,
+} from './runSuperseded.server.js';
 import { startProofigCheckRun } from './startCheckRun.server.js';
 
 const PROOFIG_KIND = 'proofig';
@@ -39,6 +43,12 @@ export async function retryProofigCheckRun(
       status: 400,
     };
   }
+  if (isProofigRunSupersededByRetry(sourceRun)) {
+    return {
+      error: { type: 'general', message: 'This check run has already been retried.' },
+      status: 400,
+    };
+  }
 
   const retriedAt = new Date().toISOString();
   const createdById =
@@ -62,6 +72,7 @@ export async function retryProofigCheckRun(
       status: result.status,
     };
   }
+  await markProofigSourceRunSupersededByRetry(sourceRun.id, result.checkRunId, ctx.user?.id);
   return { success: true, checkRunId: result.checkRunId } as ExtensionCheckHandleActionResult & {
     checkRunId: string;
   };

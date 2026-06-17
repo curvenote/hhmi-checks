@@ -6,7 +6,7 @@ import type { Prisma } from '@curvenote/scms-db';
 import { uuidv7 as uuid } from 'uuidv7';
 import type { ProofigConfigOverlay } from '../server/config.server.js';
 import { PROOFIG_CONFIG_OBJECT_TYPE } from '../server/config.server.js';
-import { loadProofigFailedRuns } from './loadFailedRuns.server.js';
+import { loadProofigFailedRunsPage } from './loadFailedRuns.server.js';
 import {
   retryProofigCheckRun,
   retryProofigFailedRunsBulk,
@@ -118,10 +118,12 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
     },
     {
       name: 'proofig-list-failed-runs',
-      handler: async () => {
+      handler: async (_ctx: Context, formData: FormData) => {
         try {
-          const runs = await loadProofigFailedRuns();
-          return { success: true, runs };
+          const page = Number(formData.get('page') ?? 1);
+          const pageSize = Number(formData.get('pageSize') ?? 20);
+          const result = await loadProofigFailedRunsPage({ page, pageSize });
+          return { success: true, ...result };
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Failed to load failed runs';
           return { error: { type: 'general', message } };

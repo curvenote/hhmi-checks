@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { ui } from '@curvenote/scms-core';
 
 const LIST_INTENT = 'text-integrity-list-failed-runs';
 const RETRY_INTENT = 'text-integrity-retry-failed-run';
 const BULK_RETRY_INTENT = 'text-integrity-retry-failed-runs-bulk';
+const PAGE_SIZE = 20;
 
 type FailedRunRow = {
   id: string;
@@ -22,6 +23,9 @@ type FailedRunRow = {
 type ListResponse = {
   success?: boolean;
   runs?: FailedRunRow[];
+  page?: number;
+  pageSize?: number;
+  hasNextPage?: boolean;
   error?: { message?: string };
 };
 
@@ -41,17 +45,31 @@ function formatSubmitter(row: FailedRunRow): string {
 export function TextIntegrityFailedRunsAdminPanel() {
   const listFetcher = useFetcher<ListResponse>();
   const retryFetcher = useFetcher<RetryResponse>();
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const handledRetryRef = useRef<RetryResponse | null>(null);
 
   const runs = listFetcher.data?.runs ?? [];
   const listBusy = listFetcher.state !== 'idle';
   const retryBusy = retryFetcher.state !== 'idle';
+  const hasNextPage = listFetcher.data?.hasNextPage === true;
+  const currentPage = listFetcher.data?.page ?? page;
+
+  const loadPage = useCallback(
+    (targetPage: number) => {
+      setPage(targetPage);
+      setSelected(new Set());
+      const formData = new FormData();
+      formData.append('intent', LIST_INTENT);
+      formData.append('page', String(targetPage));
+      formData.append('pageSize', String(PAGE_SIZE));
+      listFetcher.submit(formData, { method: 'post' });
+    },
+    [listFetcher],
+  );
 
   useEffect(() => {
-    const formData = new FormData();
-    formData.append('intent', LIST_INTENT);
-    listFetcher.submit(formData, { method: 'post' });
+    loadPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -80,11 +98,8 @@ export function TextIntegrityFailedRunsAdminPanel() {
       ui.toastError(`${skipped} run${skipped === 1 ? '' : 's'} could not be retried`);
     }
 
-    setSelected(new Set());
-    const formData = new FormData();
-    formData.append('intent', LIST_INTENT);
-    listFetcher.submit(formData, { method: 'post' });
-  }, [retryFetcher.state, retryFetcher.data, listFetcher]);
+    loadPage(currentPage);
+  }, [retryFetcher.state, retryFetcher.data, loadPage, currentPage]);
 
   const toggleRow = (id: string) => {
     setSelected((prev) => {
@@ -95,8 +110,8 @@ export function TextIntegrityFailedRunsAdminPanel() {
     });
   };
 
-  const toggleAll = () => {
-    if (selected.size === runs.length) {
+  const toggleAllOnPage = () => {
+    if (selected.size === runs.length && runs.length > 0) {
       setSelected(new Set());
     } else {
       setSelected(new Set(runs.map((r) => r.id)));
@@ -119,7 +134,8 @@ export function TextIntegrityFailedRunsAdminPanel() {
           <h3 className="text-sm font-medium">Failed check runs</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Retry failed Text Integrity runs on behalf of the original submitter. Runs are skipped
-            when the submitter has not accepted the current EULA.
+            when the submitter has not accepted the current EULA. Bulk actions apply to the current
+            page only.
           </p>
         </div>
         <ui.StatefulButton
@@ -128,11 +144,7 @@ export function TextIntegrityFailedRunsAdminPanel() {
           variant="outline"
           busy={listBusy}
           disabled={listBusy}
-          onClick={() => {
-            const formData = new FormData();
-            formData.append('intent', LIST_INTENT);
-            listFetcher.submit(formData, { method: 'post' });
-          }}
+          onClick={() => loadPage(currentPage)}
         >
           Refresh
         </ui.StatefulButton>
@@ -141,7 +153,7 @@ export function TextIntegrityFailedRunsAdminPanel() {
       {listBusy && runs.length === 0 ? (
         <p className="text-sm text-muted-foreground">Loading failed runs…</p>
       ) : runs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No failed runs found.</p>
+        <p className="text-sm text-muted-foreground">No failed runs on this page.</p>
       ) : (
         <div className="overflow-auto max-h-80 rounded-md border border-border">
           <table className="w-full text-sm">
@@ -151,8 +163,8 @@ export function TextIntegrityFailedRunsAdminPanel() {
                   <input
                     type="checkbox"
                     checked={selected.size === runs.length && runs.length > 0}
-                    onChange={toggleAll}
-                    aria-label="Select all failed runs"
+                    onChange={toggleAllOnPage}
+                    aria-label="Select all failed runs on this page"
                   />
                 </th>
                 <th className="p-2">Work</th>
@@ -200,17 +212,41 @@ export function TextIntegrityFailedRunsAdminPanel() {
         </div>
       )}
 
-      {selected.size > 0 ? (
-        <ui.StatefulButton
-          type="button"
-          size="sm"
-          busy={retryBusy}
-          disabled={retryBusy}
-          onClick={() => submitRetry([...selected])}
-        >
-          Retry selected ({selected.size})
-        </ui.StatefulButton>
-      ) : null}
+      <div className="flex flex-wrap gap-3 justify-between items-center">
+        <div className="flex gap-2 items-center">
+          <ui.StatefulButton
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={listBusy || currentPage <= 1}
+            onClick={() => loadPage(currentPage - 1)}
+          >
+            Previous
+          </ui.StatefulButton>
+          <span className="text-sm text-muted-foreground">Page {currentPage}</span>
+          <ui.StatefulButton
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={listBusy || !hasNextPage}
+            onClick={() => loadPage(currentPage + 1)}
+          >
+            Next
+          </ui.StatefulButton>
+        </div>
+
+        {selected.size > 0 ? (
+          <ui.StatefulButton
+            type="button"
+            size="sm"
+            busy={retryBusy}
+            disabled={retryBusy}
+            onClick={() => submitRetry([...selected])}
+          >
+            Retry selected on this page ({selected.size})
+          </ui.StatefulButton>
+        ) : null}
+      </div>
     </div>
   );
 }

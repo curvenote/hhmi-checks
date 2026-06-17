@@ -15,6 +15,11 @@ vi.mock('./startCheckRun.server.js', () => ({
   startProofigCheckRun: (...args: unknown[]) => mockStart(...args),
 }));
 
+vi.mock('./runSuperseded.server.js', () => ({
+  isProofigRunSupersededByRetry: vi.fn(() => false),
+  markProofigSourceRunSupersededByRetry: vi.fn(async () => {}),
+}));
+
 const ctx = {
   user: { id: 'admin-user' },
   $config: { app: { extensions: {} } },

@@ -19,6 +19,15 @@ vi.mock('./startCheckRun.server.js', () => ({
   startTextIntegrityCheckRun: (...args: unknown[]) => mockStart(...args),
 }));
 
+vi.mock('./runSuperseded.server.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./runSuperseded.server.js')>();
+  return {
+    ...actual,
+    isTextIntegrityRunSupersededByRetry: vi.fn(() => false),
+    markTextIntegritySourceRunSupersededByRetry: vi.fn(async () => {}),
+  };
+});
+
 vi.mock('./eula.server.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./eula.server.js')>();
   return {

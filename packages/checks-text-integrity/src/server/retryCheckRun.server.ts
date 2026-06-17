@@ -9,6 +9,10 @@ import {
   getEulaStatusForUser,
 } from './eula.server.js';
 import { isTextIntegrityRunFailed } from './isRunFailed.server.js';
+import {
+  isTextIntegrityRunSupersededByRetry,
+  markTextIntegritySourceRunSupersededByRetry,
+} from './runSuperseded.server.js';
 import { startTextIntegrityCheckRun } from './startCheckRun.server.js';
 
 const TEXT_INTEGRITY_KIND = 'checks-text-integrity';
@@ -44,6 +48,12 @@ export async function retryTextIntegrityCheckRun(
   if (!isTextIntegrityRunFailed(sourceRun)) {
     return {
       error: { type: 'general', message: 'Only failed check runs can be retried.' },
+      status: 400,
+    };
+  }
+  if (isTextIntegrityRunSupersededByRetry(sourceRun)) {
+    return {
+      error: { type: 'general', message: 'This check run has already been retried.' },
       status: 400,
     };
   }
@@ -91,6 +101,7 @@ export async function retryTextIntegrityCheckRun(
       status: result.status,
     };
   }
+  await markTextIntegritySourceRunSupersededByRetry(sourceRun.id, result.checkRunId, ctx.user?.id);
   return { success: true, checkRunId: result.checkRunId } as ExtensionCheckHandleActionResult & {
     checkRunId: string;
   };

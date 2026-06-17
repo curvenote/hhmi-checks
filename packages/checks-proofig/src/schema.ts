@@ -147,6 +147,10 @@ export const proofigDataSchema = z.object({
   retryOfRunId: z.string().optional(),
   retriedAt: z.string().optional(),
   retriedByUserId: z.string().optional(),
+  /** Set on a failed source run when a retry has been started. */
+  supersededByRunId: z.string().optional(),
+  supersededAt: z.string().optional(),
+  supersededByUserId: z.string().optional(),
 });
 
 export type ProofigStageStatus = z.infer<typeof LinearStageStatusSchema>;
