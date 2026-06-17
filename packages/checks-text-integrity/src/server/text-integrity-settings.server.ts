@@ -33,7 +33,9 @@ export function isSettingsEmpty(settings: TextIntegrityServiceSettings | undefin
  * Includes view keys only for flags present in provider `view_settings` (any boolean);
  * values default to off / 0. Search repos default to all tenant-allowed repos selected.
  */
-export function buildDefaultSettings(features: Record<string, unknown>): TextIntegrityServiceSettings {
+export function buildDefaultSettings(
+  features: Record<string, unknown>,
+): TextIntegrityServiceSettings {
   const sim = getFeaturesSimilarity(features);
   const gen = sim && isRecord(sim.generation_settings) ? sim.generation_settings : null;
   const viewRaw =
@@ -58,7 +60,9 @@ export function buildDefaultSettings(features: Record<string, unknown>): TextInt
   }
 
   const submissionAuto =
-    gen != null && 'submission_auto_excludes' in gen ? gen.submission_auto_excludes === true : false;
+    gen != null && 'submission_auto_excludes' in gen
+      ? gen.submission_auto_excludes === true
+      : false;
 
   const next: TextIntegrityServiceSettings = {
     indexing_settings: { add_to_index: false },
@@ -106,7 +110,9 @@ export function reconcileSettingsWithFeatures(
   }
 
   const submissionAuto =
-    gen != null && 'submission_auto_excludes' in gen ? gen.submission_auto_excludes === true : false;
+    gen != null && 'submission_auto_excludes' in gen
+      ? gen.submission_auto_excludes === true
+      : false;
   if (!submissionAuto && next.similarity?.generation_settings) {
     delete next.similarity.generation_settings.auto_exclude_self_matching_scope;
   }

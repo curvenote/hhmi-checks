@@ -31,10 +31,12 @@ import {
   checksRelayStatusUrl,
   resolveRelayInstanceId,
 } from '../server/relay-urls.server.js';
+import { runEulaCacheCronRefresh, type TextIntegrityEulaContext } from '../server/eula.server.js';
+import { loadTextIntegrityFailedRuns } from './loadFailedRuns.server.js';
 import {
-  runEulaCacheCronRefresh,
-  type TextIntegrityEulaContext,
-} from '../server/eula.server.js';
+  retryTextIntegrityCheckRun,
+  retryTextIntegrityFailedRunsBulk,
+} from '../server/retryCheckRun.server.js';
 
 type AppChecksConfig = {
   relayBaseUrl?: string;
@@ -615,6 +617,13 @@ async function performTextIntegrityConfigureAndPersist(
   return { ok: true, configuration };
 }
 
+function parseRunIdsFromFormData(formData: FormData): string[] {
+  return formData
+    .getAll('runIds')
+    .map((v) => v.toString().trim())
+    .filter(Boolean);
+}
+
 export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[] {
   return [
     {
@@ -825,7 +834,86 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
           );
           return { success: true };
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to save maintenance settings';
+          const message =
+            err instanceof Error ? err.message : 'Failed to save maintenance settings';
+          return { error: { type: 'general', message } };
+        }
+      },
+    },
+    {
+      name: 'text-integrity-list-failed-runs',
+      handler: async () => {
+        try {
+          const runs = await loadTextIntegrityFailedRuns();
+          return { success: true, runs };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to load failed runs';
+          return { error: { type: 'general', message } };
+        }
+      },
+    },
+    {
+      name: 'text-integrity-retry-failed-run',
+      handler: async (ctx: Context, formData: FormData) => {
+        const runIds = parseRunIdsFromFormData(formData);
+        const runId = runIds[0];
+        if (!runId) {
+          return { error: { type: 'validation', message: 'runIds is required' } };
+        }
+        try {
+          const prisma = await getPrismaClient();
+          const sourceRun = await prisma.checkServiceRun.findFirst({
+            where: { id: runId, kind: 'checks-text-integrity' },
+          });
+          if (!sourceRun) {
+            return { error: { type: 'general', message: 'Check run not found' } };
+          }
+          const outcome = await retryTextIntegrityCheckRun(
+            ctx,
+            sourceRun.work_version_id,
+            runId,
+            'admin',
+          );
+          if ('success' in outcome && outcome.success) {
+            return {
+              success: true,
+              results: [
+                {
+                  runId,
+                  ok: true,
+                  checkRunId: (outcome as { checkRunId?: string }).checkRunId,
+                },
+              ],
+            };
+          }
+          return {
+            success: true,
+            results: [
+              {
+                runId,
+                ok: false,
+                message: outcome.error?.message ?? 'Retry failed',
+              },
+            ],
+          };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Retry failed';
+          return { error: { type: 'general', message } };
+        }
+      },
+    },
+    {
+      name: 'text-integrity-retry-failed-runs-bulk',
+      handler: async (ctx: Context, formData: FormData) => {
+        const runIds = parseRunIdsFromFormData(formData);
+        if (runIds.length === 0) {
+          return { error: { type: 'validation', message: 'Select at least one run to retry' } };
+        }
+        try {
+          const { results } = await retryTextIntegrityFailedRunsBulk(ctx, runIds);
+          return { success: true, results };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Bulk retry failed';
           return { error: { type: 'general', message } };
         }
       },

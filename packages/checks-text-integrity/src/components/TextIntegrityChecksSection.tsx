@@ -1,5 +1,6 @@
 import { ui, useRevalidateOnInterval, ServiceLogo } from '@curvenote/scms-core';
 import { TextIntegrityRunChecksButton } from './TextIntegrityRunChecksButton.js';
+import { TextIntegrityCheckRunRetryButton } from './TextIntegrityCheckRunRetryButton.js';
 import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
 import { TextIntegrityProgressComponent } from './TextIntegrityProgressComponent.js';
 import { TextIntegrityResultsArea } from './TextIntegrityResultsArea.js';
@@ -66,10 +67,19 @@ export function TextIntegrityChecksSection({
 
   if (showResults && !metadata.summaryReport) {
     return (
-      <ui.SimpleAlert
-        type="error"
-        message="Processing completed but no summary report was received. Please contact support."
-      />
+      <div className="flex flex-col gap-4">
+        <ui.SimpleAlert
+          type="error"
+          message="Processing completed but no summary report was received. Please contact support."
+        />
+        {workVersionId ? (
+          <TextIntegrityCheckRunRetryButton
+            actionPath={remoteStatusActionPath}
+            workVersionId={workVersionId}
+            checkRunId={checkRunId}
+          />
+        ) : null}
+      </div>
     );
   }
 

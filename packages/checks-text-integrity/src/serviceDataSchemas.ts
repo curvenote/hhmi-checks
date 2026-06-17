@@ -217,6 +217,11 @@ export const textIntegrityDataSchema = z.object({
   summaryReport: StoredSimilarityReportSchema.optional(),
   /** URL to open the report in the provider viewer (if available). */
   viewerUrl: z.string().optional(),
+
+  /** Lineage when this run was created by retrying a failed run. */
+  retryOfRunId: z.string().optional(),
+  retriedAt: z.string().optional(),
+  retriedByUserId: z.string().optional(),
 });
 
 export type TextIntegrityDataSchema = z.infer<typeof textIntegrityDataSchema>;

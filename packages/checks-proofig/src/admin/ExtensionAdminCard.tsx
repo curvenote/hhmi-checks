@@ -3,6 +3,7 @@ import { useFetcher } from 'react-router';
 import type { CheckMaintenanceRecord, ExtensionAdminCardProps } from '@curvenote/scms-core';
 import { ui, CheckMaintenanceAdminPanel } from '@curvenote/scms-core';
 import { Logo } from '../icons.js';
+import { ProofigFailedRunsAdminPanel } from './FailedRunsAdminPanel.js';
 
 const INTENT_BASE_URL = 'proofig-set-baseurl';
 const INTENT_CLIENT_ID = 'proofig-set-client-id';
@@ -147,6 +148,8 @@ function ExtensionAdminCard({ record }: ExtensionAdminCardProps) {
         maintenance={displayConfig.maintenance as CheckMaintenanceRecord | undefined}
         serviceLabel="Proofig"
       />
+
+      <ProofigFailedRunsAdminPanel />
     </div>
   );
 }

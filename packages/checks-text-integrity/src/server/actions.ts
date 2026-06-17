@@ -1,16 +1,10 @@
 import { uuidv7 as uuid } from 'uuidv7';
-import {
-  enqueueAndDispatchJob,
-  getPrismaClient,
-  safeCheckServiceRunDataUpdate,
-} from '@curvenote/scms-server';
+import { getPrismaClient, safeCheckServiceRunDataUpdate } from '@curvenote/scms-server';
 import {
   type ExtensionCheckHandleActionArgs,
   type ExtensionCheckHandleActionResult,
   type ExtensionCheckStatusArgs,
   checkMaintenanceActionError,
-  hasDocxInMetadata,
-  hasPdfInMetadata,
   maintenanceGuardFromConfig,
 } from '@curvenote/scms-core';
 import type { Prisma } from '@curvenote/scms-db';
@@ -21,8 +15,9 @@ import {
 } from '../schema.js';
 import type { TextIntegrityDataSchema } from '../schema.js';
 import { markSimilarityPdfJobRestarted, markSubmissionError } from './stateMachine.server.js';
-import { TEXT_INTEGRITY_SUBMIT } from './jobs/text-integrity-submit.server.js';
 import { getTextIntegrityConfigWithOverrides } from './config.server.js';
+import { startTextIntegrityCheckRun } from './startCheckRun.server.js';
+import { retryTextIntegrityCheckRun } from './retryCheckRun.server.js';
 import type { RelayNotifyEnvelope } from '@curvenote/check-relay-types';
 import {
   checksRelayCheckStatusUrl,
@@ -165,6 +160,7 @@ export async function handleTextIntegrityAction(
   const outboundIntents = new Set([
     'accept-eula',
     'execute',
+    'retry',
     'refresh-viewer-url',
     'relay-status',
     'restart-similarity-pdf',
@@ -226,90 +222,28 @@ export async function handleTextIntegrityAction(
       };
     }
 
-    const prisma = await getPrismaClient();
-    const workVersion = await prisma.workVersion.findUnique({
-      where: { id: workVersionId },
-    });
-    if (!workVersion) {
-      return { error: { type: 'general', message: 'Work version not found', status: 404 } };
-    }
-
-    const metadata =
-      workVersion.metadata != null && typeof workVersion.metadata === 'object'
-        ? workVersion.metadata
-        : null;
-    const hasPdf = hasPdfInMetadata(metadata);
-    const hasDocx = hasDocxInMetadata(metadata);
-    if (!hasPdf && !hasDocx) {
-      const noFilesMessage =
-        'Text Integrity requires a PDF or a Word document (.docx) on this version.';
-      await recordTextIntegrityExecuteFailure(ctx, workVersionId, noFilesMessage);
+    const result = await startTextIntegrityCheckRun(ctx, workVersionId);
+    if (!result.ok) {
       return {
-        error: {
-          type: 'general',
-          message: noFilesMessage,
-        },
+        error: { type: 'general', message: result.message },
+        status: result.status,
+      };
+    }
+    return { success: true };
+  }
+
+  if (intent === 'retry' && ctx) {
+    if (!workVersionId) {
+      return {
+        error: { type: 'general', message: 'Work version ID is required for Text Integrity retry' },
         status: 400,
       };
     }
-
-    const baseExt =
-      (ctx.$config?.app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};
-    const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
-    const manifest = parseServiceManifestSnapshot(mergedConfig.manifest);
-    const initialServiceData: TextIntegrityDataSchema = {
-      ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
-      ...(manifest ? { manifest } : {}),
-    };
-
-    const timestamp = new Date().toISOString();
-    const run = await prisma.checkServiceRun.create({
-      data: {
-        id: uuid(),
-        date_created: timestamp,
-        date_modified: timestamp,
-        kind: 'checks-text-integrity',
-        work_version_id: workVersionId,
-        created_by_id: ctx.user?.id ?? undefined,
-        data: {
-          status: 'healthy',
-          serviceDataSchema: {},
-          serviceData: initialServiceData as Prisma.JsonObject,
-        },
-      },
-    });
-    const checkRunId = run.id;
-
-    try {
-      await enqueueAndDispatchJob({
-        job_id: uuid(),
-        job_type: TEXT_INTEGRITY_SUBMIT,
-        payload: {
-          work_version_id: workVersionId,
-          check_service_run_id: checkRunId,
-        },
-        invoked_by_id: ctx.user?.id,
-        activity_type: 'CHECK_STARTED',
-        activity_data: { check: { kind: 'checks-text-integrity' } },
-      });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Text Integrity submit job failed';
-      console.error('TEXT_INTEGRITY_SUBMIT job create failed', err);
-      await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
-        const current = (data ?? {}) as CheckServiceRunData;
-        return {
-          ...current,
-          status: 'error',
-          serviceData: markSubmissionError(current.serviceData ?? initialServiceData, message),
-        } as Prisma.JsonObject;
-      });
-      return {
-        error: { type: 'general', message },
-        status: 500,
-      };
+    const checkRunId = formData?.get('checkRunId')?.toString()?.trim();
+    if (!checkRunId) {
+      return { error: { type: 'general', message: 'checkRunId is required' }, status: 400 };
     }
-
-    return { success: true };
+    return retryTextIntegrityCheckRun(ctx, workVersionId, checkRunId, 'user');
   }
 
   if (intent === 'refresh-viewer-url') {
@@ -665,7 +599,7 @@ export async function handleTextIntegrityAction(
     return { success: true };
   }
 
-  if (intent !== 'execute') {
+  if (intent !== 'execute' && intent !== 'retry') {
     return {
       error: { type: 'general', message: 'Unknown intent' },
       status: 400,

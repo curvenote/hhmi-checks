@@ -10,6 +10,7 @@ import { TextIntegrityTestConnectionRow } from './TextIntegrityTestConnectionRow
 import { TextIntegrityRefreshEulaRow } from './TextIntegrityRefreshEulaRow.js';
 import { TextIntegrityUpdateConfigurationForm } from './TextIntegrityUpdateConfigurationForm.js';
 import { TextIntegritySettingsPanel } from './TextIntegritySettingsPanel.js';
+import { TextIntegrityFailedRunsAdminPanel } from './FailedRunsAdminPanel.js';
 
 export function getManifest(
   record: Record<string, unknown> | undefined,
@@ -36,12 +37,7 @@ export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) 
     <div className="grid grid-cols-1 gap-6 max-w-3xl">
       <div className="flex gap-3 justify-between items-center min-w-0">
         <h2 className="text-xl font-semibold">Checks: {title}</h2>
-        <ServiceLogo
-          logoUrl={manifestLogo}
-          alt={title}
-          fallback={title}
-          className="h-4 shrink-0"
-        />
+        <ServiceLogo logoUrl={manifestLogo} alt={title} fallback={title} className="h-4 shrink-0" />
       </div>
       <TextIntegrityCredentialsForm
         displayConfig={displayConfig}
@@ -63,6 +59,7 @@ export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) 
         maintenance={displayConfig.maintenance as CheckMaintenanceRecord | undefined}
         serviceLabel={title}
       />
+      <TextIntegrityFailedRunsAdminPanel />
     </div>
   );
 }

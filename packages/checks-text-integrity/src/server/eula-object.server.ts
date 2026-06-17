@@ -68,9 +68,7 @@ export async function getOrCreateIthenticateObjectId(): Promise<string> {
 }
 
 /** Loads cached EULA from `extension:text-integrity:ithenticate`. */
-export async function loadCachedEula(
-  prisma?: PrismaClient,
-): Promise<CachedEula | undefined> {
+export async function loadCachedEula(prisma?: PrismaClient): Promise<CachedEula | undefined> {
   const db = prisma ?? (await getPrismaClient());
   const row = await loadIthenticateObjectRow(db);
   return parseCachedEula(row?.data);

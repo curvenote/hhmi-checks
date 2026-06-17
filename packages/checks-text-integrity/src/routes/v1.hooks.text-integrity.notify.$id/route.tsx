@@ -1,9 +1,6 @@
 import type { ActionFunctionArgs } from 'react-router';
 import { error405, httpError } from '@curvenote/scms-core';
-import {
-  getPrismaClient,
-  safeCheckServiceRunDataUpdate,
-} from '@curvenote/scms-server';
+import { getPrismaClient, safeCheckServiceRunDataUpdate } from '@curvenote/scms-server';
 import type { Prisma } from '@curvenote/scms-db';
 import type { TextIntegrityDataSchema } from '../../schema.js';
 import {

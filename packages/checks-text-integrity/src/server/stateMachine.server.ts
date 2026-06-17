@@ -152,8 +152,7 @@ export function applyWebhookEvent(
     }
 
     case WebhookEvent.ProcessingPhaseComplete: {
-      const rawSimilarity =
-        webhook.payload?.similarity_report ?? webhook.payload?.provider_payload;
+      const rawSimilarity = webhook.payload?.similarity_report ?? webhook.payload?.provider_payload;
       const reportResult = SimilarityReportPayloadSchema.safeParse(rawSimilarity);
 
       if (

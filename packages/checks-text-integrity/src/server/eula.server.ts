@@ -395,6 +395,44 @@ export async function resolveEulaSubmitFailureMessage(
   );
 }
 
+export const EULA_ADMIN_RETRY_SKIP_MESSAGE =
+  'The original submitter has not accepted the current Turnitin EULA. The user must retry manually from the work checks page.';
+
+/**
+ * Read-only EULA check for admin retry: original submitter must have accepted the latest cached version.
+ */
+export async function assertOriginalSubmitterEulaCurrent(
+  ctx: TextIntegrityEulaContext,
+  submitterUserId: string | null | undefined,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (!submitterUserId?.trim()) {
+    return {
+      ok: false,
+      message: 'This check run has no recorded submitter; cannot retry on their behalf.',
+    };
+  }
+
+  const baseExt = getTextIntegrityExtensionConfig(ctx);
+  const prisma = await getPrismaClient();
+  const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
+  if (!isEulaRequired(mergedConfig)) {
+    return { ok: true };
+  }
+
+  const cached = await refreshEulaCacheIfStale(ctx, mergedConfig);
+  const user = await prisma.user.findUnique({
+    where: { id: submitterUserId.trim() },
+    select: { data: true },
+  });
+  if (!user) {
+    return { ok: false, message: 'Original submitter account was not found.' };
+  }
+  if (!hasAcceptedLatestEula(user.data, cached)) {
+    return { ok: false, message: EULA_ADMIN_RETRY_SKIP_MESSAGE };
+  }
+  return { ok: true };
+}
+
 /** EULA metadata for TCA viewer-url requests (same shape as upload). */
 export async function buildViewerEulaPayload(
   ctx: TextIntegrityEulaContext,

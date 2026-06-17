@@ -28,7 +28,7 @@ import {
 } from '../config.server.js';
 import { checksRelayUploadUrl, resolveRelayInstanceId } from '../relay-urls.server.js';
 import {
-  assertSubmitterEulaAccepted,
+  assertOriginalSubmitterEulaCurrent,
   buildUploadEulaMetadata,
   isEulaRequired,
   isRelayEulaNotAccepted,
@@ -222,18 +222,24 @@ export async function textIntegritySubmitHandler(
   const payload = parseResult.data;
 
   const prisma = await getPrismaClient();
-  const workVersionRow = await prisma.workVersion.findUnique({
-    where: { id: payload.work_version_id },
-  });
+  const [workVersionRow, checkRunRow] = await Promise.all([
+    prisma.workVersion.findUnique({
+      where: { id: payload.work_version_id },
+    }),
+    prisma.checkServiceRun.findUnique({
+      where: { id: payload.check_service_run_id },
+      select: { created_by_id: true },
+    }),
+  ]);
   if (!workVersionRow) {
     throw httpError(404, `Work version ${payload.work_version_id} not found`);
   }
 
-  const userId = ctx.user?.id ?? data.invoked_by_id;
+  const submitterId = checkRunRow?.created_by_id ?? ctx.user?.id ?? data.invoked_by_id ?? undefined;
   let submitterUser: { id: string; email: string | null; display_name: string | null } | undefined;
-  if (userId) {
+  if (submitterId) {
     const row = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: submitterId },
       select: { id: true, email: true, display_name: true },
     });
     if (row) submitterUser = row;
@@ -298,9 +304,9 @@ export async function textIntegritySubmitHandler(
       );
     }
 
-    const eulaMessage = await assertSubmitterEulaAccepted(ctx);
-    if (eulaMessage) {
-      throw httpError(400, eulaMessage);
+    const eulaCheck = await assertOriginalSubmitterEulaCurrent(ctx, submitterId);
+    if (!eulaCheck.ok) {
+      throw httpError(400, eulaCheck.message);
     }
 
     const cachedEula = await refreshEulaCacheIfStale(ctx, mergedConfig);

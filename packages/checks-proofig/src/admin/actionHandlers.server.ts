@@ -6,6 +6,11 @@ import type { Prisma } from '@curvenote/scms-db';
 import { uuidv7 as uuid } from 'uuidv7';
 import type { ProofigConfigOverlay } from '../server/config.server.js';
 import { PROOFIG_CONFIG_OBJECT_TYPE } from '../server/config.server.js';
+import { loadProofigFailedRuns } from './loadFailedRuns.server.js';
+import {
+  retryProofigCheckRun,
+  retryProofigFailedRunsBulk,
+} from '../server/retryCheckRun.server.js';
 
 type ProofigConfigData = ProofigConfigOverlay;
 
@@ -48,6 +53,13 @@ async function updateProofigConfigField(
     const message = err instanceof Error ? err.message : 'Failed to save';
     return { error: { type: 'general', message } };
   }
+}
+
+function parseRunIdsFromFormData(formData: FormData): string[] {
+  return formData
+    .getAll('runIds')
+    .map((v) => v.toString().trim())
+    .filter(Boolean);
 }
 
 export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[] {
@@ -98,7 +110,80 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
           });
           return { success: true };
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to save maintenance settings';
+          const message =
+            err instanceof Error ? err.message : 'Failed to save maintenance settings';
+          return { error: { type: 'general', message } };
+        }
+      },
+    },
+    {
+      name: 'proofig-list-failed-runs',
+      handler: async () => {
+        try {
+          const runs = await loadProofigFailedRuns();
+          return { success: true, runs };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to load failed runs';
+          return { error: { type: 'general', message } };
+        }
+      },
+    },
+    {
+      name: 'proofig-retry-failed-run',
+      handler: async (ctx: Context, formData: FormData) => {
+        const runIds = parseRunIdsFromFormData(formData);
+        const runId = runIds[0];
+        if (!runId) {
+          return { error: { type: 'validation', message: 'runIds is required' } };
+        }
+        try {
+          const prisma = await getPrismaClient();
+          const sourceRun = await prisma.checkServiceRun.findFirst({
+            where: { id: runId, kind: 'proofig' },
+          });
+          if (!sourceRun) {
+            return { error: { type: 'general', message: 'Check run not found' } };
+          }
+          const outcome = await retryProofigCheckRun(
+            ctx,
+            sourceRun.work_version_id,
+            runId,
+            'admin',
+          );
+          if ('success' in outcome && outcome.success) {
+            return {
+              success: true,
+              results: [
+                {
+                  runId,
+                  ok: true,
+                  checkRunId: (outcome as { checkRunId?: string }).checkRunId,
+                },
+              ],
+            };
+          }
+          return {
+            success: true,
+            results: [{ runId, ok: false, message: outcome.error?.message ?? 'Retry failed' }],
+          };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Retry failed';
+          return { error: { type: 'general', message } };
+        }
+      },
+    },
+    {
+      name: 'proofig-retry-failed-runs-bulk',
+      handler: async (ctx: Context, formData: FormData) => {
+        const runIds = parseRunIdsFromFormData(formData);
+        if (runIds.length === 0) {
+          return { error: { type: 'validation', message: 'Select at least one run to retry' } };
+        }
+        try {
+          const { results } = await retryProofigFailedRunsBulk(ctx, runIds);
+          return { success: true, results };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Bulk retry failed';
           return { error: { type: 'general', message } };
         }
       },

@@ -1,42 +1,26 @@
-import { uuidv7 as uuid } from 'uuidv7';
+import { getPrismaClient } from '@curvenote/scms-server';
 import {
-  enqueueAndDispatchJob,
-  getPrismaClient,
-  safeCheckServiceRunDataUpdate,
-} from '@curvenote/scms-server';
-import {
-  type CheckServiceRunData,
   type ExtensionCheckHandleActionArgs,
   type ExtensionCheckHandleActionResult,
   type ExtensionCheckStatusArgs,
   checkMaintenanceActionError,
-  hasDocxInMetadata,
-  hasPdfInMetadata,
-  KnownJobTypes,
   maintenanceGuardFromConfig,
 } from '@curvenote/scms-core';
-import type { Prisma } from '@curvenote/scms-db';
 import {
   ALL_PENDING_STAGES,
-  MINIMAL_PROOFIG_SERVICE_DATA,
   proofigDataSchema,
   isProofigAwaitingSubimageApprovalInUi,
   type ProofigDataSchema,
   type ProofigStages,
 } from '../schema.js';
-import {
-  markDocumentPreparationError,
-  markInitialPostError,
-  beginProofigPipeline,
-} from './stateMachine.server.js';
 import { applyDocumentPreparationFromConverterJob } from './applyDocumentPreparationFromConverterJob.server.js';
-import { PROOFIG_SUBMIT_STREAM } from './jobs/proofig-submit-stream.server.js';
-import { PROOFIG_CONVERTER_FAILURE_CLEANUP } from './jobs/proofig-converter-failure-cleanup.server.js';
 import { getProofigConfigWithOverrides } from './config.server.js';
 import { postProofigRemoteStatus } from './proofigRemoteStatus.server.js';
 import { applyNotifyPayloadToCheckRun } from './applyNotifyPayloadToCheckRun.server.js';
 import { getProofingToken } from './proofigAuth.server.js';
 import { proofigReportUrlWithAccessToken } from './proofigReportUrl.server.js';
+import { startProofigCheckRun } from './startCheckRun.server.js';
+import { retryProofigCheckRun } from './retryCheckRun.server.js';
 
 async function findProofigRunForWorkVersion(
   workVersionId: string,
@@ -179,6 +163,7 @@ export interface ChecksMetadataSection {
 // Intents that trigger outbound calls to Proofig and must be blocked during maintenance.
 const OUTBOUND_INTENTS = new Set([
   'execute',
+  'retry',
   'fetch-remote-status',
   'refresh-remote-status',
   'refresh-report-url',
@@ -220,177 +205,28 @@ export async function handleProofigAction(
       };
     }
 
-    const prisma = await getPrismaClient();
-    const workVersion = await prisma.workVersion.findUnique({
-      where: { id: workVersionId },
-    });
-    if (!workVersion) {
-      return { error: { type: 'general', message: 'Work version not found', status: 404 } };
-    }
-
-    const metadata =
-      workVersion.metadata != null && typeof workVersion.metadata === 'object'
-        ? workVersion.metadata
-        : null;
-    const hasPdf = hasPdfInMetadata(metadata);
-    const hasDocx = hasDocxInMetadata(metadata);
-    if (!hasPdf && !hasDocx) {
-      const noFilesMessage = 'Proofig requires a PDF or a Word document (.docx) on this version.';
-      const timestamp = new Date().toISOString();
-      const serviceData = markInitialPostError(
-        MINIMAL_PROOFIG_SERVICE_DATA,
-        noFilesMessage,
-        timestamp,
-      );
-      await prisma.checkServiceRun.create({
-        data: {
-          id: uuid(),
-          date_created: timestamp,
-          date_modified: timestamp,
-          kind: 'proofig',
-          work_version_id: workVersionId,
-          created_by_id: ctx.user?.id ?? undefined,
-          data: {
-            status: 'error',
-            serviceDataSchema: {},
-            serviceData: serviceData as Prisma.JsonObject,
-          },
-        },
-      });
+    const result = await startProofigCheckRun(ctx, workVersionId);
+    if (!result.ok) {
       return {
-        error: {
-          type: 'general',
-          message: noFilesMessage,
-        },
+        error: { type: 'general', message: result.message },
+        status: result.status,
+      };
+    }
+    return { success: true };
+  }
+
+  if (intent === 'retry' && ctx) {
+    if (!workVersionId) {
+      return {
+        error: { type: 'general', message: 'Work version ID is required for Proofig retry' },
         status: 400,
       };
     }
-
-    const timestamp = new Date().toISOString();
-    const run = await prisma.checkServiceRun.create({
-      data: {
-        id: uuid(),
-        date_created: timestamp,
-        date_modified: timestamp,
-        kind: 'proofig',
-        work_version_id: workVersionId,
-        created_by_id: ctx.user?.id ?? undefined,
-        data: {
-          status: 'healthy',
-          serviceDataSchema: {},
-          serviceData: {},
-        },
-      },
-    });
-    const checkRunId = run.id;
-    const jobType = PROOFIG_SUBMIT_STREAM;
-    const dispatchTimestamp = new Date().toISOString();
-
-    try {
-      if (hasPdf) {
-        await safeCheckServiceRunDataUpdate(checkRunId, (runData?: Prisma.JsonValue) => {
-          const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
-          const nextServiceData = beginProofigPipeline(
-            { sourceFormat: 'pdf' },
-            current.serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
-            dispatchTimestamp,
-          );
-          return {
-            ...current,
-            status: 'healthy',
-            serviceData: nextServiceData,
-          } satisfies CheckServiceRunData<ProofigDataSchema>;
-        });
-
-        await enqueueAndDispatchJob({
-          job_id: uuid(),
-          job_type: jobType,
-          payload: {
-            work_version_id: workVersionId,
-            proofig_run_id: checkRunId,
-          },
-          invoked_by_id: ctx.user?.id,
-          activity_type: 'CHECK_STARTED',
-          activity_data: { check: { kind: 'proofig' } },
-        });
-      } else {
-        const exportJobId = uuid();
-        const proofigJobId = uuid();
-        const converterFailureCleanupJobId = uuid();
-        await safeCheckServiceRunDataUpdate(checkRunId, (runData?: Prisma.JsonValue) => {
-          const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
-          const nextServiceData = beginProofigPipeline(
-            { sourceFormat: 'docx', converterJobId: exportJobId },
-            current.serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
-            dispatchTimestamp,
-          );
-          return {
-            ...current,
-            status: 'healthy',
-            serviceData: nextServiceData,
-          } satisfies CheckServiceRunData<ProofigDataSchema>;
-        });
-        await enqueueAndDispatchJob({
-          job_id: exportJobId,
-          job_type: KnownJobTypes.CONVERTER_TASK,
-          payload: {
-            work_version_id: workVersionId,
-            target: 'pdf',
-            conversion_type: 'docx-lowriter-pdf',
-          },
-          invoked_by_id: ctx.user?.id,
-          activity_type: 'CONVERTER_TASK_STARTED',
-          activity_data: { converter: { target: 'pdf', type: 'docx-lowriter-pdf' } },
-          dependents: [
-            {
-              job_id: proofigJobId,
-              job_type: jobType,
-              payload: {
-                work_version_id: workVersionId,
-                proofig_run_id: checkRunId,
-              },
-              trigger_on: 'success',
-              activity_type: 'CHECK_STARTED',
-              activity_data: { check: { kind: 'proofig' } },
-            },
-            {
-              job_id: converterFailureCleanupJobId,
-              job_type: PROOFIG_CONVERTER_FAILURE_CLEANUP,
-              payload: {
-                proofig_run_id: checkRunId,
-              },
-              trigger_on: 'failure',
-            },
-          ],
-        });
-      }
-    } catch (err: any) {
-      const jobLabel = hasPdf ? jobType : KnownJobTypes.CONVERTER_TASK;
-      console.error(`${jobLabel} job create failed`, err);
-      await safeCheckServiceRunDataUpdate(checkRunId, (runData?: Prisma.JsonValue) => {
-        const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
-        const base = current.serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA;
-        const errMsg = err?.statusText ?? err?.message ?? 'Proofig submit job failed';
-        const nextServiceData =
-          hasPdf || !hasDocx
-            ? markInitialPostError(base, errMsg, new Date().toISOString())
-            : markDocumentPreparationError(base, errMsg, new Date().toISOString());
-        return {
-          ...current,
-          status: 'error',
-          serviceData: nextServiceData,
-        } satisfies CheckServiceRunData<ProofigDataSchema>;
-      });
-      return {
-        error: {
-          type: 'general',
-          message: err instanceof Error ? err.message : 'Proofig submit job failed',
-        },
-        status: 500,
-      };
+    const checkRunId = args.formData?.get('checkRunId')?.toString()?.trim();
+    if (!checkRunId) {
+      return { error: { type: 'general', message: 'checkRunId is required' }, status: 400 };
     }
-
-    return { success: true };
+    return retryProofigCheckRun(ctx, workVersionId, checkRunId, 'user');
   }
 
   // ----- Sync documentPreparation from CONVERTER_TASK job status (DOCX uploads) -----

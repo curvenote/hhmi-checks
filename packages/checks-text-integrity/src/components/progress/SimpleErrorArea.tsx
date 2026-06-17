@@ -28,11 +28,7 @@ export function SimpleErrorArea({
           </div>
         }
       />
-      <StageProgressArea
-        numSteps={numSteps}
-        segmentTones={segmentTones}
-        message={detail}
-      />
+      <StageProgressArea numSteps={numSteps} segmentTones={segmentTones} message={detail} />
     </div>
   );
 }

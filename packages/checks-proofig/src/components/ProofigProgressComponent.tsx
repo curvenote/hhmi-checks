@@ -1,4 +1,4 @@
-import type { ProofigDataSchema } from '../schema.js';
+import type { ProofigDataSchema, ProofigStages } from '../schema.js';
 import { ALL_PENDING_STAGES, getCurrentProofigStage } from '../schema.js';
 import { DefaultArea } from './progress/DefaultArea.js';
 import { DocumentPreparationProgressArea } from './progress/DocumentPreparationProgressArea.js';
@@ -7,6 +7,7 @@ import { IntegrityDetectionProgressArea } from './progress/IntegrityDetectionPro
 import { SubimageApprovalProgressArea } from './progress/SubimageApprovalProgressArea.js';
 import { SubimageDetectionProgressArea } from './progress/SubimageDetectionProgressArea.js';
 import { ResultsSummaryArea } from './ResultsSummaryArea.js';
+import { ProofigCheckRunRetryButton } from './ProofigCheckRunRetryButton.js';
 
 export const STAGE_LABELS = {
   documentPreparation: 'Preparing document',
@@ -17,6 +18,13 @@ export const STAGE_LABELS = {
   resultsReview: 'Ready for results review',
   finalReport: 'Generating final report',
 } as const;
+
+function stagesHaveError(stages: ProofigStages): boolean {
+  return Object.values(stages).some((stage) => {
+    if (stage == null || typeof stage !== 'object') return false;
+    return (stage as { status?: string }).status === 'error';
+  });
+}
 
 interface ProofigProgressComponentProps {
   proofigData: ProofigDataSchema | undefined;
@@ -107,6 +115,15 @@ export function ProofigProgressComponent({
   return (
     <>
       <div>{Component}</div>
+      {stagesHaveError(stages) && workVersionId ? (
+        <div className="mt-4">
+          <ProofigCheckRunRetryButton
+            actionPath={remoteStatusActionPath}
+            workVersionId={workVersionId}
+            checkRunId={checkRunId}
+          />
+        </div>
+      ) : null}
     </>
   );
 }

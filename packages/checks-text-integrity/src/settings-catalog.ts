@@ -18,7 +18,8 @@ export const SEARCH_REPOSITORY_LABELS: Record<SearchRepositoryId, string> = {
 };
 
 export const SEARCH_REPOSITORY_DESCRIPTIONS: Record<SearchRepositoryId, string> = {
-  INTERNET: 'Use this search repository to compare against content in the internet search repository',
+  INTERNET:
+    'Use this search repository to compare against content in the internet search repository',
   SUBMITTED_WORK: 'Use this search repository to compare against indexed submissions',
   PUBLICATION: 'Use this search repository to compare against publications',
   CROSSREF: 'Use this search repository to compare against crossref publications',
@@ -58,8 +59,7 @@ export const VIEW_SETTING_LABELS: Record<ViewSettingKey, string> = {
 };
 
 export const VIEW_SETTING_DESCRIPTIONS: Record<ViewSettingKey, string> = {
-  exclude_quotes:
-    'If set to true, text in quotes will not count as similar content',
+  exclude_quotes: 'If set to true, text in quotes will not count as similar content',
   exclude_bibliography:
     'If set to true, text in a bibliography section will not count as similar content',
   exclude_abstract:

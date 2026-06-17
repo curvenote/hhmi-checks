@@ -29,7 +29,11 @@ function parseOverlay(data: unknown): Partial<ProofigConfigOverlay> {
   const overlay: Partial<ProofigConfigOverlay> = {};
   for (const key of OVERLAY_KEYS) {
     if (key === 'maintenance') {
-      if (raw.maintenance != null && typeof raw.maintenance === 'object' && !Array.isArray(raw.maintenance)) {
+      if (
+        raw.maintenance != null &&
+        typeof raw.maintenance === 'object' &&
+        !Array.isArray(raw.maintenance)
+      ) {
         const m = raw.maintenance as Record<string, unknown>;
         overlay.maintenance = {
           enabled: m.enabled === true,

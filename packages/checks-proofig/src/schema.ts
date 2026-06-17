@@ -143,6 +143,10 @@ export const proofigDataSchema = z.object({
     integrityDetection: LinearStageSchema.optional(),
     resultsReview: ReviewStageSchema.optional(),
   }),
+  /** Lineage when this run was created by retrying a failed run. */
+  retryOfRunId: z.string().optional(),
+  retriedAt: z.string().optional(),
+  retriedByUserId: z.string().optional(),
 });
 
 export type ProofigStageStatus = z.infer<typeof LinearStageStatusSchema>;

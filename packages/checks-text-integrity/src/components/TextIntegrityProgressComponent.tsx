@@ -11,6 +11,7 @@ import { ProcessingProgressArea } from './progress/ProcessingProgressArea.js';
 import { SimpleErrorArea } from './progress/SimpleErrorArea.js';
 import { SubmissionCompleteProgressArea } from './progress/SubmissionCompleteProgressArea.js';
 import { SubmittingProgressArea } from './progress/SubmittingProgressArea.js';
+import { TextIntegrityCheckRunRetryButton } from './TextIntegrityCheckRunRetryButton.js';
 
 type ProgressRefreshProps = {
   actionPath: string;
@@ -47,13 +48,20 @@ export function TextIntegrityProgressComponent({
   if (hasError(metadata)) {
     const failedStep = getFailedPipelineStep(metadata) ?? 1;
     return (
-      <div>
+      <div className="flex flex-col gap-4">
         <SimpleErrorArea
           numSteps={3}
           segmentTones={getErrorPipelineSegmentTones(metadata, 3)}
           failedStageTitle={getFailedStageDisplayTitle(failedStep)}
           error={getErrorMessage(metadata)}
         />
+        {workVersionId ? (
+          <TextIntegrityCheckRunRetryButton
+            actionPath={actionPath}
+            workVersionId={workVersionId}
+            checkRunId={checkRunId}
+          />
+        ) : null}
       </div>
     );
   }

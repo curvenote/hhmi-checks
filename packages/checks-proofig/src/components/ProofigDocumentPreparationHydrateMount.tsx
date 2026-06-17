@@ -66,7 +66,15 @@ export function ProofigDocumentPreparationHydrateMount({
         pollIntervalRef.current = undefined;
       }
     };
-  }, [awaitingPrep, blocked, checkKind, checkRunId, hydrateSubmit, remoteStatusActionPath, workVersionId]);
+  }, [
+    awaitingPrep,
+    blocked,
+    checkKind,
+    checkRunId,
+    hydrateSubmit,
+    remoteStatusActionPath,
+    workVersionId,
+  ]);
 
   useEffect(() => {
     if (hydrateFetcher.state !== 'idle' || !hydrateFetcher.data) return;

@@ -68,9 +68,7 @@ export type ParsedNotifyWebhookResult =
   | { ok: true; noop: true }
   | { ok: false; issues: ZodIssue[] };
 
-function mapRelayEnvelopeToWebhookBody(
-  env: RelayNotifyEnvelopeParsed,
-): WebhookBody | 'noop' {
+function mapRelayEnvelopeToWebhookBody(env: RelayNotifyEnvelopeParsed): WebhookBody | 'noop' {
   const payload = env.payload;
   switch (env.event) {
     case 'UPLOAD_PENDING':

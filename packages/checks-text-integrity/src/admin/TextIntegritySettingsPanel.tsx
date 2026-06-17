@@ -3,13 +3,7 @@ import { deriveSettingsConfig } from './settings-config.js';
 import { SwitchFormRow } from './SwitchFormRow.js';
 import { ToggleGroupFormRow } from './ToggleGroupFormRow.js';
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-1 rounded-lg border border-border bg-card p-4 shadow-xs">
       <h3 className="border-b border-border pb-2 text-sm font-semibold">{title}</h3>

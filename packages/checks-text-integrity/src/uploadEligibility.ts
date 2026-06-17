@@ -1,7 +1,4 @@
-import {
-  getFilesForSlot,
-  isDocxOrPdfFile,
-} from '@curvenote/scms-core';
+import { getFilesForSlot, isDocxOrPdfFile } from '@curvenote/scms-core';
 
 const TEXT_INTEGRITY_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
 const MANUSCRIPT_SLOT = 'manuscript';

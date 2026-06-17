@@ -63,7 +63,9 @@ export function TopMatchesBlock({ report }: TopMatchesBlockProps) {
       {expanded && (
         <div className="pt-4 mt-4 border-t border-border">
           {topMatches.length === 0 ? (
-            <div className="py-2 text-sm text-center text-muted-foreground">No matching sources</div>
+            <div className="py-2 text-sm text-center text-muted-foreground">
+              No matching sources
+            </div>
           ) : (
             <div className="py-2 space-y-0">
               {topMatches.map((match, i) => (

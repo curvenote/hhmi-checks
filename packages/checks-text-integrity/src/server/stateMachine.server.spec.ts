@@ -1,10 +1,6 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { describe, expect, it } from 'vitest';
-import {
-  applyWebhookEvent,
-  startSubmission,
-  markSubmissionError,
-} from './stateMachine.server.js';
+import { applyWebhookEvent, startSubmission, markSubmissionError } from './stateMachine.server.js';
 import {
   type TextIntegrityDataSchema,
   type WebhookBody,
@@ -88,11 +84,12 @@ describe('Text Integrity State Machine', () => {
 
   describe('Edge Cases', () => {
     it('initializes stages if current data has no stages', () => {
-      const initial: TextIntegrityDataSchema = { stages: { submission: { status: 'pending', history: [], timestamp: '2025-01-01T00:00:00Z' } } };
-      const next = applyWebhookEvent(
-        initial,
-        makeWebhook(WebhookEvent.SubmissionComplete),
-      );
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'pending', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(initial, makeWebhook(WebhookEvent.SubmissionComplete));
       expect(next).not.toBeNull();
       expect(next?.stages.submission.status).toBe('completed');
       expect(next?.stages.processing?.status).toBe('pending');
@@ -104,10 +101,7 @@ describe('Text Integrity State Machine', () => {
           submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
         },
       };
-      const next = applyWebhookEvent(
-        initial,
-        { event: 'UNKNOWN_EVENT' as any },
-      );
+      const next = applyWebhookEvent(initial, { event: 'UNKNOWN_EVENT' as any });
       expect(next).toEqual(initial);
     });
   });
@@ -225,11 +219,7 @@ describe('Text Integrity State Machine', () => {
       };
 
       const t1 = '2025-01-01T00:01:00Z';
-      const next = applyWebhookEvent(
-        initial,
-        makeWebhook(WebhookEvent.ProcessingPhaseStarted),
-        t1,
-      );
+      const next = applyWebhookEvent(initial, makeWebhook(WebhookEvent.ProcessingPhaseStarted), t1);
 
       expect(next?.stages.processing?.status).toBe('processing');
       expect(next?.stages.processing?.timestamp).toBe(t1);
@@ -318,10 +308,7 @@ describe('Text Integrity State Machine', () => {
           submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
         },
       };
-      const next = applyWebhookEvent(
-        initial,
-        makeWebhook(WebhookEvent.SubmissionComplete),
-      );
+      const next = applyWebhookEvent(initial, makeWebhook(WebhookEvent.SubmissionComplete));
       expect(next?.stages.submission.status).toBe('completed');
       expect(next?.stages.processing?.status).toBe('pending');
     });
@@ -347,10 +334,7 @@ describe('Text Integrity State Machine', () => {
           processing: { status: 'pending', history: [], timestamp: '2025-01-01T00:00:00Z' },
         },
       };
-      const next = applyWebhookEvent(
-        initial,
-        makeWebhook(WebhookEvent.ProcessingPhaseStarted),
-      );
+      const next = applyWebhookEvent(initial, makeWebhook(WebhookEvent.ProcessingPhaseStarted));
       expect(next?.stages.processing?.status).toBe('processing');
     });
 
@@ -378,10 +362,7 @@ describe('Text Integrity State Machine', () => {
           },
         },
       };
-      const next = applyWebhookEvent(
-        initial,
-        makeWebhook(WebhookEvent.ReportGenerationStarted),
-      );
+      const next = applyWebhookEvent(initial, makeWebhook(WebhookEvent.ReportGenerationStarted));
       expect(next?.stages.reportGeneration?.status).toBe('processing');
     });
 
@@ -431,10 +412,7 @@ describe('Text Integrity State Machine', () => {
           submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
         },
       };
-      const next = applyWebhookEvent(
-        initial,
-        makeWebhook(WebhookEvent.ProcessingPhaseStarted),
-      );
+      const next = applyWebhookEvent(initial, makeWebhook(WebhookEvent.ProcessingPhaseStarted));
       expect(next?.stages.submission.status).toBe('notify-skipped');
       expect(next?.stages.processing?.status).toBe('processing');
     });
@@ -456,10 +434,7 @@ describe('Text Integrity State Machine', () => {
           submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
         },
       };
-      const next = applyWebhookEvent(
-        initial,
-        makeWebhook(WebhookEvent.ReportGenerationStarted),
-      );
+      const next = applyWebhookEvent(initial, makeWebhook(WebhookEvent.ReportGenerationStarted));
       expect(next?.stages.submission.status).toBe('notify-skipped');
       expect(next?.stages.processing?.status).toBe('notify-skipped');
       expect(next?.stages.reportGeneration?.status).toBe('processing');
@@ -503,10 +478,7 @@ describe('Text Integrity State Machine', () => {
           processing: { status: 'pending', history: [], timestamp: '2025-01-01T00:00:00Z' },
         },
       };
-      const next = applyWebhookEvent(
-        initial,
-        makeWebhook(WebhookEvent.SubmissionComplete),
-      );
+      const next = applyWebhookEvent(initial, makeWebhook(WebhookEvent.SubmissionComplete));
       expect(next).toBeNull();
     });
 
@@ -517,10 +489,7 @@ describe('Text Integrity State Machine', () => {
           processing: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
         },
       };
-      const next = applyWebhookEvent(
-        initial,
-        makeWebhook(WebhookEvent.ProcessingPhaseStarted),
-      );
+      const next = applyWebhookEvent(initial, makeWebhook(WebhookEvent.ProcessingPhaseStarted));
       expect(next).toBeNull();
     });
 
@@ -593,10 +562,7 @@ describe('Text Integrity State Machine', () => {
           },
         },
       };
-      const next = applyWebhookEvent(
-        initial,
-        makeWebhook(WebhookEvent.ReportGenerationStarted),
-      );
+      const next = applyWebhookEvent(initial, makeWebhook(WebhookEvent.ReportGenerationStarted));
       expect(next).toBeNull();
     });
 
@@ -702,11 +668,7 @@ describe('Text Integrity State Machine', () => {
       expect(getCurrentTextIntegrityState(data)).toBe('submission_complete');
 
       const t2 = '2025-01-01T00:02:00Z';
-      data = applyWebhookEvent(
-        data,
-        makeWebhook(WebhookEvent.ProcessingPhaseStarted),
-        t2,
-      )!;
+      data = applyWebhookEvent(data, makeWebhook(WebhookEvent.ProcessingPhaseStarted), t2)!;
       expect(data.stages.processing?.status).toBe('processing');
       expect(getCurrentTextIntegrityState(data)).toBe('processing_requested');
 
@@ -719,11 +681,7 @@ describe('Text Integrity State Machine', () => {
       expect(data.reportPdfId).toBe('pdf-001');
 
       const t4 = '2025-01-01T00:04:00Z';
-      data = applyWebhookEvent(
-        data,
-        makeWebhook(WebhookEvent.ReportGenerationStarted),
-        t4,
-      )!;
+      data = applyWebhookEvent(data, makeWebhook(WebhookEvent.ReportGenerationStarted), t4)!;
       expect(data.stages.reportGeneration?.status).toBe('processing');
       expect(getCurrentTextIntegrityState(data)).toBe('report_generation_started');
 
@@ -779,11 +737,7 @@ describe('Text Integrity State Machine', () => {
       const t0 = '2025-01-01T00:00:00Z';
       let data = startSubmission(undefined, t0);
       data = applyWebhookEvent(data, makeWebhook(WebhookEvent.SubmissionComplete), t0)!;
-      data = applyWebhookEvent(
-        data,
-        makeWebhook(WebhookEvent.ProcessingPhaseStarted),
-        t0,
-      )!;
+      data = applyWebhookEvent(data, makeWebhook(WebhookEvent.ProcessingPhaseStarted), t0)!;
       const next = applyWebhookEvent(
         data,
         makeWebhook(WebhookEvent.ProcessingPhaseFailed, { error_message: 'phase blew up' }),

@@ -152,7 +152,9 @@ export function coerceTextIntegrityStoredObject(data: unknown): TextIntegritySto
   }
 
   if (raw.settings != null && typeof raw.settings === 'object' && !Array.isArray(raw.settings)) {
-    out.settings = cloneJsonObject(raw.settings as Record<string, unknown>) as TextIntegrityServiceSettings;
+    out.settings = cloneJsonObject(
+      raw.settings as Record<string, unknown>,
+    ) as TextIntegrityServiceSettings;
   }
 
   if (typeof raw.notifyBaseUrl === 'string') {
@@ -167,11 +169,17 @@ export function coerceTextIntegrityStoredObject(data: unknown): TextIntegritySto
     out.serviceName = raw.serviceName;
   }
 
-  if (raw.maintenance != null && typeof raw.maintenance === 'object' && !Array.isArray(raw.maintenance)) {
+  if (
+    raw.maintenance != null &&
+    typeof raw.maintenance === 'object' &&
+    !Array.isArray(raw.maintenance)
+  ) {
     const m = raw.maintenance as Record<string, unknown>;
     out.maintenance = {
       enabled: m.enabled === true,
-      ...(typeof m.message === 'string' && m.message.trim() !== '' ? { message: m.message.trim() } : {}),
+      ...(typeof m.message === 'string' && m.message.trim() !== ''
+        ? { message: m.message.trim() }
+        : {}),
       ...(typeof m.updatedAt === 'string' ? { updatedAt: m.updatedAt } : {}),
       ...(typeof m.updatedByUserId === 'string' ? { updatedByUserId: m.updatedByUserId } : {}),
     };
@@ -250,7 +258,8 @@ export function syncDefaultsFromFeatures(
 
   if (sim?.generation_settings) {
     const enabledRepos = sim.generation_settings.search_repositories ?? [];
-    const existingRepos = existingDefaults?.similarity?.generation_settings?.search_repositories ?? [];
+    const existingRepos =
+      existingDefaults?.similarity?.generation_settings?.search_repositories ?? [];
     const keptRepos = existingRepos.filter((r) => enabledRepos.includes(r));
     next.similarity!.generation_settings = {
       search_repositories: keptRepos.length > 0 ? keptRepos : [...enabledRepos],

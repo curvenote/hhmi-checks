@@ -1,8 +1,5 @@
 import type { ReactNode } from 'react';
-import {
-  SegmentedProgressBar,
-  type PipelineSegmentTone,
-} from '../SegmentedProgressBar.js';
+import { SegmentedProgressBar, type PipelineSegmentTone } from '../SegmentedProgressBar.js';
 
 export function StageProgressArea({
   step,

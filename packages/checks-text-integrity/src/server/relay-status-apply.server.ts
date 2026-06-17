@@ -38,9 +38,7 @@ export async function applyRelayCheckStatusEnvelopes(
       await safeCheckServiceRunDataUpdate(checkServiceRunId, (runData?: Prisma.JsonValue) => {
         const current = (runData ?? {}) as CheckServiceRunData;
         const sd = textIntegrityDataSchema.safeParse(current.serviceData);
-        const currentServiceData = sd.success
-          ? sd.data
-          : MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+        const currentServiceData = sd.success ? sd.data : MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
 
         const nextServiceData = applyWebhookEvent(currentServiceData, webhook, receivedAt);
         if (!nextServiceData) {

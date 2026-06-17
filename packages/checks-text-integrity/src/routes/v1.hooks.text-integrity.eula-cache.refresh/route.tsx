@@ -4,9 +4,7 @@ import { withContext } from '@curvenote/scms-server';
 import { verifyEulaCronBearer } from '../../server/eula-cron-auth.server.js';
 import { getEulaCronSecret, runEulaCacheCronRefresh } from '../../server/eula.server.js';
 
-async function handleEulaCacheRefresh(
-  args: LoaderFunctionArgs | ActionFunctionArgs,
-) {
+async function handleEulaCacheRefresh(args: LoaderFunctionArgs | ActionFunctionArgs) {
   const ctx = await withContext(args, { noTokens: true });
 
   const secret = getEulaCronSecret(ctx);
