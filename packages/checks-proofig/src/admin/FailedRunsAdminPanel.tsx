@@ -26,6 +26,7 @@ type ListResponse = {
   page?: number;
   pageSize?: number;
   hasNextPage?: boolean;
+  scanLimitReached?: boolean;
   error?: { message?: string };
 };
 
@@ -53,6 +54,7 @@ export function ProofigFailedRunsAdminPanel() {
   const listBusy = listFetcher.state !== 'idle';
   const retryBusy = retryFetcher.state !== 'idle';
   const hasNextPage = listFetcher.data?.hasNextPage === true;
+  const scanLimitReached = listFetcher.data?.scanLimitReached === true;
   const currentPage = listFetcher.data?.page ?? page;
 
   const loadPage = useCallback(
@@ -148,6 +150,12 @@ export function ProofigFailedRunsAdminPanel() {
           Refresh
         </ui.StatefulButton>
       </div>
+
+      {scanLimitReached ? (
+        <p className="text-sm text-amber-600 dark:text-amber-500">
+          Scan limit reached — older failed runs beyond the most recent runs are not shown.
+        </p>
+      ) : null}
 
       {listBusy && runs.length === 0 ? (
         <p className="text-sm text-muted-foreground">Loading failed runs…</p>

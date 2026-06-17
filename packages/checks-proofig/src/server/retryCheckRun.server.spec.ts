@@ -1,6 +1,7 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { retryProofigCheckRun } from './retryCheckRun.server.js';
+import { markProofigSourceRunSupersededByRetry } from './runSuperseded.server.js';
 
 const mockFindFirst = vi.fn();
 const mockStart = vi.fn();
@@ -20,6 +21,8 @@ vi.mock('./runSuperseded.server.js', () => ({
   markProofigSourceRunSupersededByRetry: vi.fn(async () => {}),
 }));
 
+const mockMarkSuperseded = vi.mocked(markProofigSourceRunSupersededByRetry);
+
 const ctx = {
   user: { id: 'admin-user' },
   $config: { app: { extensions: {} } },
@@ -29,6 +32,8 @@ describe('retryProofigCheckRun', () => {
   beforeEach(() => {
     mockFindFirst.mockReset();
     mockStart.mockReset();
+    mockMarkSuperseded.mockReset();
+    mockMarkSuperseded.mockResolvedValue(undefined);
   });
 
   it('rejects when source run is not failed', async () => {
@@ -88,5 +93,24 @@ describe('retryProofigCheckRun', () => {
         invokedById: 'admin-user',
       }),
     );
+  });
+
+  it('still succeeds when marking the source superseded fails', async () => {
+    mockFindFirst.mockResolvedValue({
+      id: 'run-1',
+      kind: 'proofig',
+      work_version_id: 'wv-1',
+      created_by_id: 'original-user',
+      data: { status: 'error' },
+    });
+    mockStart.mockResolvedValue({ ok: true, checkRunId: 'run-2' });
+    mockMarkSuperseded.mockRejectedValue(new Error('OCC exhausted'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await retryProofigCheckRun(ctx, 'wv-1', 'run-1', 'admin');
+    expect(result).toMatchObject({ success: true, checkRunId: 'run-2' });
+    expect(mockMarkSuperseded).toHaveBeenCalled();
+
+    errorSpy.mockRestore();
   });
 });

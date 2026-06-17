@@ -2,6 +2,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { retryTextIntegrityCheckRun } from './retryCheckRun.server.js';
 import { EULA_ADMIN_RETRY_SKIP_MESSAGE } from './eula.server.js';
+import { markTextIntegritySourceRunSupersededByRetry } from './runSuperseded.server.js';
 
 const mockFindFirst = vi.fn();
 const mockStart = vi.fn();
@@ -38,6 +39,8 @@ vi.mock('./eula.server.js', async (importOriginal) => {
   };
 });
 
+const mockMarkSuperseded = vi.mocked(markTextIntegritySourceRunSupersededByRetry);
+
 const ctx = {
   user: { id: 'admin-user' },
   $config: { app: { extensions: {} } },
@@ -62,6 +65,8 @@ describe('retryTextIntegrityCheckRun', () => {
     mockStart.mockResolvedValue({ ok: true, checkRunId: 'run-2' });
     mockAssertSubmitter.mockResolvedValue(null);
     mockAssertOriginal.mockResolvedValue({ ok: true });
+    mockMarkSuperseded.mockReset();
+    mockMarkSuperseded.mockResolvedValue(undefined);
   });
 
   it('blocks user retry when EULA is not accepted', async () => {
@@ -94,5 +99,16 @@ describe('retryTextIntegrityCheckRun', () => {
         lineage: expect.objectContaining({ retryOfRunId: 'run-1' }),
       }),
     );
+  });
+
+  it('still succeeds when marking the source superseded fails', async () => {
+    mockMarkSuperseded.mockRejectedValue(new Error('OCC exhausted'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await retryTextIntegrityCheckRun(ctx, 'wv-1', 'run-1', 'admin');
+    expect(result).toMatchObject({ success: true, checkRunId: 'run-2' });
+    expect(mockMarkSuperseded).toHaveBeenCalled();
+
+    errorSpy.mockRestore();
   });
 });

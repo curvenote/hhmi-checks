@@ -24,6 +24,8 @@ export type ProofigFailedRunsPage = {
   page: number;
   pageSize: number;
   hasNextPage: boolean;
+  /** True when the scan window was exhausted before satisfying the page; older failures may be hidden. */
+  scanLimitReached: boolean;
 };
 
 function summarizeProofigError(data: unknown): string {
@@ -80,6 +82,7 @@ export async function loadProofigFailedRunsPage(options?: {
   const prisma = await getPrismaClient();
   const matched: ProofigFailedRunRow[] = [];
   let dbOffset = 0;
+  let dbExhausted = false;
 
   for (let batch = 0; batch < MAX_SCAN_BATCHES && matched.length < need; batch++) {
     const rows = await prisma.checkServiceRun.findMany({
@@ -92,16 +95,26 @@ export async function loadProofigFailedRunsPage(options?: {
         created_by: { select: { id: true, email: true, display_name: true } },
       },
     });
-    if (rows.length === 0) break;
+    if (rows.length === 0) {
+      dbExhausted = true;
+      break;
+    }
     dbOffset += rows.length;
     for (const run of rows) {
       if (isProofigRunFailed(run) && !isProofigRunSupersededByRetry(run)) {
         matched.push(mapRow(run as RunWithRelations));
       }
     }
+    if (rows.length < BATCH_SIZE) {
+      dbExhausted = true;
+      break;
+    }
   }
 
   const runs = matched.slice(skip, skip + pageSize);
   const hasNextPage = matched.length > skip + pageSize;
-  return { runs, page, pageSize, hasNextPage };
+  // We stopped at the batch cap with more rows still in the DB, so failures beyond
+  // the scan window are not represented in this result.
+  const scanLimitReached = !dbExhausted && matched.length < need;
+  return { runs, page, pageSize, hasNextPage, scanLimitReached };
 }

@@ -101,7 +101,20 @@ export async function retryTextIntegrityCheckRun(
       status: result.status,
     };
   }
-  await markTextIntegritySourceRunSupersededByRetry(sourceRun.id, result.checkRunId, ctx.user?.id);
+  try {
+    await markTextIntegritySourceRunSupersededByRetry(
+      sourceRun.id,
+      result.checkRunId,
+      ctx.user?.id,
+    );
+  } catch (err) {
+    // The new run already exists; do not fail the retry. The source may briefly
+    // remain in the failed-runs list until the mark succeeds on a later attempt.
+    console.error(
+      `Text Integrity retry created run ${result.checkRunId} but failed to mark source ${sourceRun.id} as superseded`,
+      err,
+    );
+  }
   return { success: true, checkRunId: result.checkRunId } as ExtensionCheckHandleActionResult & {
     checkRunId: string;
   };
