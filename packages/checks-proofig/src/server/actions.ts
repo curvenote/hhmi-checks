@@ -187,7 +187,14 @@ export async function handleProofigAction(
 ): Promise<ExtensionCheckHandleActionResult> {
   const { intent, workVersionId, ctx } = args;
 
-  if (ctx && intent !== 'apply-notify-payload') {
+  const outboundIntents = new Set([
+    'execute',
+    'fetch-remote-status',
+    'refresh-remote-status',
+    'refresh-report-url',
+    'hydrate-subimage-approval-status',
+  ]);
+  if (ctx && outboundIntents.has(intent)) {
     const prisma = await getPrismaClient();
     const base =
       (ctx.$config.app?.extensions?.['checks-proofig'] as Record<string, unknown> | undefined) ??

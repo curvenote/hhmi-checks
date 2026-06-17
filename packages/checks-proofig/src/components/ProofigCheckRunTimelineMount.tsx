@@ -1,5 +1,5 @@
 import type { ExtensionCheckRunTimelineMountProps } from '@curvenote/scms-core';
-import { ui } from '@curvenote/scms-core';
+import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
 import { useEffect, useRef } from 'react';
 import { useFetcher, useRevalidator } from 'react-router';
 import {
@@ -27,12 +27,14 @@ export function ProofigCheckRunTimelineMount({
 }: ExtensionCheckRunTimelineMountProps) {
   const hydrateFetcher = useFetcher();
   const revalidator = useRevalidator();
+  const { blocked } = useCheckMaintenanceBlocked('proofig');
   const hydrateRequestedRef = useRef(false);
   /** Avoid re-running the completion effect when `useRevalidator()` returns a new object each render (would spam `revalidate()`). */
   const lastHandledFetcherDataRef = useRef<unknown>(undefined);
 
   useEffect(() => {
     if (checkKind !== 'proofig') return;
+    if (blocked) return;
     if (hydrateRequestedRef.current) return;
     if (!defaultExpanded) return;
     if (!remoteStatusActionPath || !workVersionId || !checkRunId) return;
@@ -48,6 +50,7 @@ export function ProofigCheckRunTimelineMount({
     hydrateFetcher.submit(fd, { method: 'post', action: remoteStatusActionPath });
   }, [
     checkKind,
+    blocked,
     defaultExpanded,
     remoteStatusActionPath,
     workVersionId,
