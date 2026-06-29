@@ -682,13 +682,12 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
                 return prev as TextIntegrityStoredObject & Prisma.JsonObject;
               }
 
-              let settings = cloneServiceSettings(prev.settings);
-              if (isSettingsEmpty(settings)) {
-                settings = buildDefaultSettings(features as Record<string, unknown>);
-              }
+              const currentSettings = isSettingsEmpty(prev.settings)
+                ? buildDefaultSettings(features as Record<string, unknown>)
+                : (prev.settings ?? {});
 
               const r = applyTextIntegritySettingPatch(
-                settings,
+                currentSettings,
                 features as Record<string, unknown>,
                 name,
                 value,
@@ -698,7 +697,7 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
                 return prev as TextIntegrityStoredObject & Prisma.JsonObject;
               }
 
-              const next: TextIntegrityStoredObject = { ...prev, settings };
+              const next: TextIntegrityStoredObject = { ...prev, settings: r.settings };
               return next as TextIntegrityStoredObject & Prisma.JsonObject;
             },
           );
