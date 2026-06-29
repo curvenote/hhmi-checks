@@ -94,8 +94,8 @@ function BooleanSwitchFormRow({
   );
 }
 
-const SMALL_MATCH_MIN = 8;
-const SMALL_MATCH_MAX = 999;
+const SMALL_MATCH_MIN = 1;
+const SMALL_MATCH_MAX = 20;
 
 function SmallMatchesFormRow({
   descriptor,
@@ -131,6 +131,11 @@ function SmallMatchesFormRow({
       if (descriptor.disabled || !checked) return;
       let threshold = Math.floor(Number.parseInt(rawValue, 10));
       if (Number.isNaN(threshold)) threshold = descriptor.wordThreshold;
+      if (threshold === 0) {
+        setChecked(false);
+        submitUpdate(fetcher, descriptor.name, 'false');
+        return;
+      }
       threshold = Math.min(SMALL_MATCH_MAX, Math.max(SMALL_MATCH_MIN, threshold));
       setDraft(String(threshold));
       submitUpdate(fetcher, descriptor.name, String(threshold));
@@ -174,7 +179,7 @@ function SmallMatchesFormRow({
           />
           <ui.Input
             type="number"
-            min={SMALL_MATCH_MIN}
+            min={0}
             max={SMALL_MATCH_MAX}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -198,7 +203,7 @@ function SmallMatchesFormRow({
             checked && !descriptor.disabled ? 'text-muted-foreground' : 'text-muted-foreground/70'
           }`}
         >
-          Matches shorter than this many words are ignored. Minimum value is 8.
+          Matches shorter than this many words are ignored. Use 0 to turn this setting off.
         </p>
       </div>
     </div>

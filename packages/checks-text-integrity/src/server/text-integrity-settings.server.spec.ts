@@ -113,7 +113,7 @@ describe('text integrity exclude small matches setting', () => {
     });
   });
 
-  it('derives an enabled descriptor when a saved threshold is at least 8', () => {
+  it('derives an enabled descriptor when a saved threshold is positive', () => {
     const config = deriveSettingsConfig({
       features: SMALL_MATCH_FEATURES,
       settings: {
@@ -121,7 +121,7 @@ describe('text integrity exclude small matches setting', () => {
           view_settings: {
             exclude_small_matches: {
               enabled: true,
-              word_threshold: 12,
+              word_threshold: 1,
             },
           },
         },
@@ -133,7 +133,7 @@ describe('text integrity exclude small matches setting', () => {
     expect(descriptor).toMatchObject({
       kind: 'smallMatches',
       enabled: true,
-      wordThreshold: 12,
+      wordThreshold: 1,
     });
   });
 
@@ -184,34 +184,85 @@ describe('text integrity exclude small matches setting', () => {
     });
   });
 
-  it('updates numeric thresholds without enabling the setting and rejects smaller values', () => {
-    const thresholdUpdated = applyTextIntegritySettingPatch(
+  it('updates positive thresholds up to 20 without enabling the setting and rejects larger values', () => {
+    const lowerBoundUpdated = applyTextIntegritySettingPatch(
       buildDefaultSettings(SMALL_MATCH_FEATURES),
       SMALL_MATCH_FEATURES,
       'exclude_small_matches',
-      '12',
+      '1',
+    );
+    const upperBoundUpdated = applyTextIntegritySettingPatch(
+      buildDefaultSettings(SMALL_MATCH_FEATURES),
+      SMALL_MATCH_FEATURES,
+      'exclude_small_matches',
+      '20',
     );
     const rejected = applyTextIntegritySettingPatch(
       buildDefaultSettings(SMALL_MATCH_FEATURES),
       SMALL_MATCH_FEATURES,
       'exclude_small_matches',
-      '7',
+      '21',
     );
 
-    expect(thresholdUpdated).toEqual({
+    expect(lowerBoundUpdated).toEqual({
       ok: true,
       settings: expect.objectContaining({
         similarity: expect.objectContaining({
           view_settings: expect.objectContaining({
             exclude_small_matches: {
               enabled: false,
-              word_threshold: 12,
+              word_threshold: 1,
+            },
+          }),
+        }),
+      }),
+    });
+    expect(upperBoundUpdated).toEqual({
+      ok: true,
+      settings: expect.objectContaining({
+        similarity: expect.objectContaining({
+          view_settings: expect.objectContaining({
+            exclude_small_matches: {
+              enabled: false,
+              word_threshold: 20,
             },
           }),
         }),
       }),
     });
     expect(rejected).toEqual({ ok: false, message: 'Invalid word threshold' });
+  });
+
+  it('disables small-match exclusion when the threshold patch is zero', () => {
+    const result = applyTextIntegritySettingPatch(
+      {
+        similarity: {
+          view_settings: {
+            exclude_small_matches: {
+              enabled: true,
+              word_threshold: 12,
+            },
+          },
+        },
+      },
+      SMALL_MATCH_FEATURES,
+      'exclude_small_matches',
+      '0',
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      settings: {
+        similarity: {
+          view_settings: {
+            exclude_small_matches: {
+              enabled: false,
+              word_threshold: 12,
+            },
+          },
+        },
+      },
+    });
   });
 
   it('stores exclude_small_matches as disabled when the toggle is disabled', () => {
@@ -306,7 +357,7 @@ describe('text integrity exclude small matches setting', () => {
         view_settings: {
           exclude_small_matches: {
             enabled: true,
-            word_threshold: 12,
+            word_threshold: 1,
           },
         },
       },
@@ -314,7 +365,7 @@ describe('text integrity exclude small matches setting', () => {
 
     expect(disabled).toBeUndefined();
     expect(enabled?.payload.report.view).toEqual({
-      excludeSmallMatches: 12,
+      excludeSmallMatches: 1,
     });
   });
 });

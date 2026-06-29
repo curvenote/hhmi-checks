@@ -75,7 +75,8 @@ function readViewValue(settings: TextIntegrityServiceSettings | undefined, key: 
 }
 
 const DEFAULT_SMALL_MATCH_WORDS = 8;
-const SMALL_MATCH_MAX = 999;
+const SMALL_MATCH_MIN = 1;
+const SMALL_MATCH_MAX = 20;
 
 function isSmallMatchesViewSetting(value: unknown): value is SmallMatchesViewSetting {
   return (
@@ -95,10 +96,7 @@ function getSmallMatchesWordThreshold(
   if (!featureEnabled) return DEFAULT_SMALL_MATCH_WORDS;
   const raw = readViewValue(settings, 'exclude_small_matches');
   if (isSmallMatchesViewSetting(raw)) {
-    return Math.min(
-      SMALL_MATCH_MAX,
-      Math.max(DEFAULT_SMALL_MATCH_WORDS, Math.floor(raw.word_threshold)),
-    );
+    return Math.min(SMALL_MATCH_MAX, Math.max(SMALL_MATCH_MIN, Math.floor(raw.word_threshold)));
   }
   return DEFAULT_SMALL_MATCH_WORDS;
 }

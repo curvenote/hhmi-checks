@@ -24,7 +24,7 @@ describe('buildRelayContextEnvelope', () => {
         view_settings: {
           exclude_small_matches: {
             enabled: true,
-            word_threshold: 15,
+            word_threshold: 1,
           },
         },
       },
@@ -35,7 +35,7 @@ describe('buildRelayContextEnvelope', () => {
       payload: {
         report: {
           view: {
-            excludeSmallMatches: 15,
+            excludeSmallMatches: 1,
           },
         },
       },

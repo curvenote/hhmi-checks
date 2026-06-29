@@ -10,7 +10,7 @@ type AnonymousReportPayload = {
   };
 };
 
-const DEFAULT_SMALL_MATCH_WORDS = 8;
+const SMALL_MATCH_MIN = 1;
 
 export type TextIntegrityRelayContextEnvelope = {
   v: 1;
@@ -51,7 +51,7 @@ function mapViewSettingsToAnonymousPayload(
     const v = raw[sourceKey];
     if (sourceKey === 'exclude_small_matches') {
       if (isSmallMatchesViewSetting(v) && v.enabled) {
-        out[targetKey] = Math.max(DEFAULT_SMALL_MATCH_WORDS, Math.floor(v.word_threshold));
+        out[targetKey] = Math.max(SMALL_MATCH_MIN, Math.floor(v.word_threshold));
       }
       continue;
     }

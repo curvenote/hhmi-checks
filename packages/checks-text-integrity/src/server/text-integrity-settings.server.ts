@@ -217,8 +217,8 @@ export function tenantViewSettingEnabled(
   return (sim.view_settings as Record<string, unknown>)[key] === true;
 }
 
-const SMALL_MATCH_MIN = DEFAULT_SMALL_MATCH_WORD_THRESHOLD;
-const SMALL_MATCH_MAX = 999;
+const SMALL_MATCH_MIN = 1;
+const SMALL_MATCH_MAX = 20;
 
 function isSmallMatchesViewSetting(value: unknown): value is SmallMatchesViewSetting {
   return (
