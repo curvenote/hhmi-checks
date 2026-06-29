@@ -72,7 +72,6 @@ export function TextIntegrityFailedRunsAdminPanel() {
 
   useEffect(() => {
     loadPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

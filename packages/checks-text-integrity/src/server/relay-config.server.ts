@@ -1,4 +1,3 @@
-import type { Context } from '@curvenote/scms-server';
 import type { AppChecksRelayConfig } from './relay-urls.server.js';
 
 type AppChecksConfig = {

@@ -21,18 +21,18 @@ vi.mock('./startCheckRun.server.js', () => ({
 }));
 
 vi.mock('./runSuperseded.server.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./runSuperseded.server.js')>();
+  const actual = await importOriginal();
   return {
-    ...actual,
+    ...(actual as Record<string, unknown>),
     isTextIntegrityRunSupersededByRetry: vi.fn(() => false),
     markTextIntegritySourceRunSupersededByRetry: vi.fn(async () => {}),
   };
 });
 
 vi.mock('./eula.server.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./eula.server.js')>();
+  const actual = await importOriginal();
   return {
-    ...actual,
+    ...(actual as Record<string, unknown>),
     assertSubmitterEulaAccepted: (...args: unknown[]) => mockAssertSubmitter(...args),
     assertOriginalSubmitterEulaCurrent: (...args: unknown[]) => mockAssertOriginal(...args),
     getEulaStatusForUser: (...args: unknown[]) => mockGetEulaStatus(...args),
