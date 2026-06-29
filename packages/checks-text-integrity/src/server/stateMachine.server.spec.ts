@@ -685,6 +685,25 @@ describe('Text Integrity State Machine', () => {
       expect(next?.similarityReportPdfInvalidatedAt).toBe(receivedAt);
     });
 
+    it('SIMILARITY_UPDATED complete before any PDF exists does not mark PDF invalidated', () => {
+      const initial: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        similarityUpdatedWebhook(WebhookEvent.ProcessingPhaseComplete, 'COMPLETE', 5),
+      );
+
+      expect(next?.stages.processing?.status).toBe('completed');
+      expect(next?.summaryReport?.overallMatchPercentage).toBe(5);
+      expect(next?.similarityReportPdfInvalidated).toBeUndefined();
+      expect(next?.similarityReportPdfInvalidatedAt).toBeUndefined();
+      expect(next?.similarityReportPdfInvalidatedByEvent).toBeUndefined();
+    });
+
     it('REPORT_GENERATION_STARTED when already processing', () => {
       const initial: TextIntegrityDataSchema = {
         stages: {
@@ -729,6 +748,38 @@ describe('Text Integrity State Machine', () => {
       expect(next?.reportPdfId).toBe('pdf-002');
       expect(next?.reportPdfUrl).toBe('https://example.com/pdf-002');
       expect(next?.stages.reportGeneration?.status).toBe('completed');
+    });
+
+    it('REPORT_GENERATION_COMPLETE clears stale similarity PDF invalidation flags', () => {
+      const initial: TextIntegrityDataSchema = {
+        reportPdfId: 'pdf-001',
+        similarityReportPdfInvalidated: true,
+        similarityReportPdfInvalidatedAt: '2025-01-01T00:10:00Z',
+        similarityReportPdfInvalidatedByEvent: 'SIMILARITY_UPDATED',
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'processing',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ReportGenerationComplete, {
+          report: {
+            report_id: 'pdf-002',
+            report_pdf_url: 'https://example.com/pdf-002',
+          },
+        }),
+      );
+
+      expect(next?.reportPdfId).toBe('pdf-002');
+      expect(next?.similarityReportPdfInvalidated).toBeUndefined();
+      expect(next?.similarityReportPdfInvalidatedAt).toBeUndefined();
+      expect(next?.similarityReportPdfInvalidatedByEvent).toBeUndefined();
     });
 
     it('REPORT_GENERATION_COMPLETE when already completed with same pdf id is a no-op', () => {

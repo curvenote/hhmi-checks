@@ -136,10 +136,26 @@ export function applyWebhookEvent(
   let similarityReportPdfInvalidatedByEvent = current.similarityReportPdfInvalidatedByEvent;
   let errorMessage: string | undefined;
 
+  function hasSimilarityPdfToInvalidate() {
+    return Boolean(
+      current.similarityReportStored ||
+      current.reportPdfId ||
+      current.latest?.reportPdfId ||
+      current.storedReportPdfId,
+    );
+  }
+
   function invalidateSimilarityPdf() {
+    if (!hasSimilarityPdfToInvalidate()) return;
     similarityReportPdfInvalidated = true;
     similarityReportPdfInvalidatedAt = receivedAt;
     similarityReportPdfInvalidatedByEvent = SIMILARITY_UPDATED_PROVIDER_EVENT;
+  }
+
+  function clearSimilarityPdfInvalidation() {
+    similarityReportPdfInvalidated = undefined;
+    similarityReportPdfInvalidatedAt = undefined;
+    similarityReportPdfInvalidatedByEvent = undefined;
   }
   let errorCode: string | undefined;
 
@@ -216,6 +232,8 @@ export function applyWebhookEvent(
         summaryReport = toStoredSimilarityReport(reportResult.data);
         if (isSimilarityUpdatedWebhook(webhook)) {
           invalidateSimilarityPdf();
+        } else {
+          clearSimilarityPdfInvalidation();
         }
         updatedStages = stages;
         break;
@@ -234,6 +252,8 @@ export function applyWebhookEvent(
       }
       if (isSimilarityUpdatedWebhook(webhook)) {
         invalidateSimilarityPdf();
+      } else {
+        clearSimilarityPdfInvalidation();
       }
 
       mergeReportPayload(webhook.payload?.report);
@@ -288,6 +308,7 @@ export function applyWebhookEvent(
         if (nextId === current.reportPdfId && nextUrl === current.reportPdfUrl) {
           break;
         }
+        clearSimilarityPdfInvalidation();
         updatedStages = stages;
         break;
       }
@@ -300,6 +321,7 @@ export function applyWebhookEvent(
         s = setLinearStage(s, 'processing', 'notify-skipped', receivedAt);
       }
       updatedStages = setLinearStage(s, 'reportGeneration', 'completed', receivedAt);
+      clearSimilarityPdfInvalidation();
 
       break;
     }

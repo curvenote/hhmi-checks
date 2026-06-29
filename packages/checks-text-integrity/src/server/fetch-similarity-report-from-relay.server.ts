@@ -5,12 +5,30 @@ import {
   resolveRelayExternalCheckId,
   type AppChecksRelayConfig,
 } from './relay-urls.server.js';
+import { isPdfBytes } from './pdf-bytes.server.js';
 
 export type FetchedSimilarityReportPdf = {
   bytes: Uint8Array;
   contentType: string;
   contentDisposition: string;
 };
+
+export type FetchSimilarityReportPdfReadyOptions = {
+  attempts?: number;
+  delayMs?: number;
+};
+
+const DEFAULT_READY_ATTEMPTS = 8;
+const DEFAULT_READY_DELAY_MS = 1000;
+
+function sleep(ms: number): Promise<void> {
+  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+}
+
+function shouldRetryPdfFetch(err: unknown): boolean {
+  if (!(err instanceof Response)) return false;
+  return [404, 409, 425, 429, 500, 502, 503, 504].includes(err.status);
+}
 
 export async function fetchSimilarityReportPdfFromRelay(
   relay: AppChecksRelayConfig,
@@ -74,9 +92,43 @@ export async function fetchSimilarityReportPdfFromRelay(
   }
 
   const bytes = new Uint8Array(await relayRes.arrayBuffer());
+  if (!isPdfBytes(bytes)) {
+    throw httpError(502, 'Checks relay returned a non-PDF response for PDF fetch');
+  }
   const contentType = ct && !ct.includes('json') ? ct : 'application/pdf';
   const contentDisposition =
     relayRes.headers.get('content-disposition') ?? 'attachment; filename="similarity-report.pdf"';
 
   return { bytes, contentType, contentDisposition };
+}
+
+export async function fetchSimilarityReportPdfFromRelayWhenReady(
+  relay: AppChecksRelayConfig,
+  serviceName: string,
+  relayInstanceId: string,
+  serviceData: TextIntegrityDataSchema,
+  options: FetchSimilarityReportPdfReadyOptions = {},
+): Promise<FetchedSimilarityReportPdf> {
+  const attempts = Math.max(1, options.attempts ?? DEFAULT_READY_ATTEMPTS);
+  const delayMs = Math.max(0, options.delayMs ?? DEFAULT_READY_DELAY_MS);
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await fetchSimilarityReportPdfFromRelay(
+        relay,
+        serviceName,
+        relayInstanceId,
+        serviceData,
+      );
+    } catch (err) {
+      lastError = err;
+      if (attempt === attempts || !shouldRetryPdfFetch(err)) {
+        throw err;
+      }
+      await sleep(delayMs);
+    }
+  }
+
+  throw lastError;
 }

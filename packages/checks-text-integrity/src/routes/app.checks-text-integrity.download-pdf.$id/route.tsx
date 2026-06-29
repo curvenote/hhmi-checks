@@ -14,12 +14,16 @@ import type { TextIntegrityDataSchema } from '../../schema.js';
 import { MINIMAL_TEXT_INTEGRITY_SERVICE_DATA, textIntegrityDataSchema } from '../../schema.js';
 import { getTextIntegrityConfigWithOverrides } from '../../server/config.server.js';
 import { assertSubmitterEulaAccepted } from '../../server/eula.server.js';
-import { fetchSimilarityReportPdfFromRelay } from '../../server/fetch-similarity-report-from-relay.server.js';
+import {
+  fetchSimilarityReportPdfFromRelay,
+  fetchSimilarityReportPdfFromRelayWhenReady,
+} from '../../server/fetch-similarity-report-from-relay.server.js';
 import { getAppChecksFromAppConfig, resolveServiceName } from '../../server/relay-config.server.js';
 import { resolveRelayInstanceId } from '../../server/relay-urls.server.js';
 import { resolveSimilarityReportDownloadSource } from '../../server/similarity-report-download.server.js';
 import {
   buildSimilarityReportFileEntry,
+  SIMILARITY_REPORT_GENERATED_SLOT,
   similarityReportStoragePath,
 } from '../../server/similarity-report-storage.server.js';
 import { startSimilarityPdfViaRelay } from '../../server/start-similarity-pdf-via-relay.server.js';
@@ -148,56 +152,70 @@ export async function loader(args: LoaderFunctionArgs) {
     });
   }
 
-  const { bytes, contentType, contentDisposition } = await fetchSimilarityReportPdfFromRelay(
-    checks ?? {},
-    serviceName,
-    relayInstanceId,
-    serviceData,
-  );
+  const wasInvalidated = serviceData.similarityReportPdfInvalidated === true;
+  const { bytes, contentType, contentDisposition } = wasInvalidated
+    ? await fetchSimilarityReportPdfFromRelayWhenReady(
+        checks ?? {},
+        serviceName,
+        relayInstanceId,
+        serviceData,
+      )
+    : await fetchSimilarityReportPdfFromRelay(
+        checks ?? {},
+        serviceName,
+        relayInstanceId,
+        serviceData,
+      );
 
-  if (serviceData.similarityReportPdfInvalidated && run.work_version_id) {
-    const workVersion = await prisma.workVersion.findUnique({
-      where: { id: run.work_version_id },
-      select: { cdn: true, cdn_key: true },
-    });
+  if (wasInvalidated) {
+    let fileEntry: ReturnType<typeof buildSimilarityReportFileEntry> | undefined;
+    let storagePath: string | undefined;
+    const workVersion = run.work_version_id
+      ? await prisma.workVersion.findUnique({
+          where: { id: run.work_version_id },
+          select: { cdn: true, cdn_key: true },
+        })
+      : null;
     if (workVersion?.cdn?.trim() && workVersion.cdn_key?.trim()) {
       const backend = new StorageBackend(ctx, [KnownBuckets.prv, KnownBuckets.pub]);
       const bucket = backend.knownBucketFromCDN(workVersion.cdn);
       if (bucket) {
-        const storagePath = similarityReportStoragePath(workVersion.cdn_key, id);
+        storagePath = similarityReportStoragePath(workVersion.cdn_key, id);
         const file = new File(backend, storagePath, bucket);
         const { md5, size } = await writeSimilarityPdfToStorage(file, bytes);
         const uploadDate = new Date().toISOString();
-        const fileEntry = buildSimilarityReportFileEntry(storagePath, size, md5, uploadDate);
-        const regeneratedPdfId = serviceData.reportPdfId ?? serviceData.latest?.reportPdfId;
-
-        await safeCheckServiceRunDataUpdate(id, (currentRunData?: Prisma.JsonValue) => {
-          const current = (currentRunData ?? {}) as CheckServiceRunData;
-          const sdParsed = textIntegrityDataSchema.safeParse(current.serviceData);
-          const sd = sdParsed.success ? sdParsed.data : serviceData;
-          const nextFiles = { ...(sd.files ?? {}) };
-          for (const key of Object.keys(nextFiles)) {
-            if (nextFiles[key]?.slot === fileEntry.slot) {
-              delete nextFiles[key];
-            }
-          }
-          nextFiles[storagePath] = fileEntry;
-          const nextServiceData: TextIntegrityDataSchema = { ...sd };
-          delete nextServiceData.similarityReportPdfInvalidated;
-          delete nextServiceData.similarityReportPdfInvalidatedAt;
-          delete nextServiceData.similarityReportPdfInvalidatedByEvent;
-          return {
-            ...current,
-            serviceData: {
-              ...nextServiceData,
-              files: nextFiles,
-              similarityReportStored: true,
-              storedReportPdfId: regeneratedPdfId,
-            },
-          } as Prisma.JsonObject;
-        });
+        fileEntry = buildSimilarityReportFileEntry(storagePath, size, md5, uploadDate);
       }
     }
+
+    const regeneratedPdfId = serviceData.reportPdfId ?? serviceData.latest?.reportPdfId;
+    await safeCheckServiceRunDataUpdate(id, (currentRunData?: Prisma.JsonValue) => {
+      const current = (currentRunData ?? {}) as CheckServiceRunData;
+      const sdParsed = textIntegrityDataSchema.safeParse(current.serviceData);
+      const sd = sdParsed.success ? sdParsed.data : serviceData;
+      const nextFiles = { ...(sd.files ?? {}) };
+      for (const key of Object.keys(nextFiles)) {
+        if (nextFiles[key]?.slot === SIMILARITY_REPORT_GENERATED_SLOT) {
+          delete nextFiles[key];
+        }
+      }
+      if (fileEntry && storagePath) {
+        nextFiles[storagePath] = fileEntry;
+      }
+      const nextServiceData: TextIntegrityDataSchema = { ...sd };
+      delete nextServiceData.similarityReportPdfInvalidated;
+      delete nextServiceData.similarityReportPdfInvalidatedAt;
+      delete nextServiceData.similarityReportPdfInvalidatedByEvent;
+      return {
+        ...current,
+        serviceData: {
+          ...nextServiceData,
+          files: nextFiles,
+          similarityReportStored: Boolean(fileEntry),
+          storedReportPdfId: fileEntry ? regeneratedPdfId : undefined,
+        },
+      } as Prisma.JsonObject;
+    });
   }
 
   return new Response(Buffer.from(bytes), {
