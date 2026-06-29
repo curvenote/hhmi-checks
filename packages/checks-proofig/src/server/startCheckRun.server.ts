@@ -4,13 +4,8 @@ import {
   getPrismaClient,
   safeCheckServiceRunDataUpdate,
 } from '@curvenote/scms-server';
-import type {
-  ExtensionCheckHandleActionArgs,
-  type CheckServiceRunData,
-  hasDocxInMetadata,
-  hasPdfInMetadata,
-  KnownJobTypes,
-} from '@curvenote/scms-core';
+import type { ExtensionCheckHandleActionArgs, CheckServiceRunData } from '@curvenote/scms-core';
+import { hasDocxInMetadata, hasPdfInMetadata, KnownJobTypes } from '@curvenote/scms-core';
 import type { Prisma } from '@curvenote/scms-db';
 import { MINIMAL_PROOFIG_SERVICE_DATA, type ProofigDataSchema } from '../schema.js';
 import {
