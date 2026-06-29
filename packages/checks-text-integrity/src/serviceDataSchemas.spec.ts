@@ -87,8 +87,19 @@ describe('shouldPollTextIntegrityChecks', () => {
     expect(shouldPollTextIntegrityChecks(pendingPdf, 'run-1')).toBe(true);
   });
 
-  it('stops polling when processing and PDF generation are complete', () => {
+  it('continues polling when PDF generation is complete but the current PDF is not stored yet', () => {
     const done = dataWithReportStatus('completed');
+    done.reportPdfId = 'pdf-current';
+    done.storedReportPdfId = 'pdf-previous';
+    done.similarityReportStored = true;
+    expect(shouldPollTextIntegrityChecks(done, 'run-1')).toBe(true);
+  });
+
+  it('stops polling when processing and the current PDF are complete', () => {
+    const done = dataWithReportStatus('completed');
+    done.reportPdfId = 'pdf-current';
+    done.storedReportPdfId = 'pdf-current';
+    done.similarityReportStored = true;
     expect(shouldPollTextIntegrityChecks(done, 'run-1')).toBe(false);
   });
 

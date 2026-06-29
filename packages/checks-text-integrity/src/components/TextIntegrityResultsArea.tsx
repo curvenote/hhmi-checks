@@ -1,5 +1,5 @@
 import type { TextIntegrityDataSchema } from '../schema.js';
-import { getTextIntegrityManifest, isWaitingForPdfReport } from '../schema.js';
+import { getTextIntegrityManifest, isWaitingForStoredPdfReport } from '../schema.js';
 import { SimilarityScoresBlock } from './SimilarityScoresBlock.js';
 import { TextIntegrityPdfReportStatus } from './TextIntegrityPdfReportStatus.js';
 import { TopMatchesBlock } from './TopMatchesBlock.js';
@@ -28,9 +28,7 @@ export function TextIntegrityResultsArea({
     metadata.similarityReportStored === true &&
     metadata.storedReportPdfId === currentReportPdfId;
   const reportGenerationComplete = reportGenStatus === 'completed';
-  const waitingForReport =
-    isWaitingForPdfReport(metadata) ||
-    (reportGenerationComplete && !reportPdfAvailable && !similarityReportPdfInvalidated);
+  const waitingForReport = isWaitingForStoredPdfReport(metadata);
   const reportGenerationFailed = reportGenStatus === 'error';
 
   if (!summaryReport) return null;
