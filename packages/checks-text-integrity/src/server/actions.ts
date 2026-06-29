@@ -229,12 +229,18 @@ async function planRelayRecovery(
   return plan;
 }
 
-async function markRelayRecoveryStarted(checkRunId: string, leaseOwner: string): Promise<void> {
+async function markRelayRecoveryStarted(checkRunId: string, leaseOwner: string): Promise<boolean> {
   const startedAt = new Date().toISOString();
-  await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
+  const row = await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
     const next = markRelayRecoveryStartedData(data, leaseOwner, new Date(startedAt));
     return next as Prisma.JsonObject | null;
   });
+  const parsed = textIntegrityDataSchema.safeParse((row.data as CheckServiceRunData)?.serviceData);
+  return (
+    parsed.success &&
+    parsed.data.relayRecovery?.leaseOwner === leaseOwner &&
+    parsed.data.relayRecovery.startedAt != null
+  );
 }
 
 async function markRelayRecoveryLocalProcessingStarted(
@@ -714,7 +720,17 @@ export async function handleTextIntegrityAction(
           );
         }
 
-        await markRelayRecoveryStarted(checkRunId, recoveryAction.leaseOwner);
+        const recoveryMarked = await markRelayRecoveryStarted(
+          checkRunId,
+          recoveryAction.leaseOwner,
+        );
+        if (!recoveryMarked) {
+          return relayRecoveryWarningResult(
+            'Checks relay recovery started, but the local recovery marker was not persisted. Refresh status to continue reconciliation.',
+            409,
+          );
+        }
+
         const recoveryStarted = await applyRelayRecoveryProcessingStarted(
           checkRunId,
           externalCheckId,
