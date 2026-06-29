@@ -32,6 +32,7 @@ export const WebhookBodySchema = z.object({
       similarity_report: z.unknown().optional(),
       provider_payload: z.unknown().optional(),
       error_message: z.string().optional(),
+      error_code: z.string().optional(),
       report: z
         .object({
           report_id: z.string().optional(),
