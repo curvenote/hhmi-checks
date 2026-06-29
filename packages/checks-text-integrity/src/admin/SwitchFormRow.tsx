@@ -8,7 +8,11 @@ export const INTENT_UPDATE_SETTING = 'text-integrity-update-setting';
 
 function SettingHint({ description }: { description: string }) {
   return (
-    <ui.SimpleTooltip title={description} asChild>
+    <ui.SimpleTooltip
+      title={description}
+      asChild
+      className="max-w-80 whitespace-normal break-words text-left"
+    >
       <button
         type="button"
         className="inline-flex shrink-0 rounded-full p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
