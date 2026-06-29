@@ -2,7 +2,7 @@ import type { CreateJob, CheckServiceRunData } from '@curvenote/scms-core';
 import type { Context } from '@curvenote/scms-server';
 import { JobStatus } from '@curvenote/scms-db';
 import type { Prisma } from '@curvenote/scms-db';
-import { httpError } from '@curvenote/scms-core';
+import { httpError, maintenanceGuardFromConfig } from '@curvenote/scms-core';
 import type { WorkVersionMetadataPayload } from '@curvenote/common';
 import { z } from 'zod';
 import { uuidv7 } from 'uuidv7';
@@ -13,7 +13,6 @@ import {
   jobs,
   safeCheckServiceRunDataUpdate,
 } from '@curvenote/scms-server';
-import { maintenanceGuardFromConfig } from '@curvenote/scms-core';
 import { getProofigConfigWithOverrides } from '../config.server.js';
 import { getProofingToken, invalidateProofingTokenCache } from '../proofigAuth.server.js';
 import {
