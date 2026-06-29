@@ -14,7 +14,12 @@ import {
   textIntegrityDataSchema,
 } from '../schema.js';
 import type { TextIntegrityDataSchema } from '../schema.js';
-import { markSimilarityPdfJobRestarted, markSubmissionError } from './stateMachine.server.js';
+import {
+  markSimilarityPdfJobRestarted,
+  markSimilarityPdfJobStartFailed,
+  markSimilarityPdfJobStartRequested,
+  markSubmissionError,
+} from './stateMachine.server.js';
 import {
   markRelayRecoveryLocalProcessingStartedData,
   markRelayRecoveryStartedData,
@@ -279,6 +284,57 @@ async function applyRelayRecoveryProcessingStarted(
 
   await markRelayRecoveryLocalProcessingStarted(checkRunId, leaseOwner);
   return { ok: true };
+}
+
+function similarityPdfStartIsAlreadyPending(serviceData: TextIntegrityDataSchema): boolean {
+  return serviceData.stages?.reportGeneration?.status === 'processing';
+}
+
+function shouldStartSimilarityPdf(serviceData: TextIntegrityDataSchema): boolean {
+  if (similarityPdfStartIsAlreadyPending(serviceData)) return false;
+  if (serviceData.similarityReportPdfInvalidated === true) return true;
+  return serviceData.stages?.reportGeneration?.status === 'error';
+}
+
+async function claimSimilarityPdfStart(checkRunId: string): Promise<boolean> {
+  const didClaim = { current: false };
+  await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
+    didClaim.current = false;
+    const current = (data ?? {}) as CheckServiceRunData;
+    const serviceData = readServiceDataFromRunData(current) ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+    if (!shouldStartSimilarityPdf(serviceData)) return null;
+    didClaim.current = true;
+    return {
+      ...current,
+      serviceData: markSimilarityPdfJobStartRequested(serviceData),
+    } as Prisma.JsonObject;
+  });
+  return didClaim.current;
+}
+
+async function markSimilarityPdfStartError(checkRunId: string, message: string): Promise<void> {
+  await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
+    const current = (data ?? {}) as CheckServiceRunData;
+    const serviceData = readServiceDataFromRunData(current) ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+    if (serviceData.stages?.reportGeneration?.status !== 'processing') return null;
+    return {
+      ...current,
+      serviceData: markSimilarityPdfJobStartFailed(serviceData, message),
+    } as Prisma.JsonObject;
+  });
+}
+
+async function recordSimilarityPdfStartAccepted(
+  checkRunId: string,
+  newPdfId: string,
+): Promise<void> {
+  await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
+    const current = (data ?? {}) as CheckServiceRunData;
+    const serviceData = readServiceDataFromRunData(current) ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+    if (serviceData.stages?.reportGeneration?.status !== 'processing') return null;
+    const next = markSimilarityPdfJobRestarted(serviceData, newPdfId);
+    return { ...current, serviceData: next } as Prisma.JsonObject;
+  });
 }
 
 // TODO: these viewer defaults should come from database / stored service settings in future
@@ -799,6 +855,15 @@ export async function handleTextIntegrityAction(
     const serviceName = resolveServiceName(mergedConfig);
     const relayInstanceId = resolveRelayInstanceId(mergedConfig);
 
+    if (!shouldStartSimilarityPdf(serviceData)) {
+      return { success: true };
+    }
+
+    const didClaim = await claimSimilarityPdfStart(checkRunId);
+    if (!didClaim) {
+      return { success: true };
+    }
+
     let startRes: Response;
     try {
       startRes = await relaySimilarityPdfStart(
@@ -809,10 +874,12 @@ export async function handleTextIntegrityAction(
         externalCheckId,
       );
     } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to contact checks-relay';
+      await markSimilarityPdfStartError(checkRunId, `Failed to start PDF regeneration: ${message}`);
       return {
         error: {
           type: 'general',
-          message: e instanceof Error ? e.message : 'Failed to contact checks-relay',
+          message,
         },
         status: 502,
       };
@@ -820,11 +887,13 @@ export async function handleTextIntegrityAction(
 
     if (!startRes.ok) {
       const text = await startRes.text().catch(() => '');
+      const message =
+        `Checks relay could not restart similarity PDF (${startRes.status}): ${text}`.trim();
+      await markSimilarityPdfStartError(checkRunId, `Failed to start PDF regeneration: ${message}`);
       return {
         error: {
           type: 'general',
-          message:
-            `Checks relay could not restart similarity PDF (${startRes.status}): ${text}`.trim(),
+          message,
         },
         status: startRes.status >= 400 && startRes.status < 600 ? startRes.status : 502,
       };
@@ -835,21 +904,18 @@ export async function handleTextIntegrityAction(
     } | null;
     const newPdfId = startResult?.result?.pdf_id;
     if (!newPdfId || typeof newPdfId !== 'string') {
+      const message = 'Checks relay did not return a similarity PDF id; cannot restart';
+      await markSimilarityPdfStartError(checkRunId, `Failed to start PDF regeneration: ${message}`);
       return {
         error: {
           type: 'general',
-          message: 'Checks relay did not return a similarity PDF id; cannot restart',
+          message,
         },
         status: 502,
       };
     }
 
-    await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
-      const current = (data ?? {}) as CheckServiceRunData;
-      const sd = current.serviceData ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
-      const next = markSimilarityPdfJobRestarted(sd, newPdfId);
-      return { ...current, serviceData: next } as Prisma.JsonObject;
-    });
+    await recordSimilarityPdfStartAccepted(checkRunId, newPdfId);
 
     return { success: true };
   }

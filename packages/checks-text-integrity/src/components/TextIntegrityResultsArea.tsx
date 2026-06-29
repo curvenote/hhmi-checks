@@ -21,8 +21,16 @@ export function TextIntegrityResultsArea({
   const { summaryReport, stages } = metadata;
   const manifest = getTextIntegrityManifest(metadata);
   const reportGenStatus = stages?.reportGeneration?.status;
-  const waitingForReport = isWaitingForPdfReport(metadata);
+  const similarityReportPdfInvalidated = metadata.similarityReportPdfInvalidated === true;
+  const currentReportPdfId = metadata.reportPdfId ?? metadata.latest?.reportPdfId;
+  const reportPdfAvailable =
+    !similarityReportPdfInvalidated &&
+    metadata.similarityReportStored === true &&
+    metadata.storedReportPdfId === currentReportPdfId;
   const reportGenerationComplete = reportGenStatus === 'completed';
+  const waitingForReport =
+    isWaitingForPdfReport(metadata) ||
+    (reportGenerationComplete && !reportPdfAvailable && !similarityReportPdfInvalidated);
   const reportGenerationFailed = reportGenStatus === 'error';
 
   if (!summaryReport) return null;
@@ -44,6 +52,8 @@ export function TextIntegrityResultsArea({
           reportGenerationComplete={reportGenerationComplete}
           reportGenerationFailed={reportGenerationFailed}
           waitingForReport={waitingForReport}
+          similarityReportPdfInvalidated={similarityReportPdfInvalidated}
+          reportPdfAvailable={reportPdfAvailable}
           checkRunId={checkRunId}
           workVersionId={workVersionId}
           actionPath={actionPath}

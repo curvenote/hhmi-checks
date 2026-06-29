@@ -9,7 +9,9 @@ describe('resolveSimilarityReportDownloadSource', () => {
     const path = 'wv-key/generated/run-1/similarity-report.pdf';
     const data = {
       ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+      reportPdfId: 'pdf-1',
       similarityReportStored: true,
+      storedReportPdfId: 'pdf-1',
       files: {
         [path]: buildSimilarityReportFileEntry(path, 100, 'abc', '2025-01-01'),
       },
@@ -22,17 +24,20 @@ describe('resolveSimilarityReportDownloadSource', () => {
     });
   });
 
-  it('falls back to relay when nothing is stored', () => {
+  it('returns pending when nothing is stored', () => {
     expect(resolveSimilarityReportDownloadSource(MINIMAL_TEXT_INTEGRITY_SERVICE_DATA)).toEqual({
-      kind: 'relay',
+      kind: 'pending',
+      reason: 'unstored',
     });
   });
 
-  it('falls back to relay when the stored PDF has been invalidated', () => {
+  it('returns stale pending when the stored PDF has been invalidated', () => {
     const path = 'wv-key/generated/run-1/similarity-report.pdf';
     const data = {
       ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+      reportPdfId: 'pdf-1',
       similarityReportStored: true,
+      storedReportPdfId: 'pdf-1',
       similarityReportPdfInvalidated: true,
       files: {
         [path]: buildSimilarityReportFileEntry(path, 100, 'abc', '2025-01-01'),
@@ -40,7 +45,45 @@ describe('resolveSimilarityReportDownloadSource', () => {
     };
 
     expect(resolveSimilarityReportDownloadSource(data)).toEqual({
-      kind: 'relay',
+      kind: 'pending',
+      reason: 'stale',
+    });
+  });
+
+  it('returns processing pending while report generation is in progress', () => {
+    expect(
+      resolveSimilarityReportDownloadSource({
+        ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+        stages: {
+          ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA.stages,
+          reportGeneration: {
+            status: 'processing',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      }),
+    ).toEqual({
+      kind: 'pending',
+      reason: 'processing',
+    });
+  });
+
+  it('does not serve a stale stored file for a different current PDF id', () => {
+    const path = 'wv-key/generated/run-1/similarity-report.pdf';
+    const data = {
+      ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+      reportPdfId: 'pdf-2',
+      similarityReportStored: true,
+      storedReportPdfId: 'pdf-1',
+      files: {
+        [path]: buildSimilarityReportFileEntry(path, 100, 'abc', '2025-01-01'),
+      },
+    };
+
+    expect(resolveSimilarityReportDownloadSource(data)).toEqual({
+      kind: 'pending',
+      reason: 'unstored',
     });
   });
 });

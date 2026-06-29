@@ -13,39 +13,6 @@ export type FetchedSimilarityReportPdf = {
   contentDisposition: string;
 };
 
-export type FetchSimilarityReportPdfReadyOptions = {
-  attempts?: number;
-  delayMs?: number;
-};
-
-const DEFAULT_READY_ATTEMPTS = 4;
-const DEFAULT_READY_DELAY_MS = 750;
-const MAX_RETRY_AFTER_MS = 3000;
-
-function sleep(ms: number): Promise<void> {
-  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
-}
-
-function shouldRetryPdfFetch(err: unknown): boolean {
-  if (!(err instanceof Response)) return false;
-  return [404, 409, 425, 429, 500, 502, 503, 504].includes(err.status);
-}
-
-function getRetryAfterDelayMs(err: unknown): number | null {
-  if (!(err instanceof Response)) return null;
-  const retryAfter = err.headers.get('retry-after')?.trim();
-  if (!retryAfter) return null;
-
-  const seconds = Number(retryAfter);
-  if (Number.isFinite(seconds) && seconds >= 0) {
-    return Math.min(seconds * 1000, MAX_RETRY_AFTER_MS);
-  }
-
-  const retryAt = Date.parse(retryAfter);
-  if (Number.isNaN(retryAt)) return null;
-  return Math.min(Math.max(0, retryAt - Date.now()), MAX_RETRY_AFTER_MS);
-}
-
 function retryAfterInit(relayRes: Response): ResponseInit | undefined {
   const retryAfter = relayRes.headers.get('retry-after');
   return retryAfter ? { headers: { 'Retry-After': retryAfter } } : undefined;
@@ -128,36 +95,4 @@ export async function fetchSimilarityReportPdfFromRelay(
     relayRes.headers.get('content-disposition') ?? 'attachment; filename="similarity-report.pdf"';
 
   return { bytes, contentType, contentDisposition };
-}
-
-export async function fetchSimilarityReportPdfFromRelayWhenReady(
-  relay: AppChecksRelayConfig,
-  serviceName: string,
-  relayInstanceId: string,
-  serviceData: TextIntegrityDataSchema,
-  options: FetchSimilarityReportPdfReadyOptions = {},
-): Promise<FetchedSimilarityReportPdf> {
-  const attempts = Math.max(1, options.attempts ?? DEFAULT_READY_ATTEMPTS);
-  const delayMs = Math.max(0, options.delayMs ?? DEFAULT_READY_DELAY_MS);
-  let lastError: unknown;
-
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    try {
-      return await fetchSimilarityReportPdfFromRelay(
-        relay,
-        serviceName,
-        relayInstanceId,
-        serviceData,
-      );
-    } catch (err) {
-      lastError = err;
-      if (attempt === attempts || !shouldRetryPdfFetch(err)) {
-        throw err;
-      }
-      const retryAfterDelayMs = getRetryAfterDelayMs(err);
-      await sleep(retryAfterDelayMs && retryAfterDelayMs > 0 ? retryAfterDelayMs : delayMs);
-    }
-  }
-
-  throw lastError;
 }

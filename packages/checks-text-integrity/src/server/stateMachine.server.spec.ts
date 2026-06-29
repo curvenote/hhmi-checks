@@ -1,6 +1,13 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { describe, expect, it } from 'vitest';
-import { applyWebhookEvent, startSubmission, markSubmissionError } from './stateMachine.server.js';
+import {
+  applyWebhookEvent,
+  markSimilarityPdfJobRestarted,
+  markSimilarityPdfJobStartFailed,
+  markSimilarityPdfJobStartRequested,
+  markSubmissionError,
+  startSubmission,
+} from './stateMachine.server.js';
 import {
   type TextIntegrityDataSchema,
   type WebhookBody,
@@ -90,6 +97,83 @@ describe('Text Integrity State Machine', () => {
       expect(result.stages.submission.status).toBe('processing');
       expect(result.stages.submission.history).toHaveLength(1);
       expect(result.stages.submission.history[0].status).toBe('pending');
+    });
+
+    it('markSimilarityPdfJobStartRequested marks report generation processing without clearing stale invalidation', () => {
+      const result = markSimilarityPdfJobStartRequested(
+        {
+          stages: {
+            submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+            processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+            reportGeneration: {
+              status: 'completed',
+              history: [],
+              timestamp: '2025-01-01T00:00:00Z',
+            },
+          },
+          reportPdfId: 'pdf-old',
+          reportPdfUrl: 'https://relay.example.com/pdf-old',
+          similarityReportStored: true,
+          storedReportPdfId: 'pdf-old',
+          similarityReportPdfInvalidated: true,
+        },
+        '2025-01-01T00:01:00Z',
+      );
+
+      expect(result.stages.reportGeneration?.status).toBe('processing');
+      expect(result.reportPdfId).toBe('pdf-old');
+      expect(result.reportPdfUrl).toBeUndefined();
+      expect(result.similarityReportStored).toBe(false);
+      expect(result.similarityReportPdfInvalidated).toBe(true);
+    });
+
+    it('markSimilarityPdfJobRestarted stores the new PDF id but leaves completion to webhooks', () => {
+      const result = markSimilarityPdfJobRestarted(
+        {
+          stages: {
+            submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+            processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+            reportGeneration: {
+              status: 'processing',
+              history: [],
+              timestamp: '2025-01-01T00:00:00Z',
+            },
+          },
+          reportPdfId: 'pdf-old',
+          similarityReportPdfInvalidated: true,
+        },
+        'pdf-new',
+        '2025-01-01T00:01:00Z',
+      );
+
+      expect(result.stages.reportGeneration?.status).toBe('processing');
+      expect(result.reportPdfId).toBe('pdf-new');
+      expect(result.reportPdfUrl).toBeUndefined();
+      expect(result.similarityReportStored).toBe(false);
+      expect(result.similarityReportPdfInvalidated).toBe(true);
+    });
+
+    it('markSimilarityPdfJobStartFailed records an error for the existing retry UI', () => {
+      const result = markSimilarityPdfJobStartFailed(
+        {
+          stages: {
+            submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+            processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+            reportGeneration: {
+              status: 'processing',
+              history: [],
+              timestamp: '2025-01-01T00:00:00Z',
+            },
+          },
+          similarityReportPdfInvalidated: true,
+        },
+        'Failed to start PDF regeneration: relay unavailable',
+        '2025-01-01T00:01:00Z',
+      );
+
+      expect(result.stages.reportGeneration?.status).toBe('error');
+      expect(result.stages.reportGeneration?.error).toContain('relay unavailable');
+      expect(result.similarityReportPdfInvalidated).toBe(true);
     });
 
     it('markSubmissionError sets error stage', () => {

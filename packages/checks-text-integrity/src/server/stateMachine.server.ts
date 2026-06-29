@@ -387,6 +387,27 @@ export function applyWebhookEvent(
  * Stores the new `reportPdfId` only; clears `reportPdfUrl` until a notify webhook
  * provides `payload.report.report_pdf_url` (see mergeReportPayload).
  */
+export function markSimilarityPdfJobStartRequested(
+  current: TextIntegrityDataSchema,
+  receivedAt: string = new Date().toISOString(),
+): TextIntegrityDataSchema {
+  const base = current;
+  const stages = base.stages ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA.stages;
+  const updatedStages = setLinearStage(stages, 'reportGeneration', 'processing', receivedAt);
+  return {
+    ...base,
+    stages: updatedStages,
+    reportPdfUrl: undefined,
+    similarityReportStored: false,
+    latest: base.latest
+      ? {
+          ...base.latest,
+          reportPdfUrl: undefined,
+        }
+      : undefined,
+  };
+}
+
 export function markSimilarityPdfJobRestarted(
   current: TextIntegrityDataSchema,
   newPdfId: string,
@@ -400,6 +421,7 @@ export function markSimilarityPdfJobRestarted(
     stages: updatedStages,
     reportPdfId: newPdfId,
     reportPdfUrl: undefined,
+    similarityReportStored: false,
     latest: base.latest
       ? {
           ...base.latest,
@@ -407,5 +429,20 @@ export function markSimilarityPdfJobRestarted(
           reportPdfUrl: undefined,
         }
       : undefined,
+  };
+}
+
+/** Mark a failed attempt to ask checks-relay to start PDF generation. */
+export function markSimilarityPdfJobStartFailed(
+  current: TextIntegrityDataSchema,
+  message: string,
+  receivedAt: string = new Date().toISOString(),
+): TextIntegrityDataSchema {
+  const base = current;
+  const stages = base.stages ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA.stages;
+  const updatedStages = setLinearStage(stages, 'reportGeneration', 'error', receivedAt, message);
+  return {
+    ...base,
+    stages: updatedStages,
   };
 }
