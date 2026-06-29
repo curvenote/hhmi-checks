@@ -125,6 +125,18 @@ export const TextIntegrityLatestSchema = z.object({
 });
 export type TextIntegrityLatest = z.infer<typeof TextIntegrityLatestSchema>;
 
+export const RelayRecoveryLeaseSchema = z.object({
+  phase: z.string(),
+  action: z.string(),
+  reason: z.string().optional(),
+  requestedAt: z.string(),
+  leaseOwner: z.string(),
+  leaseExpiresAt: z.string(),
+  requestedByUserId: z.string().optional(),
+  startedAt: z.string().optional(),
+});
+export type RelayRecoveryLease = z.infer<typeof RelayRecoveryLeaseSchema>;
+
 // ---------------------------------------------------------------------------
 // Webhook event log entry
 // ---------------------------------------------------------------------------
@@ -217,6 +229,9 @@ export const textIntegrityDataSchema = z.object({
   summaryReport: StoredSimilarityReportSchema.optional(),
   /** URL to open the report in the provider viewer (if available). */
   viewerUrl: z.string().optional(),
+
+  /** Provider-neutral recovery lease for relay-hinted self-heal actions. */
+  relayRecovery: RelayRecoveryLeaseSchema.optional(),
 
   /** Lineage when this run was created by retrying a failed run. */
   retryOfRunId: z.string().optional(),
