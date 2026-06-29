@@ -4,6 +4,8 @@ This document summarizes the main runtime flows for the Text Integrity extension
 The extension talks to checks-relay for provider operations and stores normalized
 state in the SCMS `checkServiceRun.data.serviceData` object.
 
+![Text Integrity operation overview](./operation-sequence.svg)
+
 ## Happy Path
 
 The happy path starts when a user runs the check from SCMS. SCMS creates a check
