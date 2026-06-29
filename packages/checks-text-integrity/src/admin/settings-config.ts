@@ -1,4 +1,7 @@
-import type { TextIntegrityServiceSettings } from '../server/config.server.js';
+import type {
+  SmallMatchesViewSetting,
+  TextIntegrityServiceSettings,
+} from '../server/config.server.js';
 import {
   SEARCH_REPOSITORY_DESCRIPTIONS,
   SEARCH_REPOSITORY_IDS,
@@ -35,13 +38,14 @@ export type BooleanSwitchDescriptor = {
   disabled: boolean;
 };
 
-/** Word-count threshold; 0 means small-match exclusion is off (provider numeric field). */
+/** Word-count threshold; missing stored setting means small-match exclusion is off. */
 export type SmallMatchesNumericDescriptor = {
   kind: 'smallMatches';
   name: string;
   label: string;
   description: string;
-  /** 0 = off; typical default when on is 8 (product default). */
+  enabled: boolean;
+  /** Default/minimum value when the option is switched on. */
   wordThreshold: number;
   featureEnabled: boolean;
   disabled: boolean;
@@ -71,20 +75,39 @@ function readViewValue(settings: TextIntegrityServiceSettings | undefined, key: 
 }
 
 const DEFAULT_SMALL_MATCH_WORDS = 8;
+const SMALL_MATCH_MIN = 1;
+const SMALL_MATCH_MAX = 20;
+
+function isSmallMatchesViewSetting(value: unknown): value is SmallMatchesViewSetting {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).enabled === 'boolean' &&
+    typeof (value as Record<string, unknown>).word_threshold === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).word_threshold)
+  );
+}
 
 function getSmallMatchesWordThreshold(
   settings: TextIntegrityServiceSettings | undefined,
   featureEnabled: boolean,
 ): number {
-  if (!featureEnabled) return 0;
+  if (!featureEnabled) return DEFAULT_SMALL_MATCH_WORDS;
   const raw = readViewValue(settings, 'exclude_small_matches');
-  if (typeof raw === 'number' && !Number.isNaN(raw)) {
-    return Math.min(999, Math.max(0, Math.floor(raw)));
-  }
-  if (raw === true) {
-    return DEFAULT_SMALL_MATCH_WORDS;
+  if (isSmallMatchesViewSetting(raw)) {
+    return Math.min(SMALL_MATCH_MAX, Math.max(SMALL_MATCH_MIN, Math.floor(raw.word_threshold)));
   }
   return DEFAULT_SMALL_MATCH_WORDS;
+}
+
+function getSmallMatchesEnabled(
+  settings: TextIntegrityServiceSettings | undefined,
+  featureEnabled: boolean,
+): boolean {
+  if (!featureEnabled) return false;
+  const raw = readViewValue(settings, 'exclude_small_matches');
+  return isSmallMatchesViewSetting(raw) ? raw.enabled : false;
 }
 
 /**
@@ -153,6 +176,7 @@ export function deriveSettingsConfig(
         name: 'exclude_small_matches',
         label: VIEW_SETTING_LABELS[key],
         description: VIEW_SETTING_DESCRIPTIONS[key],
+        enabled: getSmallMatchesEnabled(settings, featureEnabled),
         wordThreshold: getSmallMatchesWordThreshold(settings, featureEnabled),
         featureEnabled,
         disabled: !featureEnabled,

@@ -1,4 +1,4 @@
-import type { TextIntegrityServiceSettings } from './config.server.js';
+import type { SmallMatchesViewSetting, TextIntegrityServiceSettings } from './config.server.js';
 import { SEARCH_REPOSITORY_SETTING_IDS } from '../settings-catalog.js';
 
 type AnonymousReportPayload = {
@@ -10,10 +10,23 @@ type AnonymousReportPayload = {
   };
 };
 
+const SMALL_MATCH_MIN = 1;
+
 export type TextIntegrityRelayContextEnvelope = {
   v: 1;
   payload: AnonymousReportPayload;
 };
+
+function isSmallMatchesViewSetting(value: unknown): value is SmallMatchesViewSetting {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).enabled === 'boolean' &&
+    typeof (value as Record<string, unknown>).word_threshold === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).word_threshold)
+  );
+}
 
 function mapViewSettingsToAnonymousPayload(
   settings: TextIntegrityServiceSettings | undefined,
@@ -36,7 +49,13 @@ function mapViewSettingsToAnonymousPayload(
   ];
   for (const [sourceKey, targetKey] of pairs) {
     const v = raw[sourceKey];
-    if (typeof v === 'boolean' || typeof v === 'number') out[targetKey] = v;
+    if (sourceKey === 'exclude_small_matches') {
+      if (isSmallMatchesViewSetting(v) && v.enabled) {
+        out[targetKey] = Math.max(SMALL_MATCH_MIN, Math.floor(v.word_threshold));
+      }
+      continue;
+    }
+    if (typeof v === 'boolean') out[targetKey] = v;
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }
