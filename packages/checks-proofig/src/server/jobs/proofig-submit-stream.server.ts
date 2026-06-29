@@ -86,6 +86,7 @@ export type CreateProofigSubmitJobPayload = z.infer<typeof CreateProofigSubmitJo
 export async function proofigSubmitStreamHandler(
   ctx: Context,
   data: CreateJob,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _storageBackend?: unknown,
 ) {
   const rollingLog: { message: string; data: unknown }[] = [];

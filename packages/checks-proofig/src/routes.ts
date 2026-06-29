@@ -10,6 +10,7 @@ import { resolveRoutePath } from '@curvenote/scms-server';
  * Webhook routes are mounted under `/v1/api/hooks/*` via `attachTo: 'v1/hooks'`.
  * App route for manuscript checks is mounted at `/app/manuscript-checks` via `attachTo: 'app'`.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function registerRoutes(_appConfig: Config): Promise<RouteRegistration[]> {
   return [
     {

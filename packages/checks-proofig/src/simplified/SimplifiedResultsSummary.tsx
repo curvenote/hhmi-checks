@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { ProofigDataSchema } from '../schema.js';
 import { getProofigSummaryCounts, proofigIsAwaitingHumanReview } from '../utils/proofigSummary.js';
-import { plural, ui } from '@curvenote/scms-core';
+import { plural } from '@curvenote/scms-core';
 import { LogoMono } from '../icons.js';
 import { ReportNoLongerAvailable } from '../components/ReportNoLongerAvailable.js';
 import { ProofigRefreshRemoteStatusButton } from '../components/ProofigRefreshRemoteStatusButton.js';
