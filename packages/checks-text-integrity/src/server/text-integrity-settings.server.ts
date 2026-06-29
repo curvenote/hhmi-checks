@@ -1,4 +1,8 @@
-import type { TextIntegrityServiceSettings } from './config.server.js';
+import type {
+  SmallMatchesViewSetting,
+  TextIntegrityServiceSettings,
+  TextIntegrityViewSettingValue,
+} from './config.server.js';
 import {
   SEARCH_REPOSITORY_IDS,
   SEARCH_REPOSITORY_SETTING_IDS,
@@ -52,10 +56,10 @@ function getTenantSearchRepositories(generationSettings: Record<string, unknown>
 
 function buildDefaultViewSettings(
   viewFeatures: Record<string, unknown> | null,
-): Record<string, boolean | number> {
+): Record<string, TextIntegrityViewSettingValue> {
   if (!viewFeatures) return {};
 
-  const defaults: Record<string, boolean | number> = {};
+  const defaults: Record<string, TextIntegrityViewSettingValue> = {};
   for (const key of VIEW_SETTING_KEYS) {
     if (key in viewFeatures) {
       if (key === 'exclude_small_matches') continue;
@@ -216,9 +220,31 @@ export function tenantViewSettingEnabled(
 const SMALL_MATCH_MIN = DEFAULT_SMALL_MATCH_WORD_THRESHOLD;
 const SMALL_MATCH_MAX = 999;
 
-function deleteViewSetting(settings: TextIntegrityServiceSettings, key: ViewSettingKey): void {
-  if (settings.similarity?.view_settings == null) return;
-  delete settings.similarity.view_settings[key];
+function isSmallMatchesViewSetting(value: unknown): value is SmallMatchesViewSetting {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).enabled === 'boolean' &&
+    typeof (value as Record<string, unknown>).word_threshold === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).word_threshold)
+  );
+}
+
+function readSmallMatchesViewSetting(
+  settings: TextIntegrityServiceSettings,
+): SmallMatchesViewSetting {
+  const raw = settings.similarity?.view_settings?.exclude_small_matches;
+  if (isSmallMatchesViewSetting(raw)) {
+    return {
+      enabled: raw.enabled,
+      word_threshold: Math.min(
+        SMALL_MATCH_MAX,
+        Math.max(SMALL_MATCH_MIN, Math.floor(raw.word_threshold)),
+      ),
+    };
+  }
+  return { enabled: false, word_threshold: DEFAULT_SMALL_MATCH_WORD_THRESHOLD };
 }
 
 export type ApplySettingPatchResult =
@@ -267,23 +293,23 @@ export function applyTextIntegritySettingPatch(
       return { ok: false, message: 'This view option is not enabled for your tenant' };
     }
     if (key === 'exclude_small_matches') {
+      next.similarity = next.similarity ?? {};
+      next.similarity.view_settings = next.similarity.view_settings ?? {};
+
+      const smallMatches = readSmallMatchesViewSetting(next);
       if (value === 'false' || value === '0') {
-        deleteViewSetting(next, key);
+        next.similarity.view_settings[key] = { ...smallMatches, enabled: false };
         return { ok: true, settings: next };
       }
       if (value === 'true') {
-        next.similarity = next.similarity ?? {};
-        next.similarity.view_settings = next.similarity.view_settings ?? {};
-        next.similarity.view_settings[key] = DEFAULT_SMALL_MATCH_WORD_THRESHOLD;
+        next.similarity.view_settings[key] = { ...smallMatches, enabled: true };
         return { ok: true, settings: next };
       }
       const n = Math.floor(Number(value));
       if (Number.isNaN(n) || n < SMALL_MATCH_MIN || n > SMALL_MATCH_MAX) {
         return { ok: false, message: 'Invalid word threshold' };
       }
-      next.similarity = next.similarity ?? {};
-      next.similarity.view_settings = next.similarity.view_settings ?? {};
-      next.similarity.view_settings[key] = n;
+      next.similarity.view_settings[key] = { ...smallMatches, word_threshold: n };
       return { ok: true, settings: next };
     }
     if (value !== 'true' && value !== 'false') {

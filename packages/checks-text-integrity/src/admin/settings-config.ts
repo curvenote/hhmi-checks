@@ -1,4 +1,7 @@
-import type { TextIntegrityServiceSettings } from '../server/config.server.js';
+import type {
+  SmallMatchesViewSetting,
+  TextIntegrityServiceSettings,
+} from '../server/config.server.js';
 import {
   SEARCH_REPOSITORY_DESCRIPTIONS,
   SEARCH_REPOSITORY_IDS,
@@ -74,17 +77,28 @@ function readViewValue(settings: TextIntegrityServiceSettings | undefined, key: 
 const DEFAULT_SMALL_MATCH_WORDS = 8;
 const SMALL_MATCH_MAX = 999;
 
+function isSmallMatchesViewSetting(value: unknown): value is SmallMatchesViewSetting {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).enabled === 'boolean' &&
+    typeof (value as Record<string, unknown>).word_threshold === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).word_threshold)
+  );
+}
+
 function getSmallMatchesWordThreshold(
   settings: TextIntegrityServiceSettings | undefined,
   featureEnabled: boolean,
 ): number {
   if (!featureEnabled) return DEFAULT_SMALL_MATCH_WORDS;
   const raw = readViewValue(settings, 'exclude_small_matches');
-  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= DEFAULT_SMALL_MATCH_WORDS) {
-    return Math.min(SMALL_MATCH_MAX, Math.floor(raw));
-  }
-  if (raw === true) {
-    return DEFAULT_SMALL_MATCH_WORDS;
+  if (isSmallMatchesViewSetting(raw)) {
+    return Math.min(
+      SMALL_MATCH_MAX,
+      Math.max(DEFAULT_SMALL_MATCH_WORDS, Math.floor(raw.word_threshold)),
+    );
   }
   return DEFAULT_SMALL_MATCH_WORDS;
 }
@@ -95,10 +109,7 @@ function getSmallMatchesEnabled(
 ): boolean {
   if (!featureEnabled) return false;
   const raw = readViewValue(settings, 'exclude_small_matches');
-  return (
-    raw === true ||
-    (typeof raw === 'number' && Number.isFinite(raw) && raw >= DEFAULT_SMALL_MATCH_WORDS)
-  );
+  return isSmallMatchesViewSetting(raw) ? raw.enabled : false;
 }
 
 /**

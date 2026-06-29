@@ -9,6 +9,13 @@ export const TEXT_INTEGRITY_CONFIG_OBJECT_TYPE = 'extension:text-integrity:confi
 /** Cached Turnitin EULA HTML and version metadata (large payload; not stored on config row). */
 export const TEXT_INTEGRITY_ITHEnticate_OBJECT_TYPE = 'extension:text-integrity:ithenticate';
 
+export type SmallMatchesViewSetting = {
+  enabled: boolean;
+  word_threshold: number;
+};
+
+export type TextIntegrityViewSettingValue = boolean | SmallMatchesViewSetting;
+
 /** Admin-editable defaults (generation_settings + view_settings only). */
 export interface TextIntegrityDefaults {
   similarity?: {
@@ -16,7 +23,7 @@ export interface TextIntegrityDefaults {
       search_repositories?: string[];
       submission_auto_excludes?: boolean;
     };
-    view_settings?: Record<string, boolean | number>;
+    view_settings?: Record<string, TextIntegrityViewSettingValue>;
   };
 }
 
@@ -78,7 +85,7 @@ export interface TextIntegrityServiceSettings {
       search_repositories?: string[];
       auto_exclude_self_matching_scope?: 'NONE' | 'ALL';
     };
-    view_settings?: Record<string, boolean | number>;
+    view_settings?: Record<string, TextIntegrityViewSettingValue>;
   };
 }
 

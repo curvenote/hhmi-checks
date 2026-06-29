@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFetcher, useRevalidator } from 'react-router';
 import { ui } from '@curvenote/scms-core';
 import { Info } from 'lucide-react';
@@ -106,6 +106,7 @@ function SmallMatchesFormRow({
   const revalidator = useRevalidator();
   const [checked, setChecked] = useState(descriptor.enabled);
   const [draft, setDraft] = useState(() => String(descriptor.wordThreshold));
+  const suppressNextBlurCommit = useRef(false);
 
   useEffect(() => {
     setChecked(descriptor.enabled);
@@ -137,21 +138,20 @@ function SmallMatchesFormRow({
     [checked, descriptor.disabled, descriptor.name, descriptor.wordThreshold, draft, fetcher],
   );
 
+  const suppressThresholdBlurCommitOnce = useCallback(() => {
+    suppressNextBlurCommit.current = true;
+    window.setTimeout(() => {
+      suppressNextBlurCommit.current = false;
+    }, 0);
+  }, []);
+
   const onCheckedChange = useCallback(
     (next: boolean) => {
       if (descriptor.disabled) return;
       setChecked(next);
-      if (!next) {
-        submitUpdate(fetcher, descriptor.name, 'false');
-        return;
-      }
-      let threshold = Math.floor(Number.parseInt(draft, 10));
-      if (Number.isNaN(threshold)) threshold = descriptor.wordThreshold;
-      threshold = Math.min(SMALL_MATCH_MAX, Math.max(SMALL_MATCH_MIN, threshold));
-      setDraft(String(threshold));
-      submitUpdate(fetcher, descriptor.name, String(threshold));
+      submitUpdate(fetcher, descriptor.name, next ? 'true' : 'false');
     },
-    [descriptor.disabled, descriptor.name, descriptor.wordThreshold, draft, fetcher],
+    [descriptor.disabled, descriptor.name, fetcher],
   );
 
   return (
@@ -167,6 +167,7 @@ function SmallMatchesFormRow({
           <ui.Switch
             checked={checked}
             onCheckedChange={onCheckedChange}
+            onPointerDownCapture={suppressThresholdBlurCommitOnce}
             disabled={descriptor.disabled}
             aria-label={descriptor.label}
             className="h-[1.15rem] w-8 shrink-0 cursor-pointer data-[state=checked]:bg-primary disabled:cursor-not-allowed"
@@ -177,7 +178,13 @@ function SmallMatchesFormRow({
             max={SMALL_MATCH_MAX}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => commitThreshold()}
+            onBlur={() => {
+              if (suppressNextBlurCommit.current) {
+                suppressNextBlurCommit.current = false;
+                return;
+              }
+              commitThreshold();
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') commitThreshold();
             }}

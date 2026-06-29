@@ -119,7 +119,10 @@ describe('text integrity exclude small matches setting', () => {
       settings: {
         similarity: {
           view_settings: {
-            exclude_small_matches: 12,
+            exclude_small_matches: {
+              enabled: true,
+              word_threshold: 12,
+            },
           },
         },
       },
@@ -134,34 +137,16 @@ describe('text integrity exclude small matches setting', () => {
     });
   });
 
-  it('treats a legacy true value as enabled with the default threshold', () => {
+  it('derives a disabled descriptor while preserving the saved threshold', () => {
     const config = deriveSettingsConfig({
       features: SMALL_MATCH_FEATURES,
       settings: {
         similarity: {
           view_settings: {
-            exclude_small_matches: true,
-          },
-        },
-      },
-    });
-
-    const descriptor = config?.viewSettings.find((d) => d.name === 'exclude_small_matches');
-
-    expect(descriptor).toMatchObject({
-      kind: 'smallMatches',
-      enabled: true,
-      wordThreshold: 8,
-    });
-  });
-
-  it('treats a legacy zero threshold as off with a draft threshold of 8', () => {
-    const config = deriveSettingsConfig({
-      features: SMALL_MATCH_FEATURES,
-      settings: {
-        similarity: {
-          view_settings: {
-            exclude_small_matches: 0,
+            exclude_small_matches: {
+              enabled: false,
+              word_threshold: 12,
+            },
           },
         },
       },
@@ -172,11 +157,11 @@ describe('text integrity exclude small matches setting', () => {
     expect(descriptor).toMatchObject({
       kind: 'smallMatches',
       enabled: false,
-      wordThreshold: 8,
+      wordThreshold: 12,
     });
   });
 
-  it('stores the default threshold when enabling with a boolean value', () => {
+  it('stores enabled separately from the default threshold when enabling with a boolean value', () => {
     const result = applyTextIntegritySettingPatch(
       buildDefaultSettings(SMALL_MATCH_FEATURES),
       SMALL_MATCH_FEATURES,
@@ -189,15 +174,18 @@ describe('text integrity exclude small matches setting', () => {
       settings: expect.objectContaining({
         similarity: expect.objectContaining({
           view_settings: expect.objectContaining({
-            exclude_small_matches: 8,
+            exclude_small_matches: {
+              enabled: true,
+              word_threshold: 8,
+            },
           }),
         }),
       }),
     });
   });
 
-  it('stores numeric thresholds at or above 8 and rejects smaller values', () => {
-    const enabled = applyTextIntegritySettingPatch(
+  it('updates numeric thresholds without enabling the setting and rejects smaller values', () => {
+    const thresholdUpdated = applyTextIntegritySettingPatch(
       buildDefaultSettings(SMALL_MATCH_FEATURES),
       SMALL_MATCH_FEATURES,
       'exclude_small_matches',
@@ -210,12 +198,15 @@ describe('text integrity exclude small matches setting', () => {
       '7',
     );
 
-    expect(enabled).toEqual({
+    expect(thresholdUpdated).toEqual({
       ok: true,
       settings: expect.objectContaining({
         similarity: expect.objectContaining({
           view_settings: expect.objectContaining({
-            exclude_small_matches: 12,
+            exclude_small_matches: {
+              enabled: false,
+              word_threshold: 12,
+            },
           }),
         }),
       }),
@@ -223,13 +214,16 @@ describe('text integrity exclude small matches setting', () => {
     expect(rejected).toEqual({ ok: false, message: 'Invalid word threshold' });
   });
 
-  it('deletes exclude_small_matches when the toggle is disabled', () => {
+  it('stores exclude_small_matches as disabled when the toggle is disabled', () => {
     const result = applyTextIntegritySettingPatch(
       {
         similarity: {
           view_settings: {
             exclude_quotes: true,
-            exclude_small_matches: 12,
+            exclude_small_matches: {
+              enabled: true,
+              word_threshold: 12,
+            },
           },
         },
       },
@@ -244,39 +238,81 @@ describe('text integrity exclude small matches setting', () => {
         similarity: {
           view_settings: {
             exclude_quotes: true,
+            exclude_small_matches: {
+              enabled: false,
+              word_threshold: 12,
+            },
           },
         },
       },
     });
   });
 
-  it('omits disabled small-match values from relay context and includes valid thresholds', () => {
-    const disabled = buildRelayContextEnvelope({
+  it('keeps small-match exclusion disabled when a later threshold patch arrives', () => {
+    const initialSettings = {
       similarity: {
         view_settings: {
-          exclude_small_matches: 0,
+          exclude_small_matches: {
+            enabled: true,
+            word_threshold: 12,
+          },
+        },
+      },
+    };
+
+    const disabled = applyTextIntegritySettingPatch(
+      initialSettings,
+      SMALL_MATCH_FEATURES,
+      'exclude_small_matches',
+      'false',
+    );
+    expect(disabled.ok).toBe(true);
+
+    const thresholdUpdated = applyTextIntegritySettingPatch(
+      disabled.ok ? disabled.settings : initialSettings,
+      SMALL_MATCH_FEATURES,
+      'exclude_small_matches',
+      '15',
+    );
+
+    expect(thresholdUpdated).toEqual({
+      ok: true,
+      settings: {
+        similarity: {
+          view_settings: {
+            exclude_small_matches: {
+              enabled: false,
+              word_threshold: 15,
+            },
+          },
         },
       },
     });
-    const legacyTrue = buildRelayContextEnvelope({
+  });
+
+  it('omits disabled small-match values from relay context and includes enabled thresholds', () => {
+    const disabled = buildRelayContextEnvelope({
       similarity: {
         view_settings: {
-          exclude_small_matches: true,
+          exclude_small_matches: {
+            enabled: false,
+            word_threshold: 15,
+          },
         },
       },
     });
     const enabled = buildRelayContextEnvelope({
       similarity: {
         view_settings: {
-          exclude_small_matches: 12,
+          exclude_small_matches: {
+            enabled: true,
+            word_threshold: 12,
+          },
         },
       },
     });
 
     expect(disabled).toBeUndefined();
-    expect(legacyTrue?.payload.report.view).toEqual({
-      excludeSmallMatches: 8,
-    });
     expect(enabled?.payload.report.view).toEqual({
       excludeSmallMatches: 12,
     });
