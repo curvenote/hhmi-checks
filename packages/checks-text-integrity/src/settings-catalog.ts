@@ -9,6 +9,10 @@ export const SEARCH_REPOSITORY_IDS = [
 
 export type SearchRepositoryId = (typeof SEARCH_REPOSITORY_IDS)[number];
 
+export const SEARCH_REPOSITORY_SETTING_IDS = SEARCH_REPOSITORY_IDS.filter(
+  (id) => id !== 'SUBMITTED_WORK',
+);
+
 export const SEARCH_REPOSITORY_LABELS: Record<SearchRepositoryId, string> = {
   INTERNET: 'Internet',
   SUBMITTED_WORK: 'Submitted Work',

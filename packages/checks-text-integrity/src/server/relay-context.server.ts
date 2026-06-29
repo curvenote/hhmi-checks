@@ -1,4 +1,5 @@
 import type { TextIntegrityServiceSettings } from './config.server.js';
+import { SEARCH_REPOSITORY_SETTING_IDS } from '../settings-catalog.js';
 
 type AnonymousReportPayload = {
   report: {
@@ -47,7 +48,9 @@ export function buildRelayContextEnvelope(
   const generation = settings?.similarity?.generation_settings;
   if (Array.isArray(generation?.search_repositories)) {
     report.searchRepositories = generation.search_repositories.filter(
-      (repo): repo is string => typeof repo === 'string' && repo.trim().length > 0,
+      (repo): repo is string =>
+        typeof repo === 'string' &&
+        (SEARCH_REPOSITORY_SETTING_IDS as readonly string[]).includes(repo),
     );
   }
   if (generation?.auto_exclude_self_matching_scope != null) {

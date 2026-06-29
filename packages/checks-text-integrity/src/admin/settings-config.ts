@@ -2,6 +2,7 @@ import type { TextIntegrityServiceSettings } from '../server/config.server.js';
 import {
   SEARCH_REPOSITORY_DESCRIPTIONS,
   SEARCH_REPOSITORY_IDS,
+  SEARCH_REPOSITORY_SETTING_IDS,
   SEARCH_REPOSITORY_LABELS,
   VIEW_SETTING_DESCRIPTIONS,
   VIEW_SETTING_KEYS,
@@ -12,6 +13,7 @@ import {
 
 export {
   SEARCH_REPOSITORY_IDS,
+  SEARCH_REPOSITORY_SETTING_IDS,
   SEARCH_REPOSITORY_LABELS,
   SEARCH_REPOSITORY_DESCRIPTIONS,
   VIEW_SETTING_KEYS,
@@ -120,7 +122,7 @@ export function deriveSettingsConfig(
   const savedRepos = new Set(reposList ?? []);
 
   const searchRepositories: BooleanSwitchDescriptor[] = [];
-  for (const id of SEARCH_REPOSITORY_IDS) {
+  for (const id of SEARCH_REPOSITORY_SETTING_IDS) {
     const featureEnabled = tenantRepoSet.has(id);
     let defaultValue: boolean;
     if (!featureEnabled) {

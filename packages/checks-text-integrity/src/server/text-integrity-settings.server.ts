@@ -1,6 +1,7 @@
 import type { TextIntegrityServiceSettings } from './config.server.js';
 import {
   SEARCH_REPOSITORY_IDS,
+  SEARCH_REPOSITORY_SETTING_IDS,
   VIEW_SETTING_KEYS,
   type ViewSettingKey,
 } from '../settings-catalog.js';
@@ -44,7 +45,8 @@ function getTenantSearchRepositories(generationSettings: Record<string, unknown>
   if (!generationSettings || !Array.isArray(generationSettings.search_repositories)) return [];
 
   return generationSettings.search_repositories.filter(
-    (id): id is string => typeof id === 'string',
+    (id): id is string =>
+      typeof id === 'string' && (SEARCH_REPOSITORY_SETTING_IDS as readonly string[]).includes(id),
   );
 }
 
@@ -97,7 +99,7 @@ function buildDefaultGenerationSettings(
 /**
  * Initial full settings snapshot after first configure.
  * Includes view keys only for flags present in provider `view_settings` (any boolean);
- * values default to off / 0. Search repos default to all tenant-allowed repos selected.
+ * values default to off / 0. Search repos default to all tenant-allowed selectable repos.
  */
 export function buildDefaultSettings(
   features: Record<string, unknown>,
@@ -136,7 +138,12 @@ export function reconcileSettingsWithFeatures(
   const allowedRepos = new Set<string>();
   if (gen && Array.isArray(gen.search_repositories)) {
     for (const id of gen.search_repositories) {
-      if (typeof id === 'string') allowedRepos.add(id);
+      if (
+        typeof id === 'string' &&
+        (SEARCH_REPOSITORY_SETTING_IDS as readonly string[]).includes(id)
+      ) {
+        allowedRepos.add(id);
+      }
     }
   }
 
@@ -192,6 +199,7 @@ export function cloneServiceSettings(
 }
 
 export function tenantRepoEnabled(features: Record<string, unknown>, repoId: string): boolean {
+  if (!(SEARCH_REPOSITORY_SETTING_IDS as readonly string[]).includes(repoId)) return false;
   const sim = getFeaturesSimilarity(features);
   if (!sim) return false;
   const gen = sim.generation_settings;
@@ -231,6 +239,9 @@ export function applyTextIntegritySettingPatch(
     const repoId = scopeMatch[1];
     if (!(SEARCH_REPOSITORY_IDS as readonly string[]).includes(repoId)) {
       return { ok: false, message: 'Unknown search repository' };
+    }
+    if (!(SEARCH_REPOSITORY_SETTING_IDS as readonly string[]).includes(repoId)) {
+      return { ok: false, message: 'This search repository is fixed off' };
     }
     if (!tenantRepoEnabled(features, repoId)) {
       return { ok: false, message: 'This search repository is not enabled for your tenant' };
