@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { deriveSettingsConfig } from './settings-config.js';
 import { SwitchFormRow } from './SwitchFormRow.js';
-import { ToggleGroupFormRow } from './ToggleGroupFormRow.js';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -49,13 +48,6 @@ export function TextIntegritySettingsPanel({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-border bg-card p-4 shadow-xs">
-        <div className="space-y-1">
-          <SwitchFormRow descriptor={config.indexing} />
-          <ToggleGroupFormRow descriptor={config.excludeSelfMatchingScope} />
-        </div>
-      </div>
-
       <Section title="Search repositories">
         <div className="divide-y divide-border">
           {config.searchRepositories.map((d) => (

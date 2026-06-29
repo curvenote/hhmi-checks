@@ -234,15 +234,6 @@ export function applyTextIntegritySettingPatch(
 ): ApplySettingPatchResult {
   const next = cloneServiceSettings(settings);
 
-  if (name === 'add_to_index') {
-    if (value !== 'true' && value !== 'false') {
-      return { ok: false, message: 'Invalid value for add_to_index' };
-    }
-    next.indexing_settings = next.indexing_settings ?? {};
-    next.indexing_settings.add_to_index = value === 'true';
-    return { ok: true, settings: next };
-  }
-
   const scopeMatch = /^search_repo_(.+)$/.exec(name);
   if (scopeMatch) {
     const repoId = scopeMatch[1];
@@ -262,19 +253,6 @@ export function applyTextIntegritySettingPatch(
     if (on) repos.add(repoId);
     else repos.delete(repoId);
     next.similarity.generation_settings.search_repositories = Array.from(repos);
-    return { ok: true, settings: next };
-  }
-
-  if (name === 'auto_exclude_self_matching_scope') {
-    if (value !== 'ALL' && value !== 'NONE') {
-      return { ok: false, message: 'Invalid scope' };
-    }
-    if (!tenantSelfMatchEnabled(features)) {
-      return { ok: false, message: 'Self-match exclusion is not enabled for your tenant' };
-    }
-    next.similarity = next.similarity ?? {};
-    next.similarity.generation_settings = next.similarity.generation_settings ?? {};
-    next.similarity.generation_settings.auto_exclude_self_matching_scope = value;
     return { ok: true, settings: next };
   }
 
