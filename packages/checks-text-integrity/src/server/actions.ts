@@ -180,6 +180,7 @@ type RelayRecoveryWarningResult = ExtensionCheckHandleActionResult & {
 };
 
 function relayRecoveryWarningResult(message: string, status = 502): RelayRecoveryWarningResult {
+  console.warn('[checks-text-integrity] relay recovery warning', { status, message });
   return {
     success: true,
     recovery: {
