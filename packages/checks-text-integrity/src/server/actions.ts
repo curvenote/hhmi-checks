@@ -16,8 +16,9 @@ import {
 import type { TextIntegrityDataSchema } from '../schema.js';
 import { markSimilarityPdfJobRestarted, markSubmissionError } from './stateMachine.server.js';
 import {
-  applyRelayRecoveryLeaseData,
+  markRelayRecoveryLocalProcessingStartedData,
   markRelayRecoveryStartedData,
+  planRelayRecoveryData,
   type CheckServiceRunData,
 } from './relay-recovery.server.js';
 import {
@@ -165,30 +166,47 @@ function isRelayRecoveryHint(raw: unknown): raw is RelayRecoveryHint {
   );
 }
 
-async function acquireRelayRecoveryLease(
+type RelayRecoveryAction =
+  | { action: 'startRelay'; leaseOwner: string }
+  | { action: 'retryLocal'; leaseOwner: string }
+  | { action: 'skip' };
+
+async function planRelayRecovery(
   checkRunId: string,
   recovery: RelayRecoveryHint,
   userId: string | undefined,
-): Promise<{ acquired: true; leaseOwner: string } | { acquired: false }> {
+): Promise<RelayRecoveryAction> {
   const leaseOwner = uuid();
   const requestedAt = new Date();
   const leaseExpiresAt = new Date(requestedAt.getTime() + RELAY_RECOVERY_LEASE_MS).toISOString();
+  let plan: RelayRecoveryAction = { action: 'skip' };
 
   const row = await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
-    const next = applyRelayRecoveryLeaseData(data, recovery, {
+    const next = planRelayRecoveryData(data, recovery, {
       leaseOwner,
       requestedAt,
       leaseExpiresAt,
       now: requestedAt,
       userId,
     });
-    return next as Prisma.JsonObject | null;
+    if (next.action === 'startRelay') {
+      plan = { action: 'startRelay', leaseOwner };
+      return next.data as Prisma.JsonObject;
+    }
+    if (next.action === 'retryLocal') {
+      plan = { action: 'retryLocal', leaseOwner: next.leaseOwner };
+    }
+    return null;
   });
 
   const parsed = textIntegrityDataSchema.safeParse((row.data as CheckServiceRunData)?.serviceData);
-  return parsed.success && parsed.data.relayRecovery?.leaseOwner === leaseOwner
-    ? { acquired: true, leaseOwner }
-    : { acquired: false };
+  if (
+    plan.action === 'startRelay' &&
+    (!parsed.success || parsed.data.relayRecovery?.leaseOwner !== leaseOwner)
+  ) {
+    return { action: 'skip' };
+  }
+  return plan;
 }
 
 async function markRelayRecoveryStarted(checkRunId: string, leaseOwner: string): Promise<void> {
@@ -197,6 +215,43 @@ async function markRelayRecoveryStarted(checkRunId: string, leaseOwner: string):
     const next = markRelayRecoveryStartedData(data, leaseOwner, new Date(startedAt));
     return next as Prisma.JsonObject | null;
   });
+}
+
+async function markRelayRecoveryLocalProcessingStarted(
+  checkRunId: string,
+  leaseOwner: string,
+): Promise<void> {
+  const localProcessingStartedAt = new Date().toISOString();
+  await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
+    const next = markRelayRecoveryLocalProcessingStartedData(
+      data,
+      leaseOwner,
+      new Date(localProcessingStartedAt),
+    );
+    return next as Prisma.JsonObject | null;
+  });
+}
+
+async function applyRelayRecoveryProcessingStarted(
+  checkRunId: string,
+  externalCheckId: string,
+  serviceName: string,
+  leaseOwner: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const recoveryStarted = await applyRelayCheckStatusEnvelopes(checkRunId, [
+    {
+      event: 'PROCESSING_PHASE_STARTED',
+      check_id: externalCheckId,
+      client_id: checkRunId,
+      service_name: serviceName,
+      occurred_at: new Date().toISOString(),
+      payload: { started: true },
+    },
+  ]);
+  if (!recoveryStarted.ok) return recoveryStarted;
+
+  await markRelayRecoveryLocalProcessingStarted(checkRunId, leaseOwner);
+  return { ok: true };
 }
 
 // TODO: these viewer defaults should come from database / stored service settings in future
@@ -577,8 +632,18 @@ export async function handleTextIntegrityAction(
 
     const recovery = isRelayRecoveryHint(relayStatus.recovery) ? relayStatus.recovery : undefined;
     if (recovery) {
-      const lease = await acquireRelayRecoveryLease(checkRunId, recovery, ctx.user?.id);
-      if (lease.acquired) {
+      const recoveryAction = await planRelayRecovery(checkRunId, recovery, ctx.user?.id);
+      if (recoveryAction.action === 'retryLocal') {
+        const recoveryStarted = await applyRelayRecoveryProcessingStarted(
+          checkRunId,
+          externalCheckId,
+          serviceName,
+          recoveryAction.leaseOwner,
+        );
+        if (!recoveryStarted.ok) {
+          return { error: { type: 'general', message: recoveryStarted.message }, status: 400 };
+        }
+      } else if (recoveryAction.action === 'startRelay') {
         const relayContext = buildRelayContextEnvelope(
           mergedConfig.settings as TextIntegrityServiceSettings,
         );
@@ -636,20 +701,16 @@ export async function handleTextIntegrityAction(
           };
         }
 
-        const recoveryStarted = await applyRelayCheckStatusEnvelopes(checkRunId, [
-          {
-            event: 'PROCESSING_PHASE_STARTED',
-            check_id: externalCheckId,
-            client_id: checkRunId,
-            service_name: serviceName,
-            occurred_at: new Date().toISOString(),
-            payload: { started: true },
-          },
-        ]);
+        await markRelayRecoveryStarted(checkRunId, recoveryAction.leaseOwner);
+        const recoveryStarted = await applyRelayRecoveryProcessingStarted(
+          checkRunId,
+          externalCheckId,
+          serviceName,
+          recoveryAction.leaseOwner,
+        );
         if (!recoveryStarted.ok) {
           return { error: { type: 'general', message: recoveryStarted.message }, status: 400 };
         }
-        await markRelayRecoveryStarted(checkRunId, lease.leaseOwner);
       }
     }
 

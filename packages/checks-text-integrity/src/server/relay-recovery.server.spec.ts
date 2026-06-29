@@ -4,7 +4,9 @@ import type { RelayRecoveryHint } from '@curvenote/check-relay-types';
 import type { TextIntegrityDataSchema } from '../schema.js';
 import {
   applyRelayRecoveryLeaseData,
+  markRelayRecoveryLocalProcessingStartedData,
   markRelayRecoveryStartedData,
+  planRelayRecoveryData,
 } from './relay-recovery.server.js';
 
 const RECOVERY: RelayRecoveryHint = {
@@ -110,6 +112,55 @@ describe('relay recovery lease helpers', () => {
     expect(next).toBeNull();
   });
 
+  it('plans a local retry without reacquiring when relay started but local processing was not marked', () => {
+    const current = runData({
+      ...runData().serviceData,
+      relayRecovery: {
+        phase: 'similarity',
+        action: 'start-report-generation',
+        reason: 'missing',
+        requestedAt: '2025-12-31T23:58:00.000Z',
+        leaseOwner: 'owner-1',
+        leaseExpiresAt: EXPIRED_AT,
+        startedAt: '2026-01-01T00:00:30.000Z',
+      },
+    } as TextIntegrityDataSchema);
+
+    const plan = planRelayRecoveryData(current, RECOVERY, {
+      leaseOwner: 'owner-2',
+      requestedAt: NOW,
+      leaseExpiresAt: ACTIVE_UNTIL,
+      now: NOW,
+    });
+
+    expect(plan).toEqual({ action: 'retryLocal', leaseOwner: 'owner-1' });
+  });
+
+  it('skips recovery after relay start and local processing were both marked', () => {
+    const current = runData({
+      ...runData().serviceData,
+      relayRecovery: {
+        phase: 'similarity',
+        action: 'start-report-generation',
+        reason: 'missing',
+        requestedAt: '2025-12-31T23:58:00.000Z',
+        leaseOwner: 'owner-1',
+        leaseExpiresAt: EXPIRED_AT,
+        startedAt: '2026-01-01T00:00:30.000Z',
+        localProcessingStartedAt: '2026-01-01T00:00:31.000Z',
+      },
+    } as TextIntegrityDataSchema);
+
+    const plan = planRelayRecoveryData(current, RECOVERY, {
+      leaseOwner: 'owner-2',
+      requestedAt: NOW,
+      leaseExpiresAt: ACTIVE_UNTIL,
+      now: NOW,
+    });
+
+    expect(plan).toEqual({ action: 'skip' });
+  });
+
   it('blocks recovery when post-apply processing state is already active or complete', () => {
     for (const status of ['processing', 'completed', 'notify-skipped'] as const) {
       const current = runData({
@@ -147,5 +198,19 @@ describe('relay recovery lease helpers', () => {
 
     const next = markRelayRecoveryStartedData(current, 'owner-1', NOW);
     expect(lease(next?.serviceData)?.startedAt).toBe(NOW.toISOString());
+  });
+
+  it('only marks local processing started for the current lease owner', () => {
+    const current = applyRelayRecoveryLeaseData(runData(), RECOVERY, {
+      leaseOwner: 'owner-1',
+      requestedAt: NOW,
+      leaseExpiresAt: ACTIVE_UNTIL,
+      now: NOW,
+    });
+
+    expect(markRelayRecoveryLocalProcessingStartedData(current, 'owner-2', NOW)).toBeNull();
+
+    const next = markRelayRecoveryLocalProcessingStartedData(current, 'owner-1', NOW);
+    expect(lease(next?.serviceData)?.localProcessingStartedAt).toBe(NOW.toISOString());
   });
 });

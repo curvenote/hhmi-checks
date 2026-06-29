@@ -134,6 +134,7 @@ export const RelayRecoveryLeaseSchema = z.object({
   leaseExpiresAt: z.string(),
   requestedByUserId: z.string().optional(),
   startedAt: z.string().optional(),
+  localProcessingStartedAt: z.string().optional(),
 });
 export type RelayRecoveryLease = z.infer<typeof RelayRecoveryLeaseSchema>;
 
