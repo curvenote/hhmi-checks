@@ -1,4 +1,13 @@
 import type { PrismaClient } from '@curvenote/scms-db';
+import type { TextIntegrityDefaults, TextIntegrityServiceSettings } from '../settings-types.js';
+
+export {
+  isSmallMatchesViewSetting,
+  type SmallMatchesViewSetting,
+  type TextIntegrityDefaults,
+  type TextIntegrityServiceSettings,
+  type TextIntegrityViewSettingValue,
+} from '../settings-types.js';
 
 /**
  * Object table type for Text Integrity config overrides.
@@ -8,35 +17,6 @@ export const TEXT_INTEGRITY_CONFIG_OBJECT_TYPE = 'extension:text-integrity:confi
 
 /** Cached Turnitin EULA HTML and version metadata (large payload; not stored on config row). */
 export const TEXT_INTEGRITY_ITHEnticate_OBJECT_TYPE = 'extension:text-integrity:ithenticate';
-
-export type SmallMatchesViewSetting = {
-  enabled: boolean;
-  word_threshold: number;
-};
-
-export function isSmallMatchesViewSetting(value: unknown): value is SmallMatchesViewSetting {
-  return (
-    value != null &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    typeof (value as Record<string, unknown>).enabled === 'boolean' &&
-    typeof (value as Record<string, unknown>).word_threshold === 'number' &&
-    Number.isFinite((value as Record<string, unknown>).word_threshold)
-  );
-}
-
-export type TextIntegrityViewSettingValue = boolean | SmallMatchesViewSetting;
-
-/** Admin-editable defaults (generation_settings + view_settings only). */
-export interface TextIntegrityDefaults {
-  similarity?: {
-    generation_settings?: {
-      search_repositories?: string[];
-      submission_auto_excludes?: boolean;
-    };
-    view_settings?: Record<string, TextIntegrityViewSettingValue>;
-  };
-}
 
 /** Reserved for future Object-row credential overrides (currently unused). */
 export type TextIntegrityCredentialsStored = Record<string, never>;
@@ -83,20 +63,6 @@ export interface TextIntegrityStoredObject {
     message?: string;
     updatedAt?: string;
     updatedByUserId?: string;
-  };
-}
-
-/** Persisted admin settings for text integrity (Object row + merged extension config). */
-export interface TextIntegrityServiceSettings {
-  indexing_settings?: {
-    add_to_index?: boolean;
-  };
-  similarity?: {
-    generation_settings?: {
-      search_repositories?: string[];
-      auto_exclude_self_matching_scope?: 'NONE' | 'ALL';
-    };
-    view_settings?: Record<string, TextIntegrityViewSettingValue>;
   };
 }
 

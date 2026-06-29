@@ -1,7 +1,4 @@
-import {
-  isSmallMatchesViewSetting,
-  type TextIntegrityServiceSettings,
-} from '../server/config.server.js';
+import { isSmallMatchesViewSetting, type TextIntegrityServiceSettings } from '../settings-types.js';
 import {
   SEARCH_REPOSITORY_DESCRIPTIONS,
   SEARCH_REPOSITORY_IDS,
