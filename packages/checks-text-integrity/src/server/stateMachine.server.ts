@@ -232,8 +232,6 @@ export function applyWebhookEvent(
         summaryReport = toStoredSimilarityReport(reportResult.data);
         if (isSimilarityUpdatedWebhook(webhook)) {
           invalidateSimilarityPdf();
-        } else {
-          clearSimilarityPdfInvalidation();
         }
         updatedStages = stages;
         break;
@@ -252,8 +250,6 @@ export function applyWebhookEvent(
       }
       if (isSimilarityUpdatedWebhook(webhook)) {
         invalidateSimilarityPdf();
-      } else {
-        clearSimilarityPdfInvalidation();
       }
 
       mergeReportPayload(webhook.payload?.report);

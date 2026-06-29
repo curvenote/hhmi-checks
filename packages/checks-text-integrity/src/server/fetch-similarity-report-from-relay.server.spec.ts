@@ -71,6 +71,7 @@ describe('fetchSimilarityReportPdfFromRelay', () => {
 
 describe('fetchSimilarityReportPdfFromRelayWhenReady', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -99,6 +100,42 @@ describe('fetchSimilarityReportPdfFromRelayWhenReady', () => {
       { attempts: 2, delayMs: 0 },
     );
 
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(Buffer.from(result.bytes).toString('utf8')).toContain('%PDF-1.7');
+  });
+
+  it('uses relay Retry-After when retrying readiness failures', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: 'PDF is still processing' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json', 'Retry-After': '1' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response('%PDF-1.7\nbody', {
+          status: 200,
+          headers: { 'Content-Type': 'application/pdf' },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const promise = fetchSimilarityReportPdfFromRelayWhenReady(
+      relay,
+      'ithenticate',
+      'default',
+      serviceData,
+      { attempts: 2, delayMs: 10_000 },
+    );
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+
+    const result = await promise;
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(Buffer.from(result.bytes).toString('utf8')).toContain('%PDF-1.7');
   });

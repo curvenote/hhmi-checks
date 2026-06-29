@@ -704,6 +704,41 @@ describe('Text Integrity State Machine', () => {
       expect(next?.similarityReportPdfInvalidatedByEvent).toBeUndefined();
     });
 
+    it('preserves SIMILARITY_UPDATED invalidation across unrelated processing-complete redelivery', () => {
+      const initial: TextIntegrityDataSchema = {
+        reportPdfId: 'pdf-001',
+        similarityReportStored: true,
+        storedReportPdfId: 'pdf-001',
+        similarityReportPdfInvalidated: true,
+        similarityReportPdfInvalidatedAt: '2025-01-01T00:10:00Z',
+        similarityReportPdfInvalidatedByEvent: 'SIMILARITY_UPDATED',
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'completed',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      };
+      const next = applyWebhookEvent(
+        initial,
+        makeWebhook(WebhookEvent.ProcessingPhaseComplete, {
+          similarity_report: {
+            ...SAMPLE_SIMILARITY_REPORT,
+            overall_match_percentage: 8,
+          },
+        }),
+        '2025-01-01T00:20:00Z',
+      );
+
+      expect(next?.summaryReport?.overallMatchPercentage).toBe(8);
+      expect(next?.similarityReportPdfInvalidated).toBe(true);
+      expect(next?.similarityReportPdfInvalidatedAt).toBe('2025-01-01T00:10:00Z');
+      expect(next?.similarityReportPdfInvalidatedByEvent).toBe('SIMILARITY_UPDATED');
+    });
+
     it('REPORT_GENERATION_STARTED when already processing', () => {
       const initial: TextIntegrityDataSchema = {
         stages: {
