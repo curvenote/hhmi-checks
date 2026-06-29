@@ -15,7 +15,10 @@ import {
 } from '../schema.js';
 import type { TextIntegrityDataSchema } from '../schema.js';
 import { markSimilarityPdfJobRestarted, markSubmissionError } from './stateMachine.server.js';
-import { getTextIntegrityConfigWithOverrides } from './config.server.js';
+import {
+  getTextIntegrityConfigWithOverrides,
+  type TextIntegrityServiceSettings,
+} from './config.server.js';
 import { startTextIntegrityCheckRun } from './startCheckRun.server.js';
 import { retryTextIntegrityCheckRun } from './retryCheckRun.server.js';
 import type { RelayNotifyEnvelope } from '@curvenote/check-relay-types';
@@ -34,6 +37,7 @@ import {
   getEulaStatusForUser,
   recordUserEulaAcceptance,
 } from './eula.server.js';
+import { buildRelayContextEnvelope } from './relay-context.server.js';
 
 type AppChecksConfig = {
   relayBaseUrl?: string;
@@ -318,6 +322,9 @@ export async function handleTextIntegrityAction(
 
     const serviceName = resolveServiceName(mergedConfig);
     const relayInstanceId = resolveRelayInstanceId(mergedConfig);
+    const relayContext = buildRelayContextEnvelope(
+      mergedConfig.settings as TextIntegrityServiceSettings,
+    );
     const viewerUrlEndpoint = checksRelayReportViewerUrl(
       relayBaseUrl,
       serviceName,
@@ -336,6 +343,7 @@ export async function handleTextIntegrityAction(
         body: JSON.stringify({
           viewerUserId: ctx.user?.id ?? 'anonymous',
           ...VIEWER_URL_DEFAULTS,
+          ...(relayContext ? { relayContext } : {}),
           ...(eulaPayload ? { eula: eulaPayload } : {}),
         }),
       });
