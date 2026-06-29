@@ -25,7 +25,9 @@ export type TextIntegrityCredentialsStored = Record<string, never>;
 
 /** Normalizes persisted credentials (drops legacy keys such as `apiKey`). */
 export function pickTextIntegrityCredentialsForWrite(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _prev: TextIntegrityCredentialsStored | undefined,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _patch: Partial<TextIntegrityCredentialsStored>,
 ): TextIntegrityCredentialsStored {
   return {};

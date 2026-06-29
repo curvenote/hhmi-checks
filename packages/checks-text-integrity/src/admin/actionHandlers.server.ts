@@ -75,6 +75,7 @@ function resolveTextIntegrityServiceName(mergedExtensionConfig: Record<string, u
 function stripCredentialsFromStoredData(data: unknown): Record<string, unknown> {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
   const o = data as Record<string, unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { credentials: _omit, ...rest } = o;
   return rest;
 }
@@ -735,6 +736,7 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
     },
     {
       name: 'text-integrity-refresh-eula',
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       handler: async (ctx: Context, _formData: FormData) => {
         try {
           const result = await runEulaCacheCronRefresh(ctx as TextIntegrityEulaContext);
