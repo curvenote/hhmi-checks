@@ -105,6 +105,7 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
                 },
               } as ProofigConfigData & Prisma.JsonObject;
             }
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { maintenance: _omit, ...rest } = base;
             return rest as ProofigConfigData & Prisma.JsonObject;
           });

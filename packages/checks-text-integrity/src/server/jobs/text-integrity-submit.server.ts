@@ -151,6 +151,7 @@ async function readRelaySubmitResponse(res: Response): Promise<RelaySubmitRespon
 export async function textIntegritySubmitHandler(
   ctx: Context,
   data: CreateJob,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _storageBackend?: unknown,
 ) {
   const parseResult = TextIntegritySubmitJobPayloadSchema.safeParse(data.payload);
