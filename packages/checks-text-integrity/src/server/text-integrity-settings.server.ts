@@ -1,6 +1,7 @@
 import type { TextIntegrityServiceSettings } from './config.server.js';
 import {
   SEARCH_REPOSITORY_IDS,
+  SEARCH_REPOSITORY_SETTING_IDS,
   VIEW_SETTING_KEYS,
   type ViewSettingKey,
 } from '../settings-catalog.js';
@@ -8,6 +9,18 @@ import {
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v != null && typeof v === 'object' && !Array.isArray(v);
 }
+
+type SimilarityGenerationSettings = NonNullable<
+  NonNullable<TextIntegrityServiceSettings['similarity']>['generation_settings']
+>;
+
+const DEFAULT_ADD_TO_INDEX = false;
+const DEFAULT_SMALL_MATCH_WORD_THRESHOLD = 8;
+const DEFAULT_BOOLEAN_VIEW_SETTING = false;
+const DEFAULT_SELF_MATCHING_AUTO_EXCLUDES = true;
+const DEFAULT_SELF_MATCHING_SCOPE: NonNullable<
+  SimilarityGenerationSettings['auto_exclude_self_matching_scope']
+> = 'NONE';
 
 export function getFeaturesSimilarity(
   features: Record<string, unknown>,
@@ -28,10 +41,65 @@ export function isSettingsEmpty(settings: TextIntegrityServiceSettings | undefin
   return !hasIdx && !hasSim;
 }
 
+function getTenantSearchRepositories(generationSettings: Record<string, unknown> | null): string[] {
+  if (!generationSettings || !Array.isArray(generationSettings.search_repositories)) return [];
+
+  return generationSettings.search_repositories.filter(
+    (id): id is string =>
+      typeof id === 'string' && (SEARCH_REPOSITORY_SETTING_IDS as readonly string[]).includes(id),
+  );
+}
+
+function getDefaultViewSettingValue(key: ViewSettingKey): boolean | number {
+  if (key === 'exclude_small_matches') return DEFAULT_SMALL_MATCH_WORD_THRESHOLD;
+  return DEFAULT_BOOLEAN_VIEW_SETTING;
+}
+
+function buildDefaultViewSettings(
+  viewFeatures: Record<string, unknown> | null,
+): Record<string, boolean | number> {
+  if (!viewFeatures) return {};
+
+  const defaults: Record<string, boolean | number> = {};
+  for (const key of VIEW_SETTING_KEYS) {
+    if (key in viewFeatures) {
+      defaults[key] = getDefaultViewSettingValue(key);
+    }
+  }
+  return defaults;
+}
+
+function tenantSupportsSelfMatchingAutoExcludes(
+  generationSettings: Record<string, unknown> | null,
+): boolean {
+  return (
+    generationSettings != null &&
+    'submission_auto_excludes' in generationSettings &&
+    generationSettings.submission_auto_excludes === true
+  );
+}
+
+function buildDefaultGenerationSettings(
+  generationSettings: Record<string, unknown> | null,
+): SimilarityGenerationSettings {
+  const defaults: SimilarityGenerationSettings = {
+    search_repositories: getTenantSearchRepositories(generationSettings),
+  };
+
+  if (
+    DEFAULT_SELF_MATCHING_AUTO_EXCLUDES &&
+    tenantSupportsSelfMatchingAutoExcludes(generationSettings)
+  ) {
+    defaults.auto_exclude_self_matching_scope = DEFAULT_SELF_MATCHING_SCOPE;
+  }
+
+  return defaults;
+}
+
 /**
  * Initial full settings snapshot after first configure.
  * Includes view keys only for flags present in provider `view_settings` (any boolean);
- * values default to off / 0. Search repos default to all tenant-allowed repos selected.
+ * values default to off / 0. Search repos default to all tenant-allowed selectable repos.
  */
 export function buildDefaultSettings(
   features: Record<string, unknown>,
@@ -43,43 +111,13 @@ export function buildDefaultSettings(
       ? (sim.view_settings as Record<string, unknown>)
       : null;
 
-  const tenantRepos: string[] = [];
-  if (gen && Array.isArray(gen.search_repositories)) {
-    for (const id of gen.search_repositories) {
-      if (typeof id === 'string') tenantRepos.push(id);
-    }
-  }
-
-  const viewSettings: Record<string, boolean | number> = {};
-  if (viewRaw) {
-    for (const key of VIEW_SETTING_KEYS) {
-      if (key in viewRaw) {
-        viewSettings[key] = key === 'exclude_small_matches' ? 8 : false;
-      }
-    }
-  }
-
-  const submissionAuto =
-    gen != null && 'submission_auto_excludes' in gen
-      ? gen.submission_auto_excludes === true
-      : false;
-
-  const next: TextIntegrityServiceSettings = {
-    indexing_settings: { add_to_index: false },
+  return {
+    indexing_settings: { add_to_index: DEFAULT_ADD_TO_INDEX },
     similarity: {
-      generation_settings: {
-        search_repositories: [...tenantRepos],
-        ...(submissionAuto ? { auto_exclude_self_matching_scope: 'NONE' as const } : {}),
-      },
-      view_settings: viewSettings,
+      generation_settings: buildDefaultGenerationSettings(gen),
+      view_settings: buildDefaultViewSettings(viewRaw),
     },
   };
-
-  if (!submissionAuto && next.similarity?.generation_settings) {
-    delete next.similarity.generation_settings.auto_exclude_self_matching_scope;
-  }
-
-  return next;
 }
 
 /**
@@ -100,7 +138,12 @@ export function reconcileSettingsWithFeatures(
   const allowedRepos = new Set<string>();
   if (gen && Array.isArray(gen.search_repositories)) {
     for (const id of gen.search_repositories) {
-      if (typeof id === 'string') allowedRepos.add(id);
+      if (
+        typeof id === 'string' &&
+        (SEARCH_REPOSITORY_SETTING_IDS as readonly string[]).includes(id)
+      ) {
+        allowedRepos.add(id);
+      }
     }
   }
 
@@ -156,6 +199,7 @@ export function cloneServiceSettings(
 }
 
 export function tenantRepoEnabled(features: Record<string, unknown>, repoId: string): boolean {
+  if (!(SEARCH_REPOSITORY_SETTING_IDS as readonly string[]).includes(repoId)) return false;
   const sim = getFeaturesSimilarity(features);
   if (!sim) return false;
   const gen = sim.generation_settings;
@@ -172,21 +216,15 @@ export function tenantViewSettingEnabled(
   return (sim.view_settings as Record<string, unknown>)[key] === true;
 }
 
-export function tenantSelfMatchEnabled(features: Record<string, unknown>): boolean {
-  const sim = getFeaturesSimilarity(features);
-  if (!sim) return false;
-  const gen = sim.generation_settings;
-  if (!isRecord(gen) || !('submission_auto_excludes' in gen)) return false;
-  return gen.submission_auto_excludes === true;
-}
-
 const SMALL_MATCH_MIN = 1;
 const SMALL_MATCH_MAX = 999;
 
-export type ApplySettingPatchResult = { ok: true } | { ok: false; message: string };
+export type ApplySettingPatchResult =
+  | { ok: true; settings: TextIntegrityServiceSettings }
+  | { ok: false; message: string };
 
 /**
- * Mutates `settings` in place (caller should pass a clone). Validates against `features`.
+ * Validates and applies one admin setting patch, returning a fresh settings object.
  */
 export function applyTextIntegritySettingPatch(
   settings: TextIntegrityServiceSettings,
@@ -194,20 +232,16 @@ export function applyTextIntegritySettingPatch(
   name: string,
   value: string,
 ): ApplySettingPatchResult {
-  if (name === 'add_to_index') {
-    if (value !== 'true' && value !== 'false') {
-      return { ok: false, message: 'Invalid value for add_to_index' };
-    }
-    settings.indexing_settings = settings.indexing_settings ?? {};
-    settings.indexing_settings.add_to_index = value === 'true';
-    return { ok: true };
-  }
+  const next = cloneServiceSettings(settings);
 
   const scopeMatch = /^search_repo_(.+)$/.exec(name);
   if (scopeMatch) {
     const repoId = scopeMatch[1];
     if (!(SEARCH_REPOSITORY_IDS as readonly string[]).includes(repoId)) {
       return { ok: false, message: 'Unknown search repository' };
+    }
+    if (!(SEARCH_REPOSITORY_SETTING_IDS as readonly string[]).includes(repoId)) {
+      return { ok: false, message: 'This search repository is fixed off' };
     }
     if (!tenantRepoEnabled(features, repoId)) {
       return { ok: false, message: 'This search repository is not enabled for your tenant' };
@@ -216,26 +250,13 @@ export function applyTextIntegritySettingPatch(
       return { ok: false, message: 'Invalid value' };
     }
     const on = value === 'true';
-    settings.similarity = settings.similarity ?? {};
-    settings.similarity.generation_settings = settings.similarity.generation_settings ?? {};
-    const repos = new Set(settings.similarity.generation_settings.search_repositories ?? []);
+    next.similarity = next.similarity ?? {};
+    next.similarity.generation_settings = next.similarity.generation_settings ?? {};
+    const repos = new Set(next.similarity.generation_settings.search_repositories ?? []);
     if (on) repos.add(repoId);
     else repos.delete(repoId);
-    settings.similarity.generation_settings.search_repositories = Array.from(repos);
-    return { ok: true };
-  }
-
-  if (name === 'auto_exclude_self_matching_scope') {
-    if (value !== 'ALL' && value !== 'NONE') {
-      return { ok: false, message: 'Invalid scope' };
-    }
-    if (!tenantSelfMatchEnabled(features)) {
-      return { ok: false, message: 'Self-match exclusion is not enabled for your tenant' };
-    }
-    settings.similarity = settings.similarity ?? {};
-    settings.similarity.generation_settings = settings.similarity.generation_settings ?? {};
-    settings.similarity.generation_settings.auto_exclude_self_matching_scope = value;
-    return { ok: true };
+    next.similarity.generation_settings.search_repositories = Array.from(repos);
+    return { ok: true, settings: next };
   }
 
   if ((VIEW_SETTING_KEYS as readonly string[]).includes(name)) {
@@ -246,26 +267,26 @@ export function applyTextIntegritySettingPatch(
     if (key === 'exclude_small_matches') {
       const n = Math.floor(Number(value));
       if (value === '0' || n === 0) {
-        settings.similarity = settings.similarity ?? {};
-        settings.similarity.view_settings = settings.similarity.view_settings ?? {};
-        settings.similarity.view_settings[key] = 0;
-        return { ok: true };
+        next.similarity = next.similarity ?? {};
+        next.similarity.view_settings = next.similarity.view_settings ?? {};
+        next.similarity.view_settings[key] = 0;
+        return { ok: true, settings: next };
       }
       if (Number.isNaN(n) || n < SMALL_MATCH_MIN || n > SMALL_MATCH_MAX) {
         return { ok: false, message: 'Invalid word threshold' };
       }
-      settings.similarity = settings.similarity ?? {};
-      settings.similarity.view_settings = settings.similarity.view_settings ?? {};
-      settings.similarity.view_settings[key] = n;
-      return { ok: true };
+      next.similarity = next.similarity ?? {};
+      next.similarity.view_settings = next.similarity.view_settings ?? {};
+      next.similarity.view_settings[key] = n;
+      return { ok: true, settings: next };
     }
     if (value !== 'true' && value !== 'false') {
       return { ok: false, message: 'Invalid value' };
     }
-    settings.similarity = settings.similarity ?? {};
-    settings.similarity.view_settings = settings.similarity.view_settings ?? {};
-    settings.similarity.view_settings[key] = value === 'true';
-    return { ok: true };
+    next.similarity = next.similarity ?? {};
+    next.similarity.view_settings = next.similarity.view_settings ?? {};
+    next.similarity.view_settings[key] = value === 'true';
+    return { ok: true, settings: next };
   }
 
   return { ok: false, message: 'Unknown setting name' };

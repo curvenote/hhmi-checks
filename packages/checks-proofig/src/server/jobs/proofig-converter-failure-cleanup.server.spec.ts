@@ -11,6 +11,7 @@ vi.mock('../applyDocumentPreparationFromConverterJob.server.js', () => ({
 }));
 
 vi.mock('@curvenote/scms-server', async (importOriginal) => {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const actual = await importOriginal<typeof import('@curvenote/scms-server')>();
   return {
     ...actual,

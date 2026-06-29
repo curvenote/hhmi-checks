@@ -72,7 +72,6 @@ export function ProofigFailedRunsAdminPanel() {
 
   useEffect(() => {
     loadPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -183,7 +182,7 @@ export function ProofigFailedRunsAdminPanel() {
             </thead>
             <tbody>
               {runs.map((row) => (
-                <tr key={row.id} className="border-b border-border align-top">
+                <tr key={row.id} className="align-top border-b border-border">
                   <td className="p-2">
                     <input
                       type="checkbox"

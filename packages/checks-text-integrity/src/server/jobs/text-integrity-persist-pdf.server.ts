@@ -1,17 +1,16 @@
 import type { CreateJob } from '@curvenote/scms-core';
-import type { Context } from '@curvenote/scms-server';
 import { JobStatus } from '@curvenote/scms-db';
 import type { Prisma } from '@curvenote/scms-db';
 import { httpError } from '@curvenote/scms-core';
 import { uuidv7 } from 'uuidv7';
 import { z } from 'zod';
 import {
+  type Context,
+  type StorageBackend,
   getPrismaClient,
   jobs,
   safeCheckServiceRunDataUpdate,
   File,
-  KnownBuckets,
-  StorageBackend,
 } from '@curvenote/scms-server';
 import type { TextIntegrityDataSchema } from '../../schema.js';
 import { textIntegrityDataSchema } from '../../schema.js';

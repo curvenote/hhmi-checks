@@ -15,13 +15,23 @@ import {
 } from '../schema.js';
 import type { TextIntegrityDataSchema } from '../schema.js';
 import { markSimilarityPdfJobRestarted, markSubmissionError } from './stateMachine.server.js';
-import { getTextIntegrityConfigWithOverrides } from './config.server.js';
+import {
+  markRelayRecoveryLocalProcessingStartedData,
+  markRelayRecoveryStartedData,
+  planRelayRecoveryData,
+  type CheckServiceRunData,
+} from './relay-recovery.server.js';
+import {
+  getTextIntegrityConfigWithOverrides,
+  type TextIntegrityServiceSettings,
+} from './config.server.js';
 import { startTextIntegrityCheckRun } from './startCheckRun.server.js';
 import { retryTextIntegrityCheckRun } from './retryCheckRun.server.js';
-import type { RelayNotifyEnvelope } from '@curvenote/check-relay-types';
+import type { RelayNotifyEnvelope, RelayRecoveryHint } from '@curvenote/check-relay-types';
 import {
   checksRelayCheckStatusUrl,
   checksRelayReportPdfStartUrl,
+  checksRelayReportStartGenerationUrl,
   checksRelayReportViewerUrl,
   resolveRelayExternalCheckId,
   resolveRelayInstanceId,
@@ -34,6 +44,7 @@ import {
   getEulaStatusForUser,
   recordUserEulaAcceptance,
 } from './eula.server.js';
+import { buildRelayContextEnvelope } from './relay-context.server.js';
 
 type AppChecksConfig = {
   relayBaseUrl?: string;
@@ -45,11 +56,12 @@ function getAppChecks(ctx: { $config?: Record<string, unknown> }): AppChecksConf
   return app?.checks;
 }
 
-type CheckServiceRunData = {
-  status: string;
-  serviceData?: TextIntegrityDataSchema;
-  serviceDataSchema?: Record<string, unknown>;
+type RelayStatusResponseBody = {
+  envelopes?: RelayNotifyEnvelope[];
+  recovery?: RelayRecoveryHint;
 };
+
+const RELAY_RECOVERY_LEASE_MS = 60_000;
 
 /** Persist a failed dispatch so checks/details pages can show the error. */
 async function recordTextIntegrityExecuteFailure(
@@ -116,6 +128,157 @@ async function relaySimilarityPdfStart(
     },
     body: JSON.stringify({}),
   });
+}
+
+async function relayReportGenerationStart(
+  relayBaseUrl: string,
+  relayApiKey: string,
+  serviceName: string,
+  relayInstanceId: string,
+  externalId: string,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const url = checksRelayReportStartGenerationUrl(
+    relayBaseUrl,
+    serviceName,
+    relayInstanceId,
+    externalId,
+  );
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${relayApiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+function isRelayRecoveryHint(raw: unknown): raw is RelayRecoveryHint {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  const r = raw as Record<string, unknown>;
+  return (
+    typeof r.phase === 'string' &&
+    r.phase.trim() !== '' &&
+    r.action === 'start-report-generation' &&
+    (r.reason === 'missing' || r.reason === 'not-ready') &&
+    r.recoverable === true
+  );
+}
+
+type RelayRecoveryAction =
+  | { action: 'startRelay'; leaseOwner: string }
+  | { action: 'retryLocal'; leaseOwner: string }
+  | { action: 'skip' };
+
+type RelayRecoveryWarningResult = ExtensionCheckHandleActionResult & {
+  recovery: {
+    ok: false;
+    message: string;
+    status: number;
+  };
+};
+
+function relayRecoveryWarningResult(message: string, status = 502): RelayRecoveryWarningResult {
+  console.warn('[checks-text-integrity] relay recovery warning', { status, message });
+  return {
+    success: true,
+    recovery: {
+      ok: false,
+      message,
+      status,
+    },
+  };
+}
+
+async function planRelayRecovery(
+  checkRunId: string,
+  recovery: RelayRecoveryHint,
+  userId: string | undefined,
+): Promise<RelayRecoveryAction> {
+  const leaseOwner = uuid();
+  const requestedAt = new Date();
+  const leaseExpiresAt = new Date(requestedAt.getTime() + RELAY_RECOVERY_LEASE_MS).toISOString();
+  const planRef: { current: RelayRecoveryAction } = { current: { action: 'skip' } };
+
+  const row = await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
+    const next = planRelayRecoveryData(data, recovery, {
+      leaseOwner,
+      requestedAt,
+      leaseExpiresAt,
+      now: requestedAt,
+      userId,
+    });
+    if (next.action === 'startRelay') {
+      planRef.current = { action: 'startRelay', leaseOwner };
+      return next.data as Prisma.JsonObject;
+    }
+    if (next.action === 'retryLocal') {
+      planRef.current = { action: 'retryLocal', leaseOwner: next.leaseOwner };
+    }
+    return null;
+  });
+
+  const plan = planRef.current;
+  const parsed = textIntegrityDataSchema.safeParse((row.data as CheckServiceRunData)?.serviceData);
+  if (
+    plan.action === 'startRelay' &&
+    (!parsed.success || parsed.data.relayRecovery?.leaseOwner !== leaseOwner)
+  ) {
+    return { action: 'skip' };
+  }
+  return plan;
+}
+
+async function markRelayRecoveryStarted(checkRunId: string, leaseOwner: string): Promise<boolean> {
+  const startedAt = new Date().toISOString();
+  const row = await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
+    const next = markRelayRecoveryStartedData(data, leaseOwner, new Date(startedAt));
+    return next as Prisma.JsonObject | null;
+  });
+  const parsed = textIntegrityDataSchema.safeParse((row.data as CheckServiceRunData)?.serviceData);
+  return (
+    parsed.success &&
+    parsed.data.relayRecovery?.leaseOwner === leaseOwner &&
+    parsed.data.relayRecovery.startedAt != null
+  );
+}
+
+async function markRelayRecoveryLocalProcessingStarted(
+  checkRunId: string,
+  leaseOwner: string,
+): Promise<void> {
+  const localProcessingStartedAt = new Date().toISOString();
+  await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
+    const next = markRelayRecoveryLocalProcessingStartedData(
+      data,
+      leaseOwner,
+      new Date(localProcessingStartedAt),
+    );
+    return next as Prisma.JsonObject | null;
+  });
+}
+
+async function applyRelayRecoveryProcessingStarted(
+  checkRunId: string,
+  externalCheckId: string,
+  serviceName: string,
+  leaseOwner: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const recoveryStarted = await applyRelayCheckStatusEnvelopes(checkRunId, [
+    {
+      event: 'PROCESSING_PHASE_STARTED',
+      check_id: externalCheckId,
+      client_id: checkRunId,
+      service_name: serviceName,
+      occurred_at: new Date().toISOString(),
+      payload: { started: true },
+    },
+  ]);
+  if (!recoveryStarted.ok) return recoveryStarted;
+
+  await markRelayRecoveryLocalProcessingStarted(checkRunId, leaseOwner);
+  return { ok: true };
 }
 
 // TODO: these viewer defaults should come from database / stored service settings in future
@@ -318,6 +481,9 @@ export async function handleTextIntegrityAction(
 
     const serviceName = resolveServiceName(mergedConfig);
     const relayInstanceId = resolveRelayInstanceId(mergedConfig);
+    const relayContext = buildRelayContextEnvelope(
+      mergedConfig.settings as TextIntegrityServiceSettings,
+    );
     const viewerUrlEndpoint = checksRelayReportViewerUrl(
       relayBaseUrl,
       serviceName,
@@ -336,6 +502,7 @@ export async function handleTextIntegrityAction(
         body: JSON.stringify({
           viewerUserId: ctx.user?.id ?? 'anonymous',
           ...VIEWER_URL_DEFAULTS,
+          ...(relayContext ? { relayContext } : {}),
           ...(eulaPayload ? { eula: eulaPayload } : {}),
         }),
       });
@@ -476,7 +643,8 @@ export async function handleTextIntegrityAction(
       };
     }
 
-    const envelopes = (json as { envelopes?: RelayNotifyEnvelope[] }).envelopes;
+    const relayStatus = json as RelayStatusResponseBody;
+    const envelopes = relayStatus.envelopes;
     if (!Array.isArray(envelopes)) {
       return {
         error: { type: 'general', message: 'checks-relay status response missing envelopes array' },
@@ -487,6 +655,93 @@ export async function handleTextIntegrityAction(
     const applied = await applyRelayCheckStatusEnvelopes(checkRunId, envelopes);
     if (!applied.ok) {
       return { error: { type: 'general', message: applied.message }, status: 400 };
+    }
+
+    const recovery = isRelayRecoveryHint(relayStatus.recovery) ? relayStatus.recovery : undefined;
+    if (recovery) {
+      const recoveryAction = await planRelayRecovery(checkRunId, recovery, ctx.user?.id);
+      if (recoveryAction.action === 'retryLocal') {
+        const recoveryStarted = await applyRelayRecoveryProcessingStarted(
+          checkRunId,
+          externalCheckId,
+          serviceName,
+          recoveryAction.leaseOwner,
+        );
+        if (!recoveryStarted.ok) {
+          return { error: { type: 'general', message: recoveryStarted.message }, status: 400 };
+        }
+      } else if (recoveryAction.action === 'startRelay') {
+        const relayContext = buildRelayContextEnvelope(
+          mergedConfig.settings as TextIntegrityServiceSettings,
+        );
+        const startBody = {
+          ...(relayContext ? { relayContext } : {}),
+          reportGenerationTrigger: `relay-status-recovery:${recovery.phase}`,
+          recovery: {
+            phase: recovery.phase,
+            action: recovery.action,
+            reason: recovery.reason,
+          },
+        };
+
+        let startResponse: Response;
+        try {
+          startResponse = await relayReportGenerationStart(
+            relayBaseUrl,
+            relayApiKey,
+            serviceName,
+            relayInstanceId,
+            externalCheckId,
+            startBody,
+          );
+        } catch (e) {
+          return relayRecoveryWarningResult(
+            e instanceof Error
+              ? e.message
+              : 'Failed to contact checks-relay for report generation recovery',
+            502,
+          );
+        }
+
+        const startText = await startResponse.text().catch(() => '');
+        let startJson: Record<string, unknown> = {};
+        try {
+          startJson = startText ? (JSON.parse(startText) as Record<string, unknown>) : {};
+        } catch {
+          startJson = { message: startText };
+        }
+        if (!startResponse.ok || startJson.status === 'error' || startJson.status === 'failed') {
+          const message =
+            typeof startJson.message === 'string'
+              ? startJson.message
+              : `Checks relay recovery start failed (${startResponse.status})`;
+          return relayRecoveryWarningResult(
+            message,
+            startResponse.status >= 400 && startResponse.status < 600 ? startResponse.status : 502,
+          );
+        }
+
+        const recoveryMarked = await markRelayRecoveryStarted(
+          checkRunId,
+          recoveryAction.leaseOwner,
+        );
+        if (!recoveryMarked) {
+          return relayRecoveryWarningResult(
+            'Checks relay recovery started, but the local recovery marker was not persisted. Refresh status to continue reconciliation.',
+            409,
+          );
+        }
+
+        const recoveryStarted = await applyRelayRecoveryProcessingStarted(
+          checkRunId,
+          externalCheckId,
+          serviceName,
+          recoveryAction.leaseOwner,
+        );
+        if (!recoveryStarted.ok) {
+          return { error: { type: 'general', message: recoveryStarted.message }, status: 400 };
+        }
+      }
     }
 
     return { success: true };

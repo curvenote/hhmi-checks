@@ -74,6 +74,15 @@ export function checksRelayReportViewerUrl(
   return `${baseServicesPath(relayBaseUrl, serviceName, instanceId)}/check/${encodeURIComponent(externalId)}/report/viewer-url`;
 }
 
+export function checksRelayReportStartGenerationUrl(
+  relayBaseUrl: string,
+  serviceName: string,
+  instanceId: string,
+  externalId: string,
+): string {
+  return `${baseServicesPath(relayBaseUrl, serviceName, instanceId)}/check/${encodeURIComponent(externalId)}/report/start-generation`;
+}
+
 export function checksRelayReportPdfStartUrl(
   relayBaseUrl: string,
   serviceName: string,

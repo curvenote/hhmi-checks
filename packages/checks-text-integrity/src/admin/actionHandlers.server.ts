@@ -75,6 +75,7 @@ function resolveTextIntegrityServiceName(mergedExtensionConfig: Record<string, u
 function stripCredentialsFromStoredData(data: unknown): Record<string, unknown> {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
   const o = data as Record<string, unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { credentials: _omit, ...rest } = o;
   return rest;
 }
@@ -682,13 +683,12 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
                 return prev as TextIntegrityStoredObject & Prisma.JsonObject;
               }
 
-              let settings = cloneServiceSettings(prev.settings);
-              if (isSettingsEmpty(settings)) {
-                settings = buildDefaultSettings(features as Record<string, unknown>);
-              }
+              const currentSettings = isSettingsEmpty(prev.settings)
+                ? buildDefaultSettings(features as Record<string, unknown>)
+                : (prev.settings ?? {});
 
               const r = applyTextIntegritySettingPatch(
-                settings,
+                currentSettings,
                 features as Record<string, unknown>,
                 name,
                 value,
@@ -698,7 +698,7 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
                 return prev as TextIntegrityStoredObject & Prisma.JsonObject;
               }
 
-              const next: TextIntegrityStoredObject = { ...prev, settings };
+              const next: TextIntegrityStoredObject = { ...prev, settings: r.settings };
               return next as TextIntegrityStoredObject & Prisma.JsonObject;
             },
           );
@@ -736,6 +736,7 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
     },
     {
       name: 'text-integrity-refresh-eula',
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       handler: async (ctx: Context, _formData: FormData) => {
         try {
           const result = await runEulaCacheCronRefresh(ctx as TextIntegrityEulaContext);

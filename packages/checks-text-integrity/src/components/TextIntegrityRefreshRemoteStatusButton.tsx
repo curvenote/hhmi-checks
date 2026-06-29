@@ -6,6 +6,7 @@ import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
 type RefreshFetcherData = {
   success?: boolean;
   error?: { type?: string; message?: string };
+  recovery?: { ok: false; message: string; status: number };
 };
 
 const INTENT = 'checks-text-integrity:relay-status';
@@ -37,6 +38,11 @@ export function TextIntegrityRefreshRemoteStatusButton({
     }
     if (d.success === true) {
       revalidator.revalidate();
+      if (d.recovery?.ok === false) {
+        ui.toastWarning('Status refreshed, but recovery did not start', {
+          description: d.recovery.message,
+        });
+      }
     }
   }, [fetcher.state, fetcher.data, revalidator]);
 
