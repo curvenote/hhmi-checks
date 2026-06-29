@@ -16,6 +16,11 @@ import {
 import type { TextIntegrityDataSchema } from '../schema.js';
 import { markSimilarityPdfJobRestarted, markSubmissionError } from './stateMachine.server.js';
 import {
+  applyRelayRecoveryLeaseData,
+  markRelayRecoveryStartedData,
+  type CheckServiceRunData,
+} from './relay-recovery.server.js';
+import {
   getTextIntegrityConfigWithOverrides,
   type TextIntegrityServiceSettings,
 } from './config.server.js';
@@ -49,12 +54,6 @@ function getAppChecks(ctx: { $config?: Record<string, unknown> }): AppChecksConf
   const app = ctx.$config?.app as { checks?: AppChecksConfig } | undefined;
   return app?.checks;
 }
-
-type CheckServiceRunData = {
-  status: string;
-  serviceData?: TextIntegrityDataSchema;
-  serviceDataSchema?: Record<string, unknown>;
-};
 
 type RelayStatusResponseBody = {
   envelopes?: RelayNotifyEnvelope[];
@@ -166,15 +165,6 @@ function isRelayRecoveryHint(raw: unknown): raw is RelayRecoveryHint {
   );
 }
 
-function serviceDataAllowsRelayRecovery(serviceData: TextIntegrityDataSchema | undefined): boolean {
-  const processingStatus = serviceData?.stages?.processing?.status;
-  return (
-    processingStatus !== 'processing' &&
-    processingStatus !== 'completed' &&
-    processingStatus !== 'notify-skipped'
-  );
-}
-
 async function acquireRelayRecoveryLease(
   checkRunId: string,
   recovery: RelayRecoveryHint,
@@ -185,38 +175,14 @@ async function acquireRelayRecoveryLease(
   const leaseExpiresAt = new Date(requestedAt.getTime() + RELAY_RECOVERY_LEASE_MS).toISOString();
 
   const row = await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
-    const current = (data ?? {}) as CheckServiceRunData;
-    const parsed = textIntegrityDataSchema.safeParse(current.serviceData);
-    const serviceData = parsed.success
-      ? parsed.data
-      : (current.serviceData ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA);
-
-    const existing = serviceData.relayRecovery;
-    const sameRecovery = existing?.phase === recovery.phase && existing.action === recovery.action;
-    const existingLeaseExpires = existing?.leaseExpiresAt
-      ? Date.parse(existing.leaseExpiresAt)
-      : Number.NaN;
-    const existingLeaseActive =
-      sameRecovery && !Number.isNaN(existingLeaseExpires) && existingLeaseExpires > Date.now();
-    if (sameRecovery && (existing.startedAt || existingLeaseActive)) {
-      return null;
-    }
-
-    return {
-      ...current,
-      serviceData: {
-        ...serviceData,
-        relayRecovery: {
-          phase: recovery.phase,
-          action: recovery.action,
-          reason: recovery.reason,
-          requestedAt: requestedAt.toISOString(),
-          leaseOwner,
-          leaseExpiresAt,
-          ...(userId ? { requestedByUserId: userId } : {}),
-        },
-      },
-    } as Prisma.JsonObject;
+    const next = applyRelayRecoveryLeaseData(data, recovery, {
+      leaseOwner,
+      requestedAt,
+      leaseExpiresAt,
+      now: requestedAt,
+      userId,
+    });
+    return next as Prisma.JsonObject | null;
   });
 
   const parsed = textIntegrityDataSchema.safeParse((row.data as CheckServiceRunData)?.serviceData);
@@ -228,22 +194,8 @@ async function acquireRelayRecoveryLease(
 async function markRelayRecoveryStarted(checkRunId: string, leaseOwner: string): Promise<void> {
   const startedAt = new Date().toISOString();
   await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
-    const current = (data ?? {}) as CheckServiceRunData;
-    const parsed = textIntegrityDataSchema.safeParse(current.serviceData);
-    const serviceData = parsed.success
-      ? parsed.data
-      : (current.serviceData ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA);
-    if (serviceData.relayRecovery?.leaseOwner !== leaseOwner) return null;
-    return {
-      ...current,
-      serviceData: {
-        ...serviceData,
-        relayRecovery: {
-          ...serviceData.relayRecovery,
-          startedAt,
-        },
-      },
-    } as Prisma.JsonObject;
+    const next = markRelayRecoveryStartedData(data, leaseOwner, new Date(startedAt));
+    return next as Prisma.JsonObject | null;
   });
 }
 
@@ -624,7 +576,7 @@ export async function handleTextIntegrityAction(
     }
 
     const recovery = isRelayRecoveryHint(relayStatus.recovery) ? relayStatus.recovery : undefined;
-    if (recovery && serviceDataAllowsRelayRecovery(serviceData)) {
+    if (recovery) {
       const lease = await acquireRelayRecoveryLease(checkRunId, recovery, ctx.user?.id);
       if (lease.acquired) {
         const relayContext = buildRelayContextEnvelope(
@@ -684,7 +636,6 @@ export async function handleTextIntegrityAction(
           };
         }
 
-        await markRelayRecoveryStarted(checkRunId, lease.leaseOwner);
         const recoveryStarted = await applyRelayCheckStatusEnvelopes(checkRunId, [
           {
             event: 'PROCESSING_PHASE_STARTED',
@@ -698,6 +649,7 @@ export async function handleTextIntegrityAction(
         if (!recoveryStarted.ok) {
           return { error: { type: 'general', message: recoveryStarted.message }, status: 400 };
         }
+        await markRelayRecoveryStarted(checkRunId, lease.leaseOwner);
       }
     }
 
