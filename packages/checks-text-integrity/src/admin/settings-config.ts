@@ -1,6 +1,6 @@
-import type {
-  SmallMatchesViewSetting,
-  TextIntegrityServiceSettings,
+import {
+  isSmallMatchesViewSetting,
+  type TextIntegrityServiceSettings,
 } from '../server/config.server.js';
 import {
   SEARCH_REPOSITORY_DESCRIPTIONS,
@@ -77,17 +77,6 @@ function readViewValue(settings: TextIntegrityServiceSettings | undefined, key: 
 const DEFAULT_SMALL_MATCH_WORDS = 8;
 const SMALL_MATCH_MIN = 1;
 const SMALL_MATCH_MAX = 20;
-
-function isSmallMatchesViewSetting(value: unknown): value is SmallMatchesViewSetting {
-  return (
-    value != null &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    typeof (value as Record<string, unknown>).enabled === 'boolean' &&
-    typeof (value as Record<string, unknown>).word_threshold === 'number' &&
-    Number.isFinite((value as Record<string, unknown>).word_threshold)
-  );
-}
 
 function getSmallMatchesWordThreshold(
   settings: TextIntegrityServiceSettings | undefined,

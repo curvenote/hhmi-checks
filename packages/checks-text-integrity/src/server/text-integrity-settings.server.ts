@@ -1,7 +1,8 @@
-import type {
-  SmallMatchesViewSetting,
-  TextIntegrityServiceSettings,
-  TextIntegrityViewSettingValue,
+import {
+  isSmallMatchesViewSetting,
+  type SmallMatchesViewSetting,
+  type TextIntegrityServiceSettings,
+  type TextIntegrityViewSettingValue,
 } from './config.server.js';
 import {
   SEARCH_REPOSITORY_IDS,
@@ -219,17 +220,6 @@ export function tenantViewSettingEnabled(
 
 const SMALL_MATCH_MIN = 1;
 const SMALL_MATCH_MAX = 20;
-
-function isSmallMatchesViewSetting(value: unknown): value is SmallMatchesViewSetting {
-  return (
-    value != null &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    typeof (value as Record<string, unknown>).enabled === 'boolean' &&
-    typeof (value as Record<string, unknown>).word_threshold === 'number' &&
-    Number.isFinite((value as Record<string, unknown>).word_threshold)
-  );
-}
 
 function readSmallMatchesViewSetting(
   settings: TextIntegrityServiceSettings,

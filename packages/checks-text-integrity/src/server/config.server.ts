@@ -14,6 +14,17 @@ export type SmallMatchesViewSetting = {
   word_threshold: number;
 };
 
+export function isSmallMatchesViewSetting(value: unknown): value is SmallMatchesViewSetting {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).enabled === 'boolean' &&
+    typeof (value as Record<string, unknown>).word_threshold === 'number' &&
+    Number.isFinite((value as Record<string, unknown>).word_threshold)
+  );
+}
+
 export type TextIntegrityViewSettingValue = boolean | SmallMatchesViewSetting;
 
 /** Admin-editable defaults (generation_settings + view_settings only). */
