@@ -1,11 +1,8 @@
 import type { TextIntegrityServiceSettings } from '../server/config.server.js';
 import {
-  ADD_TO_INDEX_DESCRIPTION,
-  EXCLUDE_SELF_MATCHING_SCOPE_DESCRIPTION,
   SEARCH_REPOSITORY_DESCRIPTIONS,
   SEARCH_REPOSITORY_IDS,
   SEARCH_REPOSITORY_LABELS,
-  SELF_MATCHING_OPTIONS,
   VIEW_SETTING_DESCRIPTIONS,
   VIEW_SETTING_KEYS,
   VIEW_SETTING_LABELS,
@@ -20,8 +17,6 @@ export {
   VIEW_SETTING_KEYS,
   VIEW_SETTING_LABELS,
   VIEW_SETTING_DESCRIPTIONS,
-  ADD_TO_INDEX_DESCRIPTION,
-  EXCLUDE_SELF_MATCHING_SCOPE_DESCRIPTION,
   type SearchRepositoryId,
   type ViewSettingKey,
 };
@@ -52,20 +47,8 @@ export type SmallMatchesNumericDescriptor = {
 
 export type SwitchOptionDescriptor = BooleanSwitchDescriptor | SmallMatchesNumericDescriptor;
 
-export type ToggleGroupOptionDescriptor = {
-  name: string;
-  label: string;
-  description: string;
-  options: { value: string; label: string; description: string }[];
-  defaultValue: string;
-  featureEnabled: boolean;
-  disabled: boolean;
-};
-
 export type SettingsConfig = {
-  indexing: BooleanSwitchDescriptor;
   searchRepositories: BooleanSwitchDescriptor[];
-  excludeSelfMatchingScope: ToggleGroupOptionDescriptor;
   viewSettings: SwitchOptionDescriptor[];
 };
 
@@ -159,30 +142,6 @@ export function deriveSettingsConfig(
     });
   }
 
-  const hasSelfMatchKey =
-    generationSettings != null && 'submission_auto_excludes' in generationSettings;
-  const selfMatchFeatureEnabled =
-    hasSelfMatchKey && generationSettings!.submission_auto_excludes === true;
-
-  const scopeSaved = settings?.similarity?.generation_settings?.auto_exclude_self_matching_scope;
-  let scopeValue: string =
-    typeof scopeSaved === 'string' && (scopeSaved === 'ALL' || scopeSaved === 'NONE')
-      ? scopeSaved
-      : 'NONE';
-  if (!selfMatchFeatureEnabled) {
-    scopeValue = 'NONE';
-  }
-
-  const excludeSelfMatchingScope: ToggleGroupOptionDescriptor = {
-    name: 'auto_exclude_self_matching_scope',
-    label: 'Exclude self matching scope',
-    description: EXCLUDE_SELF_MATCHING_SCOPE_DESCRIPTION,
-    options: [...SELF_MATCHING_OPTIONS],
-    defaultValue: scopeValue,
-    featureEnabled: selfMatchFeatureEnabled,
-    disabled: !selfMatchFeatureEnabled,
-  };
-
   const viewDescriptors: SwitchOptionDescriptor[] = [];
   for (const key of VIEW_SETTING_KEYS) {
     const featureEnabled = viewFeatures != null && viewFeatures[key] === true;
@@ -211,20 +170,8 @@ export function deriveSettingsConfig(
     });
   }
 
-  const indexing: BooleanSwitchDescriptor = {
-    kind: 'boolean',
-    name: 'add_to_index',
-    label: 'Add to index',
-    description: ADD_TO_INDEX_DESCRIPTION,
-    defaultValue: settings?.indexing_settings?.add_to_index === true,
-    featureEnabled: true,
-    disabled: false,
-  };
-
   return {
-    indexing,
     searchRepositories,
-    excludeSelfMatchingScope,
     viewSettings: viewDescriptors,
   };
 }

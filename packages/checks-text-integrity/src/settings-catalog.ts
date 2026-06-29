@@ -16,7 +16,6 @@ export const SEARCH_REPOSITORY_LABELS: Record<SearchRepositoryId, string> = {
   CROSSREF: 'Crossref (Publications)',
   CROSSREF_POSTED_CONTENT: 'Crossref Posted Content (Preprints)',
 };
-
 export const SEARCH_REPOSITORY_DESCRIPTIONS: Record<SearchRepositoryId, string> = {
   INTERNET:
     'Use this search repository to compare against content in the internet search repository',
@@ -81,22 +80,3 @@ export const VIEW_SETTING_DESCRIPTIONS: Record<ViewSettingKey, string> = {
   exclude_custom_sections:
     'If set to true, text matched to the custom sections defined in the admin settings will not count as similar content',
 };
-
-export const ADD_TO_INDEX_DESCRIPTION =
-  'If set, the submission will be added to all valid node groups for future matching';
-
-export const EXCLUDE_SELF_MATCHING_SCOPE_DESCRIPTION =
-  'Control how self-matching submissions are excluded from the Similarity Report.';
-
-export const SELF_MATCHING_OPTIONS = [
-  {
-    value: 'NONE',
-    label: 'NONE',
-    description: 'Exclude no self matching submissions from Similarity Report',
-  },
-  {
-    value: 'ALL',
-    label: 'ALL',
-    description: 'Exclude all self matching submissions from Similarity Report',
-  },
-] as const;

@@ -208,14 +208,6 @@ export function tenantViewSettingEnabled(
   return (sim.view_settings as Record<string, unknown>)[key] === true;
 }
 
-export function tenantSelfMatchEnabled(features: Record<string, unknown>): boolean {
-  const sim = getFeaturesSimilarity(features);
-  if (!sim) return false;
-  const gen = sim.generation_settings;
-  if (!isRecord(gen) || !('submission_auto_excludes' in gen)) return false;
-  return gen.submission_auto_excludes === true;
-}
-
 const SMALL_MATCH_MIN = 1;
 const SMALL_MATCH_MAX = 999;
 
