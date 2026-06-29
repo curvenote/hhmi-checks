@@ -1,0 +1,17 @@
+---
+description: HHMI checks nested repo workflow
+alwaysApply: true
+---
+
+# HHMI Checks Nested Repo Workflow
+
+- Treat `extensions/hhmi-checks` as its own git repository. Run git status, diffs, commits, tests, and package scripts from that directory unless the user explicitly asks for top-level `curvenote` work.
+- Prefer scoped package checks while editing text-integrity code:
+  - `npm run compile --workspace @hhmi/checks-text-integrity`
+  - `npm run test --workspace @hhmi/checks-text-integrity`
+  - `npm run lint --workspace @hhmi/checks-text-integrity`
+  - `npm run lint:format:fix --workspace @hhmi/checks-text-integrity`
+  - `npm run lint:format --workspace @hhmi/checks-text-integrity`
+- Quote React Router route paths that contain `$`, for example `'packages/checks-text-integrity/src/routes/app.checks-text-integrity.download-pdf.$id/route.tsx'`.
+- If root-level `/Users/stevejpurves/dev/curvenote` checks are required, run them separately and report unrelated root changes or warnings instead of folding them into extension work.
+- Prefer pure helpers plus focused specs for route/action behavior so nested-package changes can be tested without loading the entire top-level workspace.
