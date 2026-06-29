@@ -28,6 +28,7 @@ function setLinearStage(
   status: LinearStageStatus,
   receivedAt: string,
   error?: string,
+  errorCode?: string,
 ): TextIntegrityStages {
   const prev = stages[key] as LinearStage | undefined;
   const prevStatus = prev?.status;
@@ -49,8 +50,20 @@ function setLinearStage(
       timestamp: receivedAt,
       history,
       ...(error ? { error } : {}),
+      ...(errorCode ? { errorCode } : {}),
     },
   } as TextIntegrityStages;
+}
+
+function getPayloadErrorCode(payload: WebhookBody['payload']): string | undefined {
+  const code = payload?.error_code;
+  return typeof code === 'string' && code.trim() !== '' ? code.trim() : undefined;
+}
+
+function getPayloadErrorMessage(payload: WebhookBody['payload'], fallback: string): string {
+  const message = payload?.error_message;
+  if (typeof message === 'string' && message.trim() !== '') return message.trim();
+  return getPayloadErrorCode(payload) ?? fallback;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,6 +127,7 @@ export function applyWebhookEvent(
   let reportPdfId: string | undefined = current.reportPdfId;
   let reportPdfUrl: string | undefined = current.reportPdfUrl;
   let errorMessage: string | undefined;
+  let errorCode: string | undefined;
 
   function mergeReportPayload(reportObj: unknown) {
     if (!reportObj || typeof reportObj !== 'object') return;
@@ -133,11 +147,16 @@ export function applyWebhookEvent(
 
     case WebhookEvent.SubmissionFailed: {
       if (stages.submission.status === 'error') break;
-      errorMessage =
-        typeof webhook.payload?.error_message === 'string'
-          ? webhook.payload.error_message
-          : 'Submission failed';
-      updatedStages = setLinearStage(stages, 'submission', 'error', receivedAt, errorMessage);
+      errorCode = getPayloadErrorCode(webhook.payload);
+      errorMessage = getPayloadErrorMessage(webhook.payload, 'Submission failed');
+      updatedStages = setLinearStage(
+        stages,
+        'submission',
+        'error',
+        receivedAt,
+        errorMessage,
+        errorCode,
+      );
       break;
     }
 
@@ -184,15 +203,13 @@ export function applyWebhookEvent(
 
     case WebhookEvent.ProcessingPhaseFailed: {
       if (stages.processing?.status === 'error') break;
-      errorMessage =
-        typeof webhook.payload?.error_message === 'string'
-          ? webhook.payload.error_message
-          : 'Processing phase failed';
+      errorCode = getPayloadErrorCode(webhook.payload);
+      errorMessage = getPayloadErrorMessage(webhook.payload, 'Processing phase failed');
       let s = stages;
       if (s.submission.status !== 'completed' && s.submission.status !== 'notify-skipped') {
         s = setLinearStage(s, 'submission', 'notify-skipped', receivedAt);
       }
-      updatedStages = setLinearStage(s, 'processing', 'error', receivedAt, errorMessage);
+      updatedStages = setLinearStage(s, 'processing', 'error', receivedAt, errorMessage, errorCode);
       break;
     }
 
@@ -250,10 +267,8 @@ export function applyWebhookEvent(
 
     case WebhookEvent.ReportGenerationFailed: {
       if (stages.reportGeneration?.status === 'error') break;
-      errorMessage =
-        typeof webhook.payload?.error_message === 'string'
-          ? webhook.payload.error_message
-          : 'Report generation failed';
+      errorCode = getPayloadErrorCode(webhook.payload);
+      errorMessage = getPayloadErrorMessage(webhook.payload, 'Report generation failed');
       let s = stages;
       if (s.submission.status !== 'completed' && s.submission.status !== 'notify-skipped') {
         s = setLinearStage(s, 'submission', 'notify-skipped', receivedAt);
@@ -261,7 +276,14 @@ export function applyWebhookEvent(
       if (s.processing?.status !== 'completed' && s.processing?.status !== 'notify-skipped') {
         s = setLinearStage(s, 'processing', 'notify-skipped', receivedAt);
       }
-      updatedStages = setLinearStage(s, 'reportGeneration', 'error', receivedAt, errorMessage);
+      updatedStages = setLinearStage(
+        s,
+        'reportGeneration',
+        'error',
+        receivedAt,
+        errorMessage,
+        errorCode,
+      );
       break;
     }
   }
@@ -292,6 +314,7 @@ export function applyWebhookEvent(
       reportPdfId: reportPdfId ?? current.latest?.reportPdfId,
       reportPdfUrl: reportPdfUrl ?? current.latest?.reportPdfUrl,
       errorMessage: errorMessage ?? current.latest?.errorMessage,
+      errorCode: errorCode ?? current.latest?.errorCode,
     },
     webhookHistory,
   };

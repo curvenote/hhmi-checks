@@ -7,6 +7,7 @@ import {
   WebhookEvent,
   getCurrentTextIntegrityState,
   getTextIntegrityError,
+  hasError,
   parseNotifyWebhookJson,
 } from '../schema.js';
 
@@ -276,6 +277,49 @@ describe('Text Integrity State Machine', () => {
       )!;
       expect(getCurrentTextIntegrityState(next)).toBe('error');
       expect(getTextIntegrityError(next)).toBe('Bad document');
+    });
+
+    it('returns visible submission error and preserves error code from SUBMISSION_FAILED', () => {
+      const current: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(
+        current,
+        makeWebhook(WebhookEvent.SubmissionFailed, {
+          error_message: 'The uploaded file type is not supported.',
+          error_code: 'UNSUPPORTED_FILETYPE',
+        }),
+      )!;
+
+      expect(hasError(next)).toBe(true);
+      expect(getCurrentTextIntegrityState(next)).toBe('error');
+      expect(getTextIntegrityError(next)).toBe('The uploaded file type is not supported.');
+      expect(next.stages.submission.status).toBe('error');
+      expect(next.stages.submission.error).toBe('The uploaded file type is not supported.');
+      expect(next.stages.submission.errorCode).toBe('UNSUPPORTED_FILETYPE');
+      expect(next.latest?.errorMessage).toBe('The uploaded file type is not supported.');
+      expect(next.latest?.errorCode).toBe('UNSUPPORTED_FILETYPE');
+    });
+
+    it('falls back to error_code for visible submission error when message is absent', () => {
+      const current: TextIntegrityDataSchema = {
+        stages: {
+          submission: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+      };
+      const next = applyWebhookEvent(
+        current,
+        makeWebhook(WebhookEvent.SubmissionFailed, {
+          error_code: 'TOO_LITTLE_TEXT',
+        }),
+      )!;
+
+      expect(hasError(next)).toBe(true);
+      expect(getTextIntegrityError(next)).toBe('TOO_LITTLE_TEXT');
+      expect(next.stages.submission.errorCode).toBe('TOO_LITTLE_TEXT');
+      expect(next.latest?.errorCode).toBe('TOO_LITTLE_TEXT');
     });
 
     it('returns error on REPORT_GENERATION_FAILED', () => {

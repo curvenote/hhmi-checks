@@ -29,6 +29,7 @@ export const LinearStageSchema = z.object({
   ),
   timestamp: z.string(),
   error: z.string().optional(),
+  errorCode: z.string().optional(),
 });
 
 export type LinearStage = z.infer<typeof LinearStageSchema>;
@@ -122,6 +123,7 @@ export const TextIntegrityLatestSchema = z.object({
   reportPdfId: z.string().optional(),
   reportPdfUrl: z.string().optional(),
   errorMessage: z.string().optional(),
+  errorCode: z.string().optional(),
 });
 export type TextIntegrityLatest = z.infer<typeof TextIntegrityLatestSchema>;
 
