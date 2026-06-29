@@ -41,7 +41,7 @@ export type SmallMatchesNumericDescriptor = {
   name: string;
   label: string;
   description: string;
-  defaultValue: boolean;
+  enabled: boolean;
   /** Default/minimum value when the option is switched on. */
   wordThreshold: number;
   featureEnabled: boolean;
@@ -167,7 +167,7 @@ export function deriveSettingsConfig(
         name: 'exclude_small_matches',
         label: VIEW_SETTING_LABELS[key],
         description: VIEW_SETTING_DESCRIPTIONS[key],
-        defaultValue: getSmallMatchesEnabled(settings, featureEnabled),
+        enabled: getSmallMatchesEnabled(settings, featureEnabled),
         wordThreshold: getSmallMatchesWordThreshold(settings, featureEnabled),
         featureEnabled,
         disabled: !featureEnabled,

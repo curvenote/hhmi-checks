@@ -107,7 +107,7 @@ describe('text integrity exclude small matches setting', () => {
 
     expect(descriptor).toMatchObject({
       kind: 'smallMatches',
-      defaultValue: false,
+      enabled: false,
       wordThreshold: 8,
       disabled: false,
     });
@@ -129,8 +129,29 @@ describe('text integrity exclude small matches setting', () => {
 
     expect(descriptor).toMatchObject({
       kind: 'smallMatches',
-      defaultValue: true,
+      enabled: true,
       wordThreshold: 12,
+    });
+  });
+
+  it('treats a legacy true value as enabled with the default threshold', () => {
+    const config = deriveSettingsConfig({
+      features: SMALL_MATCH_FEATURES,
+      settings: {
+        similarity: {
+          view_settings: {
+            exclude_small_matches: true,
+          },
+        },
+      },
+    });
+
+    const descriptor = config?.viewSettings.find((d) => d.name === 'exclude_small_matches');
+
+    expect(descriptor).toMatchObject({
+      kind: 'smallMatches',
+      enabled: true,
+      wordThreshold: 8,
     });
   });
 
@@ -150,7 +171,7 @@ describe('text integrity exclude small matches setting', () => {
 
     expect(descriptor).toMatchObject({
       kind: 'smallMatches',
-      defaultValue: false,
+      enabled: false,
       wordThreshold: 8,
     });
   });
@@ -229,11 +250,18 @@ describe('text integrity exclude small matches setting', () => {
     });
   });
 
-  it('omits disabled or legacy small-match values from relay context and includes valid thresholds', () => {
+  it('omits disabled small-match values from relay context and includes valid thresholds', () => {
     const disabled = buildRelayContextEnvelope({
       similarity: {
         view_settings: {
           exclude_small_matches: 0,
+        },
+      },
+    });
+    const legacyTrue = buildRelayContextEnvelope({
+      similarity: {
+        view_settings: {
+          exclude_small_matches: true,
         },
       },
     });
@@ -246,6 +274,9 @@ describe('text integrity exclude small matches setting', () => {
     });
 
     expect(disabled).toBeUndefined();
+    expect(legacyTrue?.payload.report.view).toEqual({
+      excludeSmallMatches: 8,
+    });
     expect(enabled?.payload.report.view).toEqual({
       excludeSmallMatches: 12,
     });

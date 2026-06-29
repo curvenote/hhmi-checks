@@ -10,7 +10,7 @@ type AnonymousReportPayload = {
   };
 };
 
-const SMALL_MATCH_MIN = 8;
+const DEFAULT_SMALL_MATCH_WORDS = 8;
 
 export type TextIntegrityRelayContextEnvelope = {
   v: 1;
@@ -39,7 +39,9 @@ function mapViewSettingsToAnonymousPayload(
   for (const [sourceKey, targetKey] of pairs) {
     const v = raw[sourceKey];
     if (sourceKey === 'exclude_small_matches') {
-      if (typeof v === 'number' && Number.isFinite(v) && v >= SMALL_MATCH_MIN) {
+      if (v === true) {
+        out[targetKey] = DEFAULT_SMALL_MATCH_WORDS;
+      } else if (typeof v === 'number' && Number.isFinite(v) && v >= DEFAULT_SMALL_MATCH_WORDS) {
         out[targetKey] = Math.floor(v);
       }
       continue;

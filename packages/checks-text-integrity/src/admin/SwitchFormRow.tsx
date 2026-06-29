@@ -104,26 +104,26 @@ function SmallMatchesFormRow({
 }) {
   const fetcher = useFetcher<ActionData>();
   const revalidator = useRevalidator();
-  const [checked, setChecked] = useState(descriptor.defaultValue);
+  const [checked, setChecked] = useState(descriptor.enabled);
   const [draft, setDraft] = useState(() => String(descriptor.wordThreshold));
 
   useEffect(() => {
-    setChecked(descriptor.defaultValue);
+    setChecked(descriptor.enabled);
     setDraft(String(descriptor.wordThreshold));
-  }, [descriptor.defaultValue, descriptor.wordThreshold]);
+  }, [descriptor.enabled, descriptor.wordThreshold]);
 
   useEffect(() => {
     if (fetcher.state !== 'idle' || !fetcher.data) return;
     if (fetcher.data.error) {
       ui.toastError(fetcher.data.error.message);
-      setChecked(descriptor.defaultValue);
+      setChecked(descriptor.enabled);
       setDraft(String(descriptor.wordThreshold));
       return;
     }
     if (fetcher.data.success) {
       revalidator.revalidate();
     }
-  }, [fetcher.state, fetcher.data, descriptor.defaultValue, descriptor.wordThreshold, revalidator]);
+  }, [fetcher.state, fetcher.data, descriptor.enabled, descriptor.wordThreshold, revalidator]);
 
   const commitThreshold = useCallback(
     (rawValue: string = draft) => {
