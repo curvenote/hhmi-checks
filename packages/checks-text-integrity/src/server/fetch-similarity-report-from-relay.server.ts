@@ -154,7 +154,8 @@ export async function fetchSimilarityReportPdfFromRelayWhenReady(
       if (attempt === attempts || !shouldRetryPdfFetch(err)) {
         throw err;
       }
-      await sleep(getRetryAfterDelayMs(err) ?? delayMs);
+      const retryAfterDelayMs = getRetryAfterDelayMs(err);
+      await sleep(retryAfterDelayMs && retryAfterDelayMs > 0 ? retryAfterDelayMs : delayMs);
     }
   }
 
