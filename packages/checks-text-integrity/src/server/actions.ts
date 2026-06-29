@@ -171,6 +171,25 @@ type RelayRecoveryAction =
   | { action: 'retryLocal'; leaseOwner: string }
   | { action: 'skip' };
 
+type RelayRecoveryWarningResult = ExtensionCheckHandleActionResult & {
+  recovery: {
+    ok: false;
+    message: string;
+    status: number;
+  };
+};
+
+function relayRecoveryWarningResult(message: string, status = 502): RelayRecoveryWarningResult {
+  return {
+    success: true,
+    recovery: {
+      ok: false,
+      message,
+      status,
+    },
+  };
+}
+
 async function planRelayRecovery(
   checkRunId: string,
   recovery: RelayRecoveryHint,
@@ -179,7 +198,7 @@ async function planRelayRecovery(
   const leaseOwner = uuid();
   const requestedAt = new Date();
   const leaseExpiresAt = new Date(requestedAt.getTime() + RELAY_RECOVERY_LEASE_MS).toISOString();
-  let plan: RelayRecoveryAction = { action: 'skip' };
+  const planRef: { current: RelayRecoveryAction } = { current: { action: 'skip' } };
 
   const row = await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
     const next = planRelayRecoveryData(data, recovery, {
@@ -190,15 +209,16 @@ async function planRelayRecovery(
       userId,
     });
     if (next.action === 'startRelay') {
-      plan = { action: 'startRelay', leaseOwner };
+      planRef.current = { action: 'startRelay', leaseOwner };
       return next.data as Prisma.JsonObject;
     }
     if (next.action === 'retryLocal') {
-      plan = { action: 'retryLocal', leaseOwner: next.leaseOwner };
+      planRef.current = { action: 'retryLocal', leaseOwner: next.leaseOwner };
     }
     return null;
   });
 
+  const plan = planRef.current;
   const parsed = textIntegrityDataSchema.safeParse((row.data as CheckServiceRunData)?.serviceData);
   if (
     plan.action === 'startRelay' &&
@@ -668,16 +688,12 @@ export async function handleTextIntegrityAction(
             startBody,
           );
         } catch (e) {
-          return {
-            error: {
-              type: 'general',
-              message:
-                e instanceof Error
-                  ? e.message
-                  : 'Failed to contact checks-relay for report generation recovery',
-            },
-            status: 502,
-          };
+          return relayRecoveryWarningResult(
+            e instanceof Error
+              ? e.message
+              : 'Failed to contact checks-relay for report generation recovery',
+            502,
+          );
         }
 
         const startText = await startResponse.text().catch(() => '');
@@ -692,13 +708,10 @@ export async function handleTextIntegrityAction(
             typeof startJson.message === 'string'
               ? startJson.message
               : `Checks relay recovery start failed (${startResponse.status})`;
-          return {
-            error: { type: 'general', message },
-            status:
-              startResponse.status >= 400 && startResponse.status < 600
-                ? startResponse.status
-                : 502,
-          };
+          return relayRecoveryWarningResult(
+            message,
+            startResponse.status >= 400 && startResponse.status < 600 ? startResponse.status : 502,
+          );
         }
 
         await markRelayRecoveryStarted(checkRunId, recoveryAction.leaseOwner);
