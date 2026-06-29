@@ -16,7 +16,7 @@ export interface TextIntegrityDefaults {
       search_repositories?: string[];
       submission_auto_excludes?: boolean;
     };
-    view_settings?: Record<string, boolean>;
+    view_settings?: Record<string, boolean | number>;
   };
 }
 
@@ -253,7 +253,7 @@ export function syncDefaultsFromFeatures(
           search_repositories?: string[];
           submission_auto_excludes?: boolean;
         };
-        view_settings?: Record<string, boolean>;
+        view_settings?: Record<string, boolean | number>;
       }
     | undefined;
   const next: TextIntegrityDefaults = { similarity: {} };
@@ -278,7 +278,7 @@ export function syncDefaultsFromFeatures(
     next.similarity!.view_settings = {};
     for (const key of Object.keys(enabledView)) {
       next.similarity!.view_settings![key] =
-        existingView[key] ?? (enabledView as Record<string, boolean>)[key] ?? false;
+        existingView[key] ?? (enabledView as Record<string, boolean | number>)[key] ?? false;
     }
   }
 

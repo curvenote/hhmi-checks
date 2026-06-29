@@ -10,6 +10,8 @@ type AnonymousReportPayload = {
   };
 };
 
+const SMALL_MATCH_MIN = 8;
+
 export type TextIntegrityRelayContextEnvelope = {
   v: 1;
   payload: AnonymousReportPayload;
@@ -36,7 +38,13 @@ function mapViewSettingsToAnonymousPayload(
   ];
   for (const [sourceKey, targetKey] of pairs) {
     const v = raw[sourceKey];
-    if (typeof v === 'boolean' || typeof v === 'number') out[targetKey] = v;
+    if (sourceKey === 'exclude_small_matches') {
+      if (typeof v === 'number' && Number.isFinite(v) && v >= SMALL_MATCH_MIN) {
+        out[targetKey] = Math.floor(v);
+      }
+      continue;
+    }
+    if (typeof v === 'boolean') out[targetKey] = v;
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }

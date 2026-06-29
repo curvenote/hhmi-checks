@@ -94,6 +94,7 @@ function BooleanSwitchFormRow({
   );
 }
 
+const SMALL_MATCH_MIN = 8;
 const SMALL_MATCH_MAX = 999;
 
 function SmallMatchesFormRow({
@@ -103,32 +104,55 @@ function SmallMatchesFormRow({
 }) {
   const fetcher = useFetcher<ActionData>();
   const revalidator = useRevalidator();
+  const [checked, setChecked] = useState(descriptor.defaultValue);
   const [draft, setDraft] = useState(() => String(descriptor.wordThreshold));
 
   useEffect(() => {
+    setChecked(descriptor.defaultValue);
     setDraft(String(descriptor.wordThreshold));
-  }, [descriptor.wordThreshold]);
+  }, [descriptor.defaultValue, descriptor.wordThreshold]);
 
   useEffect(() => {
     if (fetcher.state !== 'idle' || !fetcher.data) return;
     if (fetcher.data.error) {
       ui.toastError(fetcher.data.error.message);
+      setChecked(descriptor.defaultValue);
       setDraft(String(descriptor.wordThreshold));
       return;
     }
     if (fetcher.data.success) {
       revalidator.revalidate();
     }
-  }, [fetcher.state, fetcher.data, descriptor.wordThreshold, revalidator]);
+  }, [fetcher.state, fetcher.data, descriptor.defaultValue, descriptor.wordThreshold, revalidator]);
 
-  const commit = useCallback(() => {
-    if (descriptor.disabled) return;
-    let t = Math.floor(Number.parseInt(draft, 10));
-    if (Number.isNaN(t)) t = descriptor.wordThreshold;
-    t = Math.min(SMALL_MATCH_MAX, Math.max(0, t));
-    setDraft(String(t));
-    submitUpdate(fetcher, descriptor.name, String(t));
-  }, [descriptor.disabled, draft, descriptor.wordThreshold, fetcher, descriptor.name]);
+  const commitThreshold = useCallback(
+    (rawValue: string = draft) => {
+      if (descriptor.disabled || !checked) return;
+      let threshold = Math.floor(Number.parseInt(rawValue, 10));
+      if (Number.isNaN(threshold)) threshold = descriptor.wordThreshold;
+      threshold = Math.min(SMALL_MATCH_MAX, Math.max(SMALL_MATCH_MIN, threshold));
+      setDraft(String(threshold));
+      submitUpdate(fetcher, descriptor.name, String(threshold));
+    },
+    [checked, descriptor.disabled, descriptor.name, descriptor.wordThreshold, draft, fetcher],
+  );
+
+  const onCheckedChange = useCallback(
+    (next: boolean) => {
+      if (descriptor.disabled) return;
+      setChecked(next);
+      if (!next) {
+        submitUpdate(fetcher, descriptor.name, 'false');
+        return;
+      }
+      let threshold = Math.floor(Number.parseInt(draft, 10));
+      if (Number.isNaN(threshold)) threshold = descriptor.wordThreshold;
+      threshold = Math.min(SMALL_MATCH_MAX, Math.max(SMALL_MATCH_MIN, threshold));
+      setDraft(String(threshold));
+      submitUpdate(fetcher, descriptor.name, String(threshold));
+    },
+    [descriptor.disabled, descriptor.name, descriptor.wordThreshold, draft, fetcher],
+  );
 
   return (
     <div
@@ -138,23 +162,36 @@ function SmallMatchesFormRow({
         <span className="text-sm font-medium">{descriptor.label}</span>
         <SettingHint description={descriptor.description} />
       </div>
-      <div className="flex w-full max-w-xs flex-col items-stretch gap-1 sm:w-auto sm:items-end">
-        <ui.Input
-          type="number"
-          min={0}
-          max={SMALL_MATCH_MAX}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commit();
-          }}
-          disabled={descriptor.disabled}
-          className="h-9 w-full font-mono text-sm sm:w-24"
-          aria-label="Minimum word count for a match to count toward similarity (0 = off)"
-        />
-        <p className="text-xs text-muted-foreground sm:text-right">
-          Matches shorter than this many words are ignored. Use 0 to disable. Typical value is 8.
+      <div className="flex w-full max-w-xs flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+        <div className="flex items-center justify-end gap-3">
+          <ui.Switch
+            checked={checked}
+            onCheckedChange={onCheckedChange}
+            disabled={descriptor.disabled}
+            aria-label={descriptor.label}
+            className="h-[1.15rem] w-8 shrink-0 cursor-pointer data-[state=checked]:bg-primary disabled:cursor-not-allowed"
+          />
+          <ui.Input
+            type="number"
+            min={SMALL_MATCH_MIN}
+            max={SMALL_MATCH_MAX}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => commitThreshold()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitThreshold();
+            }}
+            disabled={descriptor.disabled || !checked}
+            className="h-9 w-full font-mono text-sm sm:w-24"
+            aria-label="Minimum word count for a match to count toward similarity"
+          />
+        </div>
+        <p
+          className={`text-xs sm:text-right ${
+            checked && !descriptor.disabled ? 'text-muted-foreground' : 'text-muted-foreground/70'
+          }`}
+        >
+          Matches shorter than this many words are ignored. Minimum value is 8.
         </p>
       </div>
     </div>

@@ -35,13 +35,14 @@ export type BooleanSwitchDescriptor = {
   disabled: boolean;
 };
 
-/** Word-count threshold; 0 means small-match exclusion is off (provider numeric field). */
+/** Word-count threshold; missing stored setting means small-match exclusion is off. */
 export type SmallMatchesNumericDescriptor = {
   kind: 'smallMatches';
   name: string;
   label: string;
   description: string;
-  /** 0 = off; typical default when on is 8 (product default). */
+  defaultValue: boolean;
+  /** Default/minimum value when the option is switched on. */
   wordThreshold: number;
   featureEnabled: boolean;
   disabled: boolean;
@@ -71,20 +72,33 @@ function readViewValue(settings: TextIntegrityServiceSettings | undefined, key: 
 }
 
 const DEFAULT_SMALL_MATCH_WORDS = 8;
+const SMALL_MATCH_MAX = 999;
 
 function getSmallMatchesWordThreshold(
   settings: TextIntegrityServiceSettings | undefined,
   featureEnabled: boolean,
 ): number {
-  if (!featureEnabled) return 0;
+  if (!featureEnabled) return DEFAULT_SMALL_MATCH_WORDS;
   const raw = readViewValue(settings, 'exclude_small_matches');
-  if (typeof raw === 'number' && !Number.isNaN(raw)) {
-    return Math.min(999, Math.max(0, Math.floor(raw)));
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= DEFAULT_SMALL_MATCH_WORDS) {
+    return Math.min(SMALL_MATCH_MAX, Math.floor(raw));
   }
   if (raw === true) {
     return DEFAULT_SMALL_MATCH_WORDS;
   }
   return DEFAULT_SMALL_MATCH_WORDS;
+}
+
+function getSmallMatchesEnabled(
+  settings: TextIntegrityServiceSettings | undefined,
+  featureEnabled: boolean,
+): boolean {
+  if (!featureEnabled) return false;
+  const raw = readViewValue(settings, 'exclude_small_matches');
+  return (
+    raw === true ||
+    (typeof raw === 'number' && Number.isFinite(raw) && raw >= DEFAULT_SMALL_MATCH_WORDS)
+  );
 }
 
 /**
@@ -153,6 +167,7 @@ export function deriveSettingsConfig(
         name: 'exclude_small_matches',
         label: VIEW_SETTING_LABELS[key],
         description: VIEW_SETTING_DESCRIPTIONS[key],
+        defaultValue: getSmallMatchesEnabled(settings, featureEnabled),
         wordThreshold: getSmallMatchesWordThreshold(settings, featureEnabled),
         featureEnabled,
         disabled: !featureEnabled,
