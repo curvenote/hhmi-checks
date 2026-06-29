@@ -27,4 +27,20 @@ describe('resolveSimilarityReportDownloadSource', () => {
       kind: 'relay',
     });
   });
+
+  it('falls back to relay when the stored PDF has been invalidated', () => {
+    const path = 'wv-key/generated/run-1/similarity-report.pdf';
+    const data = {
+      ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+      similarityReportStored: true,
+      similarityReportPdfInvalidated: true,
+      files: {
+        [path]: buildSimilarityReportFileEntry(path, 100, 'abc', '2025-01-01'),
+      },
+    };
+
+    expect(resolveSimilarityReportDownloadSource(data)).toEqual({
+      kind: 'relay',
+    });
+  });
 });

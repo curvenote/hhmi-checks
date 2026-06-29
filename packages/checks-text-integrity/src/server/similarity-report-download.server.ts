@@ -12,6 +12,9 @@ export type SimilarityReportDownloadSource =
 export function resolveSimilarityReportDownloadSource(
   serviceData: TextIntegrityDataSchema,
 ): SimilarityReportDownloadSource {
+  if (serviceData.similarityReportPdfInvalidated) {
+    return { kind: 'relay' };
+  }
   const stored = getStoredSimilarityReportFile(serviceData);
   if (stored?.path) {
     return {

@@ -43,6 +43,24 @@ function processingCompleteWebhook(): WebhookBody {
   });
 }
 
+function similarityUpdatedWebhook(
+  event: WebhookEvent.ProcessingPhaseStarted | WebhookEvent.ProcessingPhaseComplete,
+  status: 'PROCESSING' | 'COMPLETE',
+  overallMatchPercentage = 7,
+): WebhookBody {
+  return {
+    event,
+    metadata: { provider_event: 'SIMILARITY_UPDATED' },
+    payload: {
+      similarity_report: {
+        ...SAMPLE_SIMILARITY_REPORT,
+        status,
+        overall_match_percentage: overallMatchPercentage,
+      },
+    },
+  };
+}
+
 function reportCompleteWebhook(): WebhookBody {
   return makeWebhook(WebhookEvent.ReportGenerationComplete, {
     report: {
@@ -592,6 +610,79 @@ describe('Text Integrity State Machine', () => {
       expect(next?.stages.processing?.status).toBe('completed');
       expect(next?.summaryReport?.overallMatchPercentage).toBe(7);
       expect(next?.latest?.overallMatchPercentage).toBe(7);
+      expect(next?.similarityReportPdfInvalidated).toBeUndefined();
+    });
+
+    it('SIMILARITY_UPDATED complete refreshes summaryReport and invalidates stored PDF', () => {
+      const initial: TextIntegrityDataSchema = {
+        summaryReport: {
+          submissionId: 'sub-123',
+          status: 'COMPLETE',
+          timeRequested: '2025-01-01T00:00:00Z',
+          overallMatchPercentage: 12,
+          internetMatchPercentage: 5,
+          publicationMatchPercentage: 3,
+          submittedWorksMatchPercentage: 4,
+          topMatches: [],
+          timeGenerated: '2025-01-01T00:01:00Z',
+          topSourceLargestMatchedWordCount: 100,
+        },
+        reportPdfId: 'pdf-001',
+        similarityReportStored: true,
+        storedReportPdfId: 'pdf-001',
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'completed',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      };
+      const receivedAt = '2025-01-01T00:10:00Z';
+      const next = applyWebhookEvent(
+        initial,
+        similarityUpdatedWebhook(WebhookEvent.ProcessingPhaseComplete, 'COMPLETE', 4),
+        receivedAt,
+      );
+
+      expect(next?.stages.processing?.status).toBe('completed');
+      expect(next?.stages.reportGeneration?.status).toBe('completed');
+      expect(next?.summaryReport?.overallMatchPercentage).toBe(4);
+      expect(next?.similarityReportPdfInvalidated).toBe(true);
+      expect(next?.similarityReportPdfInvalidatedAt).toBe(receivedAt);
+      expect(next?.similarityReportPdfInvalidatedByEvent).toBe('SIMILARITY_UPDATED');
+    });
+
+    it('SIMILARITY_UPDATED processing refreshes summaryReport without rewinding completed processing', () => {
+      const initial: TextIntegrityDataSchema = {
+        reportPdfId: 'pdf-001',
+        similarityReportStored: true,
+        storedReportPdfId: 'pdf-001',
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'completed',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      };
+      const receivedAt = '2025-01-01T00:11:00Z';
+      const next = applyWebhookEvent(
+        initial,
+        similarityUpdatedWebhook(WebhookEvent.ProcessingPhaseStarted, 'PROCESSING', 6),
+        receivedAt,
+      );
+
+      expect(next?.stages.processing?.status).toBe('completed');
+      expect(next?.stages.reportGeneration?.status).toBe('completed');
+      expect(next?.summaryReport?.status).toBe('PROCESSING');
+      expect(next?.summaryReport?.overallMatchPercentage).toBe(6);
+      expect(next?.similarityReportPdfInvalidated).toBe(true);
+      expect(next?.similarityReportPdfInvalidatedAt).toBe(receivedAt);
     });
 
     it('REPORT_GENERATION_STARTED when already processing', () => {
@@ -772,6 +863,23 @@ describe('Text Integrity State Machine', () => {
         expect(r.noop).toBe(true);
       } else {
         expect.fail('expected noop branch');
+      }
+    });
+
+    it('preserves relay metadata on mapped notify webhooks', () => {
+      const r = parseNotifyWebhookJson({
+        event: 'PROCESSING_PHASE_COMPLETE',
+        check_id: 'ext-1',
+        client_id: 'run-1',
+        payload: { completed: true },
+        metadata: { provider_event: 'SIMILARITY_UPDATED' },
+      });
+      expect(r.ok).toBe(true);
+      if (r.ok && 'webhook' in r) {
+        expect(r.webhook.event).toBe(WebhookEvent.ProcessingPhaseComplete);
+        expect(r.webhook.metadata).toEqual({ provider_event: 'SIMILARITY_UPDATED' });
+      } else {
+        expect.fail('expected webhook branch');
       }
     });
   });

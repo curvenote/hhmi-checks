@@ -17,6 +17,7 @@ import {
 
 const HISTORY_LIMIT = 20;
 const WEBHOOK_HISTORY_LIMIT = 50;
+const SIMILARITY_UPDATED_PROVIDER_EVENT = 'SIMILARITY_UPDATED';
 
 // ---------------------------------------------------------------------------
 // Stage helpers (mirror proofig's setLinearStage)
@@ -53,6 +54,10 @@ function setLinearStage(
       ...(errorCode ? { errorCode } : {}),
     },
   } as TextIntegrityStages;
+}
+
+function isSimilarityUpdatedWebhook(webhook: WebhookBody): boolean {
+  return webhook.metadata?.provider_event === SIMILARITY_UPDATED_PROVIDER_EVENT;
 }
 
 function getPayloadErrorCode(payload: WebhookBody['payload']): string | undefined {
@@ -126,7 +131,16 @@ export function applyWebhookEvent(
   let summaryReport: StoredSimilarityReport | undefined = current.summaryReport;
   let reportPdfId: string | undefined = current.reportPdfId;
   let reportPdfUrl: string | undefined = current.reportPdfUrl;
+  let similarityReportPdfInvalidated = current.similarityReportPdfInvalidated;
+  let similarityReportPdfInvalidatedAt = current.similarityReportPdfInvalidatedAt;
+  let similarityReportPdfInvalidatedByEvent = current.similarityReportPdfInvalidatedByEvent;
   let errorMessage: string | undefined;
+
+  function invalidateSimilarityPdf() {
+    similarityReportPdfInvalidated = true;
+    similarityReportPdfInvalidatedAt = receivedAt;
+    similarityReportPdfInvalidatedByEvent = SIMILARITY_UPDATED_PROVIDER_EVENT;
+  }
   let errorCode: string | undefined;
 
   function mergeReportPayload(reportObj: unknown) {
@@ -161,6 +175,26 @@ export function applyWebhookEvent(
     }
 
     case WebhookEvent.ProcessingPhaseStarted: {
+      if (isSimilarityUpdatedWebhook(webhook)) {
+        const rawSimilarity =
+          webhook.payload?.similarity_report ?? webhook.payload?.provider_payload;
+        const reportResult = SimilarityReportPayloadSchema.safeParse(rawSimilarity);
+        if (reportResult.success) {
+          summaryReport = toStoredSimilarityReport(reportResult.data);
+        }
+        invalidateSimilarityPdf();
+        if (
+          stages.processing?.status === 'completed' ||
+          stages.processing?.status === 'notify-skipped'
+        ) {
+          updatedStages = stages;
+          break;
+        }
+        if (stages.processing?.status === 'processing') {
+          updatedStages = stages;
+          break;
+        }
+      }
       if (stages.processing?.status === 'processing') break;
       let s = stages;
       if (s.submission.status !== 'completed' && s.submission.status !== 'notify-skipped') {
@@ -178,9 +212,11 @@ export function applyWebhookEvent(
         stages.processing?.status === 'completed' ||
         stages.processing?.status === 'notify-skipped'
       ) {
-        // Viewer filter changes (SIMILARITY_UPDATED): refresh stored report; PDF regen follows via REPORT_GENERATION_*.
         if (!reportResult.success) break;
         summaryReport = toStoredSimilarityReport(reportResult.data);
+        if (isSimilarityUpdatedWebhook(webhook)) {
+          invalidateSimilarityPdf();
+        }
         updatedStages = stages;
         break;
       }
@@ -195,6 +231,9 @@ export function applyWebhookEvent(
 
       if (reportResult.success) {
         summaryReport = toStoredSimilarityReport(reportResult.data);
+      }
+      if (isSimilarityUpdatedWebhook(webhook)) {
+        invalidateSimilarityPdf();
       }
 
       mergeReportPayload(webhook.payload?.report);
@@ -306,6 +345,9 @@ export function applyWebhookEvent(
     summaryReport,
     reportPdfId: reportPdfId ?? current.reportPdfId,
     reportPdfUrl: reportPdfUrl ?? current.reportPdfUrl,
+    similarityReportPdfInvalidated,
+    similarityReportPdfInvalidatedAt,
+    similarityReportPdfInvalidatedByEvent,
     latest: {
       event: webhook.event,
       receivedAt,

@@ -226,6 +226,12 @@ export const textIntegrityDataSchema = z.object({
   similarityReportStored: z.boolean().optional(),
   /** Provider PDF id that was persisted to `files` (used for idempotency on restart). */
   storedReportPdfId: z.string().optional(),
+  /** True when Viewer changes invalidated the archived similarity PDF. */
+  similarityReportPdfInvalidated: z.boolean().optional(),
+  /** Timestamp when the archived similarity PDF was invalidated. */
+  similarityReportPdfInvalidatedAt: z.string().optional(),
+  /** Provider event that invalidated the archived similarity PDF. */
+  similarityReportPdfInvalidatedByEvent: z.string().optional(),
 
   // --- Report data ---
   /** Summary report when processing is complete (camelCase stored shape). */
