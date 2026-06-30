@@ -8,6 +8,19 @@ export type ProofigWorkListSummaryState = {
   underlineClassName: string;
 };
 
+export type ProofigWorkListCompactSummaryState =
+  | {
+      kind: 'icon';
+      icon: 'eye' | 'hourglass';
+      ariaLabel: string;
+      underlineClassName: string;
+    }
+  | {
+      kind: 'text';
+      label: string;
+      underlineClassName: string;
+    };
+
 function problemLabel(count: number) {
   return `${count} ${count === 1 ? 'PROBLEM' : 'PROBLEMS'}`;
 }
@@ -58,5 +71,69 @@ export function getProofigWorkListSummaryState(
   return {
     label: (STAGE_LABELS[currentStage] ?? 'In progress').toUpperCase(),
     underlineClassName,
+  };
+}
+
+export function getProofigWorkListCompactSummaryState(
+  metadata: ProofigDataSchema | undefined,
+): ProofigWorkListCompactSummaryState {
+  const summaryState = getProofigWorkListSummaryState(metadata);
+  const stages = { ...ALL_PENDING_STAGES, ...metadata?.stages };
+  const { currentStage } = getCurrentProofigStage(stages);
+  const { total, matchesReview, bad } = getProofigSummaryCounts(metadata);
+  const awaitingHumanReview = proofigIsAwaitingHumanReview(metadata);
+  const isProblemState = summaryState.underlineClassName === 'bg-destructive' && bad > 0;
+  const isInProgressState =
+    !awaitingHumanReview &&
+    !isProblemState &&
+    currentStage !== 'subimageSelection' &&
+    summaryState.underlineClassName !== 'bg-success';
+
+  if (awaitingHumanReview) {
+    if (total > 0) {
+      return {
+        kind: 'text',
+        label: `${matchesReview}/${total}`,
+        underlineClassName: summaryState.underlineClassName,
+      };
+    }
+    return {
+      kind: 'icon',
+      icon: 'hourglass',
+      ariaLabel: summaryState.label,
+      underlineClassName: summaryState.underlineClassName,
+    };
+  }
+
+  if (currentStage === 'subimageSelection') {
+    return {
+      kind: 'icon',
+      icon: 'eye',
+      ariaLabel: summaryState.label,
+      underlineClassName: summaryState.underlineClassName,
+    };
+  }
+
+  if (isProblemState) {
+    return {
+      kind: 'text',
+      label: String(bad),
+      underlineClassName: summaryState.underlineClassName,
+    };
+  }
+
+  if (isInProgressState) {
+    return {
+      kind: 'icon',
+      icon: 'hourglass',
+      ariaLabel: summaryState.label,
+      underlineClassName: summaryState.underlineClassName,
+    };
+  }
+
+  return {
+    kind: 'text',
+    label: summaryState.label,
+    underlineClassName: summaryState.underlineClassName,
   };
 }

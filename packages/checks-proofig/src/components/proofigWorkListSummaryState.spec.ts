@@ -1,7 +1,10 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { describe, expect, it } from 'vitest';
 import { KnownState, type ProofigDataSchema } from '../schema.js';
-import { getProofigWorkListSummaryState } from './proofigWorkListSummaryState.js';
+import {
+  getProofigWorkListCompactSummaryState,
+  getProofigWorkListSummaryState,
+} from './proofigWorkListSummaryState.js';
 
 const receivedAt = '2026-01-01T00:00:00.000Z';
 
@@ -175,6 +178,144 @@ describe('getProofigWorkListSummaryState', () => {
     expect(state).toEqual({
       label: 'UPLOADING TO PROOFIG',
       underlineClassName: 'bg-primary',
+    });
+  });
+});
+
+describe('getProofigWorkListCompactSummaryState', () => {
+  it('uses an eye icon for sub-image review based on the current stage', () => {
+    const state = getProofigWorkListCompactSummaryState({
+      stages: {
+        initialPost: { status: 'completed', history: [], timestamp: receivedAt },
+        subimageDetection: { status: 'completed', history: [], timestamp: receivedAt },
+        subimageSelection: { status: 'pending', history: [], timestamp: receivedAt },
+      },
+    } as unknown as ProofigDataSchema);
+
+    expect(state).toEqual({
+      kind: 'icon',
+      icon: 'eye',
+      ariaLabel: 'READY FOR SUB-IMAGE REVIEW',
+      underlineClassName: 'bg-warning',
+    });
+  });
+
+  it('uses an hourglass icon for in-progress states', () => {
+    const state = getProofigWorkListCompactSummaryState({
+      stages: {
+        initialPost: { status: 'processing', history: [], timestamp: receivedAt },
+      },
+    } as unknown as ProofigDataSchema);
+
+    expect(state).toEqual({
+      kind: 'icon',
+      icon: 'hourglass',
+      ariaLabel: 'UPLOADING TO PROOFIG',
+      underlineClassName: 'bg-primary',
+    });
+  });
+
+  it('uses a ratio for awaiting review when counts are available', () => {
+    const state = getProofigWorkListCompactSummaryState({
+      summary: {
+        state: KnownState.AwaitingReview,
+        receivedAt,
+        subimagesTotal: 23,
+        matchesReview: 2,
+        matchesReport: 0,
+        inspectsReport: 0,
+      },
+      stages: {
+        resultsReview: {
+          status: 'requested',
+          outcome: 'pending',
+          history: [],
+          timestamp: receivedAt,
+        },
+      },
+    } as unknown as ProofigDataSchema);
+
+    expect(state).toEqual({
+      kind: 'text',
+      label: '2/23',
+      underlineClassName: 'bg-warning',
+    });
+  });
+
+  it('uses an hourglass for awaiting review when counts are not available', () => {
+    const state = getProofigWorkListCompactSummaryState({
+      summary: {
+        state: KnownState.AwaitingReview,
+        receivedAt,
+      },
+      stages: {
+        resultsReview: {
+          status: 'requested',
+          history: [],
+          timestamp: receivedAt,
+        },
+      },
+    } as unknown as ProofigDataSchema);
+
+    expect(state).toEqual({
+      kind: 'icon',
+      icon: 'hourglass',
+      ariaLabel: 'AWAITING REVIEW',
+      underlineClassName: 'bg-warning',
+    });
+  });
+
+  it('uses only the numeric problem count for problem states', () => {
+    const state = getProofigWorkListCompactSummaryState({
+      summary: {
+        state: KnownState.ReportFlagged,
+        receivedAt,
+        subimagesTotal: 23,
+        matchesReview: 4,
+        matchesReport: 2,
+        inspectsReport: 1,
+      },
+      stages: {
+        resultsReview: {
+          status: 'completed',
+          outcome: 'flagged',
+          history: [],
+          timestamp: receivedAt,
+        },
+      },
+    } as unknown as ProofigDataSchema);
+
+    expect(state).toEqual({
+      kind: 'text',
+      label: '3',
+      underlineClassName: 'bg-destructive',
+    });
+  });
+
+  it('keeps the label for compact all-clear states', () => {
+    const state = getProofigWorkListCompactSummaryState({
+      summary: {
+        state: KnownState.ReportClean,
+        receivedAt,
+        subimagesTotal: 23,
+        matchesReview: 0,
+        matchesReport: 0,
+        inspectsReport: 0,
+      },
+      stages: {
+        resultsReview: {
+          status: 'completed',
+          outcome: 'clean',
+          history: [],
+          timestamp: receivedAt,
+        },
+      },
+    } as unknown as ProofigDataSchema);
+
+    expect(state).toEqual({
+      kind: 'text',
+      label: 'ALL CLEAR',
+      underlineClassName: 'bg-success',
     });
   });
 });
