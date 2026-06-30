@@ -5,12 +5,18 @@ import {
   resolveRelayExternalCheckId,
   type AppChecksRelayConfig,
 } from './relay-urls.server.js';
+import { isPdfBytes } from './pdf-bytes.server.js';
 
 export type FetchedSimilarityReportPdf = {
   bytes: Uint8Array;
   contentType: string;
   contentDisposition: string;
 };
+
+function retryAfterInit(relayRes: Response): ResponseInit | undefined {
+  const retryAfter = relayRes.headers.get('retry-after');
+  return retryAfter ? { headers: { 'Retry-After': retryAfter } } : undefined;
+}
 
 export async function fetchSimilarityReportPdfFromRelay(
   relay: AppChecksRelayConfig,
@@ -63,17 +69,27 @@ export async function fetchSimilarityReportPdfFromRelay(
       (typeof body.message === 'string' ? body.message : null) ??
       (typeof body.error === 'string' ? body.error : null) ??
       `Checks relay returned HTTP ${relayRes.status}`;
-    throw httpError(relayRes.status >= 400 && relayRes.status < 600 ? relayRes.status : 502, msg);
+    throw httpError(
+      relayRes.status >= 400 && relayRes.status < 600 ? relayRes.status : 502,
+      msg,
+      undefined,
+      retryAfterInit(relayRes),
+    );
   }
 
   if (!relayRes.ok) {
     throw httpError(
       relayRes.status >= 400 && relayRes.status < 600 ? relayRes.status : 502,
       `Checks relay returned HTTP ${relayRes.status}`,
+      undefined,
+      retryAfterInit(relayRes),
     );
   }
 
   const bytes = new Uint8Array(await relayRes.arrayBuffer());
+  if (!isPdfBytes(bytes)) {
+    throw httpError(502, 'Checks relay returned a non-PDF response for PDF fetch');
+  }
   const contentType = ct && !ct.includes('json') ? ct : 'application/pdf';
   const contentDisposition =
     relayRes.headers.get('content-disposition') ?? 'attachment; filename="similarity-report.pdf"';

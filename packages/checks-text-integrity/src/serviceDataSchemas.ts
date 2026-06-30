@@ -226,6 +226,12 @@ export const textIntegrityDataSchema = z.object({
   similarityReportStored: z.boolean().optional(),
   /** Provider PDF id that was persisted to `files` (used for idempotency on restart). */
   storedReportPdfId: z.string().optional(),
+  /** True when Viewer changes invalidated the archived similarity PDF. */
+  similarityReportPdfInvalidated: z.boolean().optional(),
+  /** Timestamp when the archived similarity PDF was invalidated. */
+  similarityReportPdfInvalidatedAt: z.string().optional(),
+  /** Provider event that invalidated the archived similarity PDF. */
+  similarityReportPdfInvalidatedByEvent: z.string().optional(),
 
   // --- Report data ---
   /** Summary report when processing is complete (camelCase stored shape). */
@@ -348,6 +354,18 @@ export function isWaitingForPdfReport(data: TextIntegrityDataSchema | undefined)
   return status === 'processing' || status === 'pending';
 }
 
+/** True while results can be shown but the current provider PDF is not stored yet. */
+export function isWaitingForStoredPdfReport(data: TextIntegrityDataSchema | undefined): boolean {
+  if (!data?.stages) return false;
+  if (!canShowResults(data)) return false;
+  if (isWaitingForPdfReport(data)) return true;
+  if (data.similarityReportPdfInvalidated === true) return false;
+  if (data.stages.reportGeneration?.status !== 'completed') return false;
+
+  const currentReportPdfId = data.reportPdfId ?? data.latest?.reportPdfId;
+  return data.similarityReportStored !== true || data.storedReportPdfId !== currentReportPdfId;
+}
+
 /** True after dispatch while the check run row exists but `serviceData.stages` is not stamped yet. */
 export function isAwaitingInitialTextIntegrityStages(
   metadata: TextIntegrityDataSchema | undefined,
@@ -364,7 +382,7 @@ export function shouldPollTextIntegrityChecks(
   const hasData = !!metadata?.stages;
   const showResults = canShowResults(metadata);
   const awaitingInitialStages = isAwaitingInitialTextIntegrityStages(metadata, checkRunId);
-  const waitingForPdfReport = showResults && isWaitingForPdfReport(metadata);
+  const waitingForPdfReport = isWaitingForStoredPdfReport(metadata);
   return awaitingInitialStages || (hasData && !showResults) || waitingForPdfReport;
 }
 

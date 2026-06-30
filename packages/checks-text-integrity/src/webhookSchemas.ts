@@ -25,6 +25,7 @@ export const WebhookEventSchema = z.nativeEnum(WebhookEvent);
  */
 export const WebhookBodySchema = z.object({
   event: WebhookEventSchema,
+  metadata: z.record(z.string(), z.unknown()).optional(),
   payload: z
     .object({
       status: z.enum(['PROCESSING', 'SUCCESS', 'FAILED']).optional(),
@@ -71,26 +72,31 @@ export type ParsedNotifyWebhookResult =
 
 function mapRelayEnvelopeToWebhookBody(env: RelayNotifyEnvelopeParsed): WebhookBody | 'noop' {
   const payload = env.payload;
+  const withMetadata = (event: WebhookEvent): WebhookBody => ({
+    event,
+    payload,
+    ...(env.metadata ? { metadata: env.metadata } : {}),
+  });
   switch (env.event) {
     case 'UPLOAD_PENDING':
       return 'noop';
     case 'UPLOAD_ACCEPTED':
     case 'UPLOAD_COMPLETE':
-      return { event: WebhookEvent.SubmissionComplete, payload };
+      return withMetadata(WebhookEvent.SubmissionComplete);
     case 'UPLOAD_FAILED':
-      return { event: WebhookEvent.SubmissionFailed, payload };
+      return withMetadata(WebhookEvent.SubmissionFailed);
     case 'PROCESSING_PHASE_STARTED':
-      return { event: WebhookEvent.ProcessingPhaseStarted, payload };
+      return withMetadata(WebhookEvent.ProcessingPhaseStarted);
     case 'PROCESSING_PHASE_COMPLETE':
-      return { event: WebhookEvent.ProcessingPhaseComplete, payload };
+      return withMetadata(WebhookEvent.ProcessingPhaseComplete);
     case 'PROCESSING_PHASE_FAILED':
-      return { event: WebhookEvent.ProcessingPhaseFailed, payload };
+      return withMetadata(WebhookEvent.ProcessingPhaseFailed);
     case 'REPORT_GENERATION_STARTED':
-      return { event: WebhookEvent.ReportGenerationStarted, payload };
+      return withMetadata(WebhookEvent.ReportGenerationStarted);
     case 'REPORT_GENERATION_COMPLETE':
-      return { event: WebhookEvent.ReportGenerationComplete, payload };
+      return withMetadata(WebhookEvent.ReportGenerationComplete);
     case 'REPORT_GENERATION_FAILED':
-      return { event: WebhookEvent.ReportGenerationFailed, payload };
+      return withMetadata(WebhookEvent.ReportGenerationFailed);
     default:
       console.warn(
         `[checks-text-integrity] Unhandled relay notify event "${env.event}", accepting with no state change`,

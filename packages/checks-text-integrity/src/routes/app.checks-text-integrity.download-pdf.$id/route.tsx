@@ -1,7 +1,6 @@
 import type { LoaderFunctionArgs } from 'react-router';
 import { error405, httpError } from '@curvenote/scms-core';
 import {
-  getConfig,
   getPrismaClient,
   withAppContext,
   File,
@@ -10,17 +9,24 @@ import {
 } from '@curvenote/scms-server';
 import type { TextIntegrityDataSchema } from '../../schema.js';
 import { MINIMAL_TEXT_INTEGRITY_SERVICE_DATA } from '../../schema.js';
-import { getTextIntegrityConfigWithOverrides } from '../../server/config.server.js';
 import { assertSubmitterEulaAccepted } from '../../server/eula.server.js';
-import { fetchSimilarityReportPdfFromRelay } from '../../server/fetch-similarity-report-from-relay.server.js';
-import { getAppChecksFromAppConfig, resolveServiceName } from '../../server/relay-config.server.js';
-import { resolveRelayInstanceId } from '../../server/relay-urls.server.js';
 import { resolveSimilarityReportDownloadSource } from '../../server/similarity-report-download.server.js';
 
 type CheckServiceRunData = {
   status: string;
   serviceData?: TextIntegrityDataSchema;
 };
+
+function pdfPendingResponse(reason: string) {
+  return Response.json(
+    {
+      status: 'pending',
+      reason,
+      message: 'Similarity PDF report is not ready for download yet.',
+    },
+    { status: 409 },
+  );
+}
 
 export async function action() {
   throw error405();
@@ -70,45 +76,10 @@ export async function loader(args: LoaderFunctionArgs) {
         }
       }
     }
+    return pdfPendingResponse('stored-file-missing');
   }
 
-  const pdfId = serviceData.reportPdfId ?? serviceData.latest?.reportPdfId;
-  if (!pdfId) {
-    throw httpError(400, 'No similarity PDF id stored for this run');
-  }
-
-  const appConfig = await getConfig();
-  const checks = getAppChecksFromAppConfig(appConfig);
-  const relayBaseUrl =
-    typeof checks?.relayBaseUrl === 'string' ? checks.relayBaseUrl.trim().replace(/\/$/, '') : '';
-  const relayApiKey = typeof checks?.relayApiKey === 'string' ? checks.relayApiKey : '';
-  if (!relayBaseUrl || !relayApiKey) {
-    throw httpError(503, 'Checks relay is not configured (app.checks.relayBaseUrl / relayApiKey)');
-  }
-
-  const appRoot = (appConfig as Record<string, unknown>)?.app as
-    | Record<string, unknown>
-    | undefined;
-  const extensions = appRoot?.extensions as Record<string, unknown> | undefined;
-  const baseExt =
-    (extensions?.['checks-text-integrity'] as Record<string, unknown> | undefined) ?? {};
-  const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
-  const serviceName = resolveServiceName(mergedConfig);
-  const relayInstanceId = resolveRelayInstanceId(mergedConfig);
-
-  const { bytes, contentType, contentDisposition } = await fetchSimilarityReportPdfFromRelay(
-    checks ?? {},
-    serviceName,
-    relayInstanceId,
-    serviceData,
+  return pdfPendingResponse(
+    downloadSource.kind === 'pending' ? downloadSource.reason : 'storage-unavailable',
   );
-
-  return new Response(Buffer.from(bytes), {
-    status: 200,
-    headers: {
-      'Content-Type': contentType,
-      'Content-Disposition': contentDisposition,
-      'Content-Length': String(bytes.byteLength),
-    },
-  });
 }

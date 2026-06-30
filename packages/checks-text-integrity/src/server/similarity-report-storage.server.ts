@@ -22,6 +22,17 @@ export function getStoredSimilarityReportFile(
   return undefined;
 }
 
+/** True when the persisted PDF matches the current provider PDF id. */
+export function hasCurrentStoredSimilarityReport(serviceData: TextIntegrityDataSchema): boolean {
+  const pdfId = serviceData.reportPdfId ?? serviceData.latest?.reportPdfId;
+  return Boolean(
+    pdfId &&
+    serviceData.similarityReportStored === true &&
+    serviceData.storedReportPdfId === pdfId &&
+    getStoredSimilarityReportFile(serviceData)?.path,
+  );
+}
+
 /** True when a PDF id exists and we have not yet stored that id (or never stored). */
 export function shouldPersistSimilarityReport(serviceData: TextIntegrityDataSchema): boolean {
   const pdfId = serviceData.reportPdfId ?? serviceData.latest?.reportPdfId;

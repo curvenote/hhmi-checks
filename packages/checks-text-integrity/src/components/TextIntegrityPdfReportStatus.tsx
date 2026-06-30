@@ -8,6 +8,8 @@ export interface TextIntegrityPdfReportStatusProps {
   reportGenerationComplete: boolean;
   reportGenerationFailed: boolean;
   waitingForReport: boolean;
+  similarityReportPdfInvalidated: boolean;
+  reportPdfAvailable: boolean;
   checkRunId?: string;
   workVersionId?: string;
   actionPath?: string;
@@ -22,6 +24,8 @@ export function TextIntegrityPdfReportStatus({
   reportGenerationComplete,
   reportGenerationFailed,
   waitingForReport,
+  similarityReportPdfInvalidated,
+  reportPdfAvailable,
   checkRunId,
   workVersionId,
   actionPath,
@@ -29,6 +33,7 @@ export function TextIntegrityPdfReportStatus({
   const revalidator = useRevalidator();
   const retryFetcher = useFetcher<RetryFetcherData>();
   const lastRetryRef = useRef<unknown>(undefined);
+  const retryReachedWaitingRef = useRef(false);
   const [retried, setRetried] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const {
@@ -56,15 +61,47 @@ export function TextIntegrityPdfReportStatus({
     }
   }, [retryFetcher.state, retryFetcher.data, revalidator]);
 
+  useEffect(() => {
+    setRetried(false);
+    retryReachedWaitingRef.current = false;
+  }, [checkRunId]);
+
+  useEffect(() => {
+    if (!retried) {
+      retryReachedWaitingRef.current = false;
+      return;
+    }
+    if (waitingForReport) {
+      retryReachedWaitingRef.current = true;
+      return;
+    }
+    if (retryReachedWaitingRef.current && (reportGenerationFailed || reportPdfAvailable)) {
+      setRetried(false);
+      retryReachedWaitingRef.current = false;
+    }
+  }, [retried, waitingForReport, reportGenerationFailed, reportPdfAvailable]);
+
   const downloadUrl = checkRunId
     ? `/app/checks-text-integrity/download-pdf/${encodeURIComponent(checkRunId)}`
     : undefined;
-  const canDownload = reportGenerationComplete && Boolean(downloadUrl);
+  const canDownload = reportPdfAvailable && Boolean(downloadUrl);
+  const canRegenerate =
+    similarityReportPdfInvalidated &&
+    !waitingForReport &&
+    !reportGenerationFailed &&
+    Boolean(actionPath?.trim()) &&
+    Boolean(checkRunId?.trim()) &&
+    !blocked;
   const canRetry =
     reportGenerationFailed &&
     Boolean(actionPath?.trim()) &&
     Boolean(checkRunId?.trim()) &&
     !blocked;
+  const showGeneratedText =
+    reportGenerationComplete &&
+    !canDownload &&
+    !waitingForReport &&
+    !similarityReportPdfInvalidated;
   const retryBusy = retryFetcher.state !== 'idle';
 
   const runDownload = useCallback(async () => {
@@ -73,7 +110,8 @@ export function TextIntegrityPdfReportStatus({
     try {
       const res = await fetch(downloadUrl, { credentials: 'same-origin' });
       if (!res.ok) {
-        ui.toastError(`Download failed (${res.status})`);
+        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        ui.toastError(body?.message ?? `Download failed (${res.status})`);
         return;
       }
       const blob = await res.blob();
@@ -111,10 +149,22 @@ export function TextIntegrityPdfReportStatus({
           {downloading ? 'Downloading…' : 'Download PDF report'}
         </ui.Button>
       )}
-      {reportGenerationComplete && !canDownload && (
+      {showGeneratedText && (
         <span className="text-sm font-normal text-muted-foreground">
           Similarity PDF report generated
         </span>
+      )}
+      {canRegenerate && !retried && (
+        <ui.MaintenanceTooltip enabled={blocked} message={message}>
+          <retryFetcher.Form method="post" action={actionPath}>
+            <input type="hidden" name="intent" value="restart-similarity-pdf" />
+            <input type="hidden" name="workVersionId" value={workVersionId ?? ''} />
+            <input type="hidden" name="checkRunId" value={checkRunId ?? ''} />
+            <ui.Button type="submit" variant="link" disabled={retryBusy || blocked}>
+              {retryBusy ? 'Regenerating…' : 'Regenerate PDF report'}
+            </ui.Button>
+          </retryFetcher.Form>
+        </ui.MaintenanceTooltip>
       )}
       {canRetry && !retried && (
         <ui.MaintenanceTooltip enabled={blocked} message={message}>
