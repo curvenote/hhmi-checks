@@ -35,7 +35,7 @@ export function TextIntegrityWorkListSummary({ metadata }: TextIntegrityWorkList
     );
   }
 
-  const label = !metadata?.stages ? 'Pending' : hasError(metadata) ? 'Error' : 'In progress';
+  const label = !metadata?.stages ? 'PENDING' : hasError(metadata) ? 'ERROR' : 'IN PROGRESS';
   const labelClassName = hasError(metadata) ? 'text-destructive' : 'text-foreground';
 
   return (
