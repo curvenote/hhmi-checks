@@ -16,6 +16,7 @@ import { ImageIntegritySectionHeader } from './components/ImageIntegritySectionH
 import { ProofigCheckRunTimelineMount } from './components/ProofigCheckRunTimelineMount.js';
 import { ProofigSummaryBadge } from './components/ProofigSummaryBadge.js';
 import { ProofigSummaryTitle } from './components/ProofigSummaryTitle.js';
+import { ProofigWorkListSummary } from './components/ProofigWorkListSummary.js';
 import ExtensionAdminCard from './admin/ExtensionAdminCard.js';
 import { ExtensionDesigns } from './designs/ExtensionDesigns.js';
 import { extensionPackageTitle } from './meta.js';
@@ -55,7 +56,7 @@ export function getIcons(): ExtensionIcon[] {
 }
 
 export function getChecks(): ClientExtensionCheckService[] {
-  return [
+  const checks = [
     {
       id: 'proofig',
       name: 'Image Integrity',
@@ -65,11 +66,13 @@ export function getChecks(): ClientExtensionCheckService[] {
       sectionActivityComponent: ImageIntegrityChecksSection,
       sectionSummaryBadgeComponent: ProofigSummaryBadge,
       sectionSummaryTitleComponent: ProofigSummaryTitle,
+      workListSummaryComponent: ProofigWorkListSummary,
       checkRunTimelineMountComponent: ProofigCheckRunTimelineMount,
       uploadCheckOptionComponent: ProofigUploadCheckOption,
       isUploadEligible: isProofigUploadEligible,
     },
   ];
+  return checks;
 }
 
 export function registerNavigation(): NavigationRegistration[] {

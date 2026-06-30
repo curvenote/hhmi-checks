@@ -15,6 +15,7 @@ import { isTextIntegrityUploadEligible } from './uploadEligibility.js';
 import { TextIntegritySectionHeader } from './components/TextIntegritySectionHeader.js';
 import { TextIntegritySummaryBadge } from './components/TextIntegritySummaryBadge.js';
 import { TextIntegritySummaryTitle } from './components/TextIntegritySummaryTitle.js';
+import { TextIntegrityWorkListSummary } from './components/TextIntegrityWorkListSummary.js';
 import ExtensionAdminCard from './admin/ExtensionAdminCard.js';
 import { ExtensionDesigns } from './designs/ExtensionDesigns.js';
 import { extensionPackageTitle } from './meta.js';
@@ -54,7 +55,7 @@ export function getIcons(): ExtensionIcon[] {
 }
 
 export function getChecks(): ClientExtensionCheckService[] {
-  return [
+  const checks = [
     {
       id: 'checks-text-integrity',
       name: 'Text Integrity',
@@ -64,10 +65,12 @@ export function getChecks(): ClientExtensionCheckService[] {
       sectionActivityComponent: TextIntegrityChecksSection,
       sectionSummaryBadgeComponent: TextIntegritySummaryBadge,
       sectionSummaryTitleComponent: TextIntegritySummaryTitle,
+      workListSummaryComponent: TextIntegrityWorkListSummary,
       uploadCheckOptionComponent: TextIntegrityUploadCheckOption,
       isUploadEligible: isTextIntegrityUploadEligible,
     },
   ];
+  return checks;
 }
 
 export function registerNavigation(): NavigationRegistration[] {
