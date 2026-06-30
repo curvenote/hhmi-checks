@@ -1,4 +1,4 @@
-import { KnownState, type ProofigDataSchema } from '../schema.js';
+import { hasError, KnownState, type ProofigDataSchema } from '../schema.js';
 
 export interface ProofigSummaryCounts {
   total: number;
@@ -7,6 +7,48 @@ export interface ProofigSummaryCounts {
   matchesReport: number;
   inspectsReport: number;
   bad: number;
+}
+
+export type ProofigResultDisplayState =
+  | {
+      kind: 'awaiting-review' | 'all-clear' | 'confirmed-all-clear';
+      counts: ProofigSummaryCounts;
+    }
+  | {
+      kind: 'manual-problems' | 'problems';
+      counts: ProofigSummaryCounts;
+      problemCount: number;
+    };
+
+function getProofigResultDisplayStateFromCounts(
+  counts: ProofigSummaryCounts,
+  awaitingHumanReview: boolean,
+): ProofigResultDisplayState {
+  if (awaitingHumanReview) {
+    return { kind: 'awaiting-review', counts };
+  }
+
+  if (counts.matchesReview === 0 && counts.matchesReport === 0 && counts.inspectsReport === 0) {
+    return { kind: 'all-clear', counts };
+  }
+
+  if (counts.matchesReview === 0 && counts.matchesReport === 0 && counts.inspectsReport > 0) {
+    return {
+      kind: 'manual-problems',
+      counts,
+      problemCount: counts.inspectsReport,
+    };
+  }
+
+  if (counts.matchesReview > 0 && counts.matchesReport === 0 && counts.inspectsReport === 0) {
+    return { kind: 'confirmed-all-clear', counts };
+  }
+
+  return {
+    kind: 'problems',
+    counts,
+    problemCount: counts.bad,
+  };
 }
 
 /**
@@ -20,6 +62,7 @@ export interface ProofigSummaryCounts {
  */
 export function proofigIsAwaitingHumanReview(proofigData: ProofigDataSchema | undefined): boolean {
   if (!proofigData || proofigData.deleted) return false;
+  if (hasError(proofigData)) return false;
 
   const rr = proofigData.stages?.resultsReview;
   if (rr?.status === 'completed' && (rr.outcome === 'clean' || rr.outcome === 'flagged')) {
@@ -58,4 +101,19 @@ export function getProofigSummaryCounts(
     inspectsReport,
     bad: matchesReport + inspectsReport,
   };
+}
+
+/**
+ * Shared result-display classification for Proofig result UIs.
+ *
+ * Proofig can keep a final `flagged` outcome after reviewers resolve/remove all problem
+ * images; it updates the counts but does not send a later clean notification. For display
+ * purposes, zero confirmed/manual problem counts therefore means an all-clear state.
+ */
+export function getProofigResultDisplayState(
+  proofigData: ProofigDataSchema | undefined,
+): ProofigResultDisplayState {
+  const counts = getProofigSummaryCounts(proofigData);
+  const awaitingHumanReview = proofigIsAwaitingHumanReview(proofigData);
+  return getProofigResultDisplayStateFromCounts(counts, awaitingHumanReview);
 }

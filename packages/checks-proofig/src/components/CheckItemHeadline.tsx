@@ -1,4 +1,5 @@
 import { cn, plural } from '@curvenote/scms-core';
+import type { ProofigResultDisplayState } from '../utils/proofigSummary.js';
 
 export interface CheckItemHeadlineProps {
   colors: {
@@ -6,13 +7,7 @@ export interface CheckItemHeadlineProps {
     clear: string;
     review: string;
   };
-  /** When true, show in-review messaging instead of count-derived “all clear” / problem headlines. */
-  awaitingHumanReview?: boolean;
-  total: number;
-  matchByAlgo: number;
-  matchesNotBad: number;
-  matchedProblems: number;
-  inspectedProblems: number;
+  displayState: ProofigResultDisplayState;
   /**
    * Noun fragment for `plural()` count phrases, e.g. `figure(s)` → "1 figure", "2 figures".
    * @default 'figure(s)'
@@ -51,15 +46,17 @@ function FractionalDisplay({
 
 export function CheckItemHeadline({
   colors,
-  awaitingHumanReview = false,
-  total,
-  matchByAlgo,
-  matchesNotBad,
-  matchedProblems,
-  inspectedProblems,
+  displayState,
   countedItemPlural = 'sub-image(s)',
 }: CheckItemHeadlineProps) {
-  if (awaitingHumanReview) {
+  const {
+    total,
+    matchesNotBad,
+    matchesReport: matchedProblems,
+    inspectsReport: inspectedProblems,
+  } = displayState.counts;
+
+  if (displayState.kind === 'awaiting-review') {
     return (
       <div className="space-y-1">
         <div className="flex gap-2 items-center">
@@ -78,7 +75,7 @@ export function CheckItemHeadline({
     );
   }
 
-  if (matchByAlgo === 0 && matchedProblems === 0 && inspectedProblems === 0) {
+  if (displayState.kind === 'all-clear') {
     return (
       <div className="space-y-1">
         <div className={`text-3xl font-medium ${colors.clear}`}>All Clear</div>
@@ -89,7 +86,7 @@ export function CheckItemHeadline({
     );
   }
 
-  if (matchByAlgo === 0 && matchedProblems === 0 && inspectedProblems > 0) {
+  if (displayState.kind === 'manual-problems') {
     return (
       <div className="space-y-1">
         <div className={`flex text-3xl font-medium ${colors.problem}`}>
@@ -105,7 +102,7 @@ export function CheckItemHeadline({
     );
   }
 
-  if (matchByAlgo > 0 && inspectedProblems === 0 && matchedProblems === 0) {
+  if (displayState.kind === 'confirmed-all-clear') {
     return (
       <div className="space-y-1">
         <div className={`text-3xl font-medium ${colors.clear}`}>Confirmed All Clear</div>

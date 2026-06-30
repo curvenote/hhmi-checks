@@ -1,6 +1,6 @@
 import { Logos } from '../client.js';
 import type { ProofigDataSchema } from '../schema.js';
-import { getProofigSummaryCounts, proofigIsAwaitingHumanReview } from '../utils/proofigSummary.js';
+import { getProofigResultDisplayState } from '../utils/proofigSummary.js';
 import { plural, ui } from '@curvenote/scms-core';
 import { MissingReportUrlIcon } from './MissingReportUrlIcon.js';
 import { ReportNoLongerAvailable } from './ReportNoLongerAvailable.js';
@@ -52,21 +52,21 @@ export function ResultsSummaryArea({
   checkRunId?: string;
   remoteStatusActionPath?: string;
 }) {
+  const resultDisplayState = getProofigResultDisplayState(proofigData);
   const {
     total,
     matchesReview,
     matchesNotBad,
     matchesReport: matchedReport,
     inspectsReport: inspectReport,
-  } = getProofigSummaryCounts(proofigData);
-  const awaitingHumanReview = proofigIsAwaitingHumanReview(proofigData);
+  } = resultDisplayState.counts;
+  const awaitingHumanReview = resultDisplayState.kind === 'awaiting-review';
   const reportUrl = proofigData?.reportUrl;
   const deleted = proofigData?.deleted;
   const showViewReportButton = !!reportUrl && !deleted && matchesReview > 0;
 
   /** Matches `CheckItemHeadline` “All Clear” branch: no flagged or confirmed issues. */
-  const isAllClear =
-    !awaitingHumanReview && matchesReview === 0 && matchedReport === 0 && inspectReport === 0;
+  const isAllClear = resultDisplayState.kind === 'all-clear';
   const hidePunchcardAndLegend = isAllClear && total < 10;
 
   const punchcard = [
@@ -147,12 +147,7 @@ export function ResultsSummaryArea({
             clear: COLORS.good.text,
             review: COLORS.review.text,
           }}
-          awaitingHumanReview={awaitingHumanReview}
-          total={total}
-          matchByAlgo={matchesReview}
-          matchesNotBad={matchesNotBad}
-          matchedProblems={matchedReport}
-          inspectedProblems={inspectReport}
+          displayState={resultDisplayState}
         />
         {!hidePunchcardAndLegend ? (
           <>
