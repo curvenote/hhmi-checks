@@ -382,11 +382,7 @@ export function applyWebhookEvent(
   return next;
 }
 
-/**
- * After a successful POST to checks-relay to start similarity PDF generation.
- * Stores the new `reportPdfId` only; clears `reportPdfUrl` until a notify webhook
- * provides `payload.report.report_pdf_url` (see mergeReportPayload).
- */
+/** Mark that checks-relay has been asked to start similarity PDF generation. */
 export function markSimilarityPdfJobStartRequested(
   current: TextIntegrityDataSchema,
   receivedAt: string = new Date().toISOString(),
@@ -408,6 +404,11 @@ export function markSimilarityPdfJobStartRequested(
   };
 }
 
+/**
+ * After a successful POST to checks-relay to start similarity PDF generation.
+ * Stores the new `reportPdfId` only; clears `reportPdfUrl` until a notify webhook
+ * provides `payload.report.report_pdf_url` (see mergeReportPayload).
+ */
 export function markSimilarityPdfJobRestarted(
   current: TextIntegrityDataSchema,
   newPdfId: string,
