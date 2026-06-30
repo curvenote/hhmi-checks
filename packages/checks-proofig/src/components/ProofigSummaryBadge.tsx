@@ -20,6 +20,14 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
   const outcome = metadata?.stages?.resultsReview?.outcome;
   const awaitingHumanReview = proofigIsAwaitingHumanReview(metadata);
 
+  if (awaitingHumanReview) {
+    return (
+      <ui.Badge variant="warning" size="xs" className="uppercase tracking-wide min-w-[80px]">
+        Awaiting review
+      </ui.Badge>
+    );
+  }
+
   // In progress: show current stage label with color by status (pending, processing, completed, error)
   if (!isAtResults || outcome === undefined) {
     const label = STAGE_LABELS[currentStage] ?? 'In progress';
@@ -39,14 +47,6 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
     );
   }
 
-  if (awaitingHumanReview) {
-    return (
-      <ui.Badge variant="warning" size="xs" className="uppercase tracking-wide min-w-[80px]">
-        Awaiting review
-      </ui.Badge>
-    );
-  }
-
   // Results: all clear
   if (bad === 0) {
     return (
@@ -57,11 +57,9 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
   }
 
   // Results: confirmed problems only
-  if (bad > 0) {
-    return (
-      <ui.Badge variant="destructive" size="xs" className="uppercase tracking-wide min-w-[80px]">
-        {bad} {bad === 1 ? 'problem' : 'problems'} found
-      </ui.Badge>
-    );
-  }
+  return (
+    <ui.Badge variant="destructive" size="xs" className="uppercase tracking-wide min-w-[80px]">
+      {bad} {bad === 1 ? 'problem' : 'problems'} found
+    </ui.Badge>
+  );
 }
