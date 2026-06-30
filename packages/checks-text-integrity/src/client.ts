@@ -16,6 +16,7 @@ import { TextIntegritySectionHeader } from './components/TextIntegritySectionHea
 import { TextIntegritySummaryBadge } from './components/TextIntegritySummaryBadge.js';
 import { TextIntegritySummaryTitle } from './components/TextIntegritySummaryTitle.js';
 import { TextIntegrityWorkListSummary } from './components/TextIntegrityWorkListSummary.js';
+import { hasError, type TextIntegrityDataSchema } from './schema.js';
 import ExtensionAdminCard from './admin/ExtensionAdminCard.js';
 import { ExtensionDesigns } from './designs/ExtensionDesigns.js';
 import { extensionPackageTitle } from './meta.js';
@@ -66,6 +67,8 @@ export function getChecks(): ClientExtensionCheckService[] {
       sectionSummaryBadgeComponent: TextIntegritySummaryBadge,
       sectionSummaryTitleComponent: TextIntegritySummaryTitle,
       workListSummaryComponent: TextIntegrityWorkListSummary,
+      isWorkListSummaryVisible: (metadata: unknown) =>
+        !hasError(metadata as TextIntegrityDataSchema | undefined),
       uploadCheckOptionComponent: TextIntegrityUploadCheckOption,
       isUploadEligible: isTextIntegrityUploadEligible,
     },

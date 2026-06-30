@@ -20,6 +20,7 @@ import { ProofigWorkListSummary } from './components/ProofigWorkListSummary.js';
 import ExtensionAdminCard from './admin/ExtensionAdminCard.js';
 import { ExtensionDesigns } from './designs/ExtensionDesigns.js';
 import { extensionPackageTitle } from './meta.js';
+import type { ProofigDataSchema } from './schema.js';
 
 export const id = 'checks-proofig';
 export const name = extensionPackageTitle;
@@ -55,6 +56,12 @@ export function getIcons(): ExtensionIcon[] {
   ];
 }
 
+function proofigHasError(metadata: unknown): boolean {
+  const stages = (metadata as ProofigDataSchema | undefined)?.stages;
+  if (!stages) return false;
+  return Object.values(stages).some((stage) => stage?.status === 'error');
+}
+
 export function getChecks(): ClientExtensionCheckService[] {
   const checks = [
     {
@@ -67,6 +74,7 @@ export function getChecks(): ClientExtensionCheckService[] {
       sectionSummaryBadgeComponent: ProofigSummaryBadge,
       sectionSummaryTitleComponent: ProofigSummaryTitle,
       workListSummaryComponent: ProofigWorkListSummary,
+      isWorkListSummaryVisible: (metadata: unknown) => !proofigHasError(metadata),
       checkRunTimelineMountComponent: ProofigCheckRunTimelineMount,
       uploadCheckOptionComponent: ProofigUploadCheckOption,
       isUploadEligible: isProofigUploadEligible,
