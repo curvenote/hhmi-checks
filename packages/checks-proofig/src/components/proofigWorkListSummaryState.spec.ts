@@ -112,6 +112,32 @@ describe('getProofigWorkListSummaryState', () => {
     });
   });
 
+  it('does not show all clear for flagged final reports with review-only counts', () => {
+    const state = getProofigWorkListSummaryState({
+      summary: {
+        state: KnownState.ReportFlagged,
+        receivedAt,
+        subimagesTotal: 23,
+        matchesReview: 2,
+        matchesReport: 0,
+        inspectsReport: 0,
+      },
+      stages: {
+        resultsReview: {
+          status: 'completed',
+          outcome: 'flagged',
+          history: [],
+          timestamp: receivedAt,
+        },
+      },
+    } as unknown as ProofigDataSchema);
+
+    expect(state).toEqual({
+      label: '0 PROBLEMS',
+      underlineClassName: 'bg-destructive',
+    });
+  });
+
   it('shows the problem count label after review completes with confirmed problems', () => {
     const state = getProofigWorkListSummaryState({
       summary: {

@@ -35,6 +35,10 @@ export function getProofigWorkListSummaryState(
   const awaitingHumanReview = proofigIsAwaitingHumanReview(metadata);
   const reportOutcome = metadata?.stages?.resultsReview?.outcome;
   const summaryState = metadata?.summary?.state;
+  const reportOutcomeIsUnset = reportOutcome == null;
+  const summaryIsCleanReport = summaryState === KnownState.ReportClean;
+  const hasCleanFinalReport =
+    reportOutcome === 'clean' || (reportOutcomeIsUnset && summaryIsCleanReport);
   const hasFinalReport =
     reportOutcome === 'clean' ||
     reportOutcome === 'flagged' ||
@@ -49,10 +53,10 @@ export function getProofigWorkListSummaryState(
   }
 
   if (hasFinalReport) {
-    if (matchesReview === 0 && matchesReport === 0 && inspectsReport === 0) {
+    if (hasCleanFinalReport && matchesReview === 0 && matchesReport === 0 && inspectsReport === 0) {
       return { label: 'ALL CLEAR', underlineClassName: 'bg-success' };
     }
-    if (matchesReview > 0 && matchesReport === 0 && inspectsReport === 0) {
+    if (hasCleanFinalReport && matchesReview > 0 && matchesReport === 0 && inspectsReport === 0) {
       return { label: 'ALL CLEAR', underlineClassName: 'bg-success' };
     }
     return { label: problemLabel(bad), underlineClassName: 'bg-destructive' };
