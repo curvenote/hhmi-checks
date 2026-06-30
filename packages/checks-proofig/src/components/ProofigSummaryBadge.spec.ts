@@ -27,10 +27,17 @@ describe('ProofigSummaryBadge', () => {
     expect(props.variant).toBe('warning');
   });
 
-  it('shows the failed stage instead of awaiting review when a stage has errored', () => {
+  it('shows the failed stage instead of all clear when results review errored with a stale outcome', () => {
     const badge = ProofigSummaryBadge({
       metadata: {
-        summary: { state: KnownState.AwaitingReview },
+        summary: {
+          state: KnownState.AwaitingReview,
+          receivedAt,
+          subimagesTotal: 10,
+          matchesReview: 2,
+          matchesReport: 0,
+          inspectsReport: 0,
+        },
         stages: {
           initialPost: { status: 'completed', history: [], timestamp: receivedAt },
           subimageDetection: { status: 'completed', history: [], timestamp: receivedAt },
@@ -38,6 +45,7 @@ describe('ProofigSummaryBadge', () => {
           integrityDetection: { status: 'completed', history: [], timestamp: receivedAt },
           resultsReview: {
             status: 'error',
+            outcome: 'pending',
             error: 'Review failed',
             history: [],
             timestamp: receivedAt,

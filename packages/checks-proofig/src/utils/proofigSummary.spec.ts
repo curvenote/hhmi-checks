@@ -291,16 +291,21 @@ describe('proofigIsAwaitingHumanReview', () => {
     ).toBe(true);
   });
 
-  test('false when any stage has errored', () => {
+  test('true when summary state is Awaiting: Review even if an earlier stage errored', () => {
     expect(
       proofigIsAwaitingHumanReview({
         summary: { state: KnownState.AwaitingReview, receivedAt },
         stages: {
           initialPost: { status: 'completed', history: [], timestamp: receivedAt },
-          subimageDetection: { status: 'error', error: 'Failed', history: [], timestamp: receivedAt },
+          subimageDetection: {
+            status: 'error',
+            error: 'Failed',
+            history: [],
+            timestamp: receivedAt,
+          },
         },
       } as unknown as ProofigDataSchema),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   test('false after Report: Clean completed', () => {
@@ -353,6 +358,34 @@ describe('proofigIsAwaitingHumanReview', () => {
 });
 
 describe('getProofigResultDisplayState', () => {
+  test('classifies errored runs as error before count-derived all-clear states', () => {
+    expect(
+      getProofigResultDisplayState({
+        summary: {
+          state: KnownState.AwaitingReview,
+          receivedAt,
+          subimagesTotal: 10,
+          matchesReview: 2,
+          matchesReport: 0,
+          inspectsReport: 0,
+        },
+        stages: {
+          initialPost: { status: 'completed', history: [], timestamp: receivedAt },
+          subimageDetection: { status: 'completed', history: [], timestamp: receivedAt },
+          subimageSelection: { status: 'completed', history: [], timestamp: receivedAt },
+          integrityDetection: { status: 'completed', history: [], timestamp: receivedAt },
+          resultsReview: {
+            status: 'error',
+            outcome: 'pending',
+            error: 'Failed',
+            history: [],
+            timestamp: receivedAt,
+          },
+        },
+      } as unknown as ProofigDataSchema).kind,
+    ).toBe('error');
+  });
+
   test('classifies awaiting review before count-derived all-clear states', () => {
     expect(
       getProofigResultDisplayState({

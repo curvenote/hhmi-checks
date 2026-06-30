@@ -1,10 +1,6 @@
 import { KnownState, type ProofigDataSchema } from '../schema.js';
-import { ALL_PENDING_STAGES, getCurrentProofigStage } from '../schema.js';
-import {
-  getProofigResultDisplayState,
-  getProofigSummaryCounts,
-  proofigIsAwaitingHumanReview,
-} from '../utils/proofigSummary.js';
+import { ALL_PENDING_STAGES, getCurrentProofigStage, hasError } from '../schema.js';
+import { getProofigResultDisplayState, getProofigSummaryCounts } from '../utils/proofigSummary.js';
 import { STAGE_LABELS } from './ProofigProgressComponent.js';
 
 export type ProofigWorkListSummaryState = {
@@ -36,6 +32,14 @@ export function getProofigWorkListSummaryState(
   const { currentStage, currentStageData } = getCurrentProofigStage(stages);
   const resultDisplayState = getProofigResultDisplayState(metadata);
   const { total, matchesReview } = resultDisplayState.counts;
+
+  if (resultDisplayState.kind === 'error' || hasError(metadata)) {
+    return {
+      label: (STAGE_LABELS[currentStage] ?? 'Error').toUpperCase(),
+      underlineClassName: 'bg-destructive',
+    };
+  }
+
   const reportOutcome = metadata?.stages?.resultsReview?.outcome;
   const summaryState = metadata?.summary?.state;
   const hasFinalReport =
@@ -89,7 +93,9 @@ export function getProofigWorkListCompactSummaryState(
   const stages = { ...ALL_PENDING_STAGES, ...metadata?.stages };
   const { currentStage } = getCurrentProofigStage(stages);
   const { total, matchesReview, bad } = getProofigSummaryCounts(metadata);
-  const awaitingHumanReview = proofigIsAwaitingHumanReview(metadata);
+  const resultDisplayState = getProofigResultDisplayState(metadata);
+  const awaitingHumanReview =
+    resultDisplayState.kind !== 'error' && resultDisplayState.kind === 'awaiting-review';
   const isProblemState = summaryState.underlineClassName === 'bg-destructive' && bad > 0;
   const isInProgressState =
     !awaitingHumanReview &&

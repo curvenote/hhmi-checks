@@ -11,6 +11,10 @@ export interface ProofigSummaryCounts {
 
 export type ProofigResultDisplayState =
   | {
+      kind: 'error';
+      counts: ProofigSummaryCounts;
+    }
+  | {
       kind: 'awaiting-review' | 'all-clear' | 'confirmed-all-clear';
       counts: ProofigSummaryCounts;
     }
@@ -62,7 +66,6 @@ function getProofigResultDisplayStateFromCounts(
  */
 export function proofigIsAwaitingHumanReview(proofigData: ProofigDataSchema | undefined): boolean {
   if (!proofigData || proofigData.deleted) return false;
-  if (hasError(proofigData)) return false;
 
   const rr = proofigData.stages?.resultsReview;
   if (rr?.status === 'completed' && (rr.outcome === 'clean' || rr.outcome === 'flagged')) {
@@ -114,6 +117,9 @@ export function getProofigResultDisplayState(
   proofigData: ProofigDataSchema | undefined,
 ): ProofigResultDisplayState {
   const counts = getProofigSummaryCounts(proofigData);
+  if (hasError(proofigData)) {
+    return { kind: 'error', counts };
+  }
   const awaitingHumanReview = proofigIsAwaitingHumanReview(proofigData);
   return getProofigResultDisplayStateFromCounts(counts, awaitingHumanReview);
 }
