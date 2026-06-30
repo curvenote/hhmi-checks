@@ -1,4 +1,5 @@
 import { cn } from '@curvenote/scms-core';
+import { Hourglass } from 'lucide-react';
 import type { TextIntegrityDataSchema } from '../schema.js';
 import { canShowResults, hasError } from '../schema.js';
 import { similarityScoreBarColorClass } from './SimilarityPercentageBar.js';
@@ -17,7 +18,7 @@ function TextIntegrityWorkListSummaryLogo({
     <span
       className={cn(
         'flex items-center min-w-0 max-w-28',
-        compact ? 'h-4 [&_img]:max-h-3.5 [&_svg]:max-h-3.5' : 'h-5 [&_img]:max-h-4 [&_svg]:max-h-4',
+        compact ? 'h-4 [&_img]:max-h-3 [&_svg]:max-h-3' : 'h-5 [&_img]:max-h-4 [&_svg]:max-h-4',
       )}
     >
       <TextIntegritySummaryTitle metadata={metadata} />
@@ -73,7 +74,11 @@ export function TextIntegrityWorkListSummary({
         <span
           className={cn('font-medium text-foreground whitespace-nowrap', compact && 'text-[10px]')}
         >
-          {label}
+          {compact && !hasError(metadata) ? (
+            <Hourglass className="size-3.5" aria-label={label} />
+          ) : (
+            label
+          )}
         </span>
         <span className={cn('h-0.5 w-full rounded-full', underlineClassName)} />
       </span>
