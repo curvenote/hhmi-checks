@@ -4,6 +4,7 @@ import { StageProgressArea } from './StageProgressArea.js';
 import { useCheckRunStale } from './useCheckRunStale.js';
 
 const DEFAULT_SERVICE_NAME = 'Text Integrity';
+const SUBMITTING_STALE_AFTER_MS = 45_000;
 
 export type SubmittingProgressAreaProps = {
   /** When set, shown instead of “Text Integrity” in the upload headline (e.g. branded provider name). */
@@ -11,7 +12,7 @@ export type SubmittingProgressAreaProps = {
   actionPath?: string;
   workVersionId?: string;
   checkRunId?: string;
-  /** ISO `CheckServiceRun.date_modified` — stale when older than 30s. */
+  /** ISO `CheckServiceRun.date_modified` — stale when older than 45s. */
   checkRunDateModified?: string;
 };
 
@@ -23,7 +24,9 @@ export function SubmittingProgressArea({
   checkRunDateModified,
 }: SubmittingProgressAreaProps) {
   const serviceName = name?.trim() || DEFAULT_SERVICE_NAME;
-  const showStaleUi = useCheckRunStale(checkRunDateModified);
+  const showStaleUi = useCheckRunStale(checkRunDateModified, {
+    staleAfterMs: SUBMITTING_STALE_AFTER_MS,
+  });
 
   const refreshSlot =
     showStaleUi && actionPath && workVersionId ? (

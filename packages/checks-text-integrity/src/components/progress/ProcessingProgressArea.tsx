@@ -3,6 +3,8 @@ import { TextIntegrityRefreshRemoteStatusButton } from '../TextIntegrityRefreshR
 import { StageProgressArea } from './StageProgressArea.js';
 import { useCheckRunStale } from './useCheckRunStale.js';
 
+const PROCESSING_STALE_AFTER_MS = 90_000;
+
 export type ProcessingProgressAreaProps = {
   actionPath?: string;
   workVersionId?: string;
@@ -16,7 +18,9 @@ export function ProcessingProgressArea({
   checkRunId,
   checkRunDateModified,
 }: ProcessingProgressAreaProps) {
-  const showStaleUi = useCheckRunStale(checkRunDateModified);
+  const showStaleUi = useCheckRunStale(checkRunDateModified, {
+    staleAfterMs: PROCESSING_STALE_AFTER_MS,
+  });
 
   const refreshSlot =
     showStaleUi && actionPath && workVersionId ? (

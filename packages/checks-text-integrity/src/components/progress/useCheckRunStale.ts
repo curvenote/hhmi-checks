@@ -1,16 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
 
 /** If the check run row was not updated within this window, show refresh / stale UI. */
-const STALE_AFTER_MS = 30_000;
+const DEFAULT_STALE_AFTER_MS = 30_000;
 /** Recompute “now vs last modified” periodically so the UI flips without a navigation. */
 const STALE_RECHECK_MS = 5000;
 
+type UseCheckRunStaleOptions = {
+  staleAfterMs?: number;
+};
+
 /**
  * True when `checkRunDateModified` (ISO from `CheckServiceRun.date_modified`) is older than
- * {@link STALE_AFTER_MS} relative to the current time.
+ * the configured stale threshold relative to the current time.
  */
-export function useCheckRunStale(checkRunDateModified: string | undefined): boolean {
+export function useCheckRunStale(
+  checkRunDateModified: string | undefined,
+  options: UseCheckRunStaleOptions = {},
+): boolean {
   const [tick, setTick] = useState(0);
+  const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
 
   useEffect(() => {
     if (!checkRunDateModified) return;
@@ -24,6 +32,6 @@ export function useCheckRunStale(checkRunDateModified: string | undefined): bool
     if (!checkRunDateModified) return false;
     const modifiedMs = new Date(checkRunDateModified).getTime();
     if (Number.isNaN(modifiedMs)) return false;
-    return Date.now() - modifiedMs > STALE_AFTER_MS;
-  }, [checkRunDateModified, tick]);
+    return Date.now() - modifiedMs > staleAfterMs;
+  }, [checkRunDateModified, staleAfterMs, tick]);
 }
