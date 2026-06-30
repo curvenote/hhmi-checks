@@ -7,6 +7,7 @@ import { cn } from '@curvenote/scms-core';
  */
 function similarityScorePalette(percentage: number): {
   barBg: string;
+  text: string;
   /** Overrides `primary` badge tint colors; use with `ui.Badge variant="primary"`. */
   outlineBadge: string;
 } {
@@ -14,26 +15,31 @@ function similarityScorePalette(percentage: number): {
   if (p < 1)
     return {
       barBg: 'bg-emerald-800',
+      text: 'text-emerald-800',
       outlineBadge:
         'border-emerald-800 text-emerald-800 bg-emerald-800/5 [a&]:hover:bg-emerald-800/10',
     };
   if (p < 24)
     return {
       barBg: 'bg-blue-600',
+      text: 'text-blue-600',
       outlineBadge: 'border-blue-600 text-blue-600 bg-blue-600/5 [a&]:hover:bg-blue-600/10',
     };
   if (p < 50)
     return {
       barBg: 'bg-amber-700',
+      text: 'text-amber-700',
       outlineBadge: 'border-amber-700 text-amber-700 bg-amber-700/5 [a&]:hover:bg-amber-700/10',
     };
   if (p < 75)
     return {
       barBg: 'bg-orange-600',
+      text: 'text-orange-600',
       outlineBadge: 'border-orange-600 text-orange-600 bg-orange-600/5 [a&]:hover:bg-orange-600/10',
     };
   return {
     barBg: 'bg-red-600',
+    text: 'text-red-600',
     outlineBadge: 'border-red-600 text-red-600 bg-red-600/5 [a&]:hover:bg-red-600/10',
   };
 }
@@ -54,6 +60,13 @@ export function similarityScoreSolidBadgeClassName(percentage: number): string {
     'border-transparent text-white [a&]:hover:opacity-90',
     similarityScorePalette(percentage).barBg,
   );
+}
+
+/**
+ * Text color only, using the same similarity tier palette as bars and badges.
+ */
+export function similarityScoreTextClassName(percentage: number): string {
+  return similarityScorePalette(percentage).text;
 }
 
 /**
