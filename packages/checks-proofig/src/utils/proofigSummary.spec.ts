@@ -291,6 +291,18 @@ describe('proofigIsAwaitingHumanReview', () => {
     ).toBe(true);
   });
 
+  test('false when any stage has errored', () => {
+    expect(
+      proofigIsAwaitingHumanReview({
+        summary: { state: KnownState.AwaitingReview, receivedAt },
+        stages: {
+          initialPost: { status: 'completed', history: [], timestamp: receivedAt },
+          subimageDetection: { status: 'error', error: 'Failed', history: [], timestamp: receivedAt },
+        },
+      } as unknown as ProofigDataSchema),
+    ).toBe(false);
+  });
+
   test('false after Report: Clean completed', () => {
     expect(
       proofigIsAwaitingHumanReview({

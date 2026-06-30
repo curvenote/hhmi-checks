@@ -1,4 +1,4 @@
-import { KnownState, type ProofigDataSchema } from '../schema.js';
+import { hasError, KnownState, type ProofigDataSchema } from '../schema.js';
 
 export interface ProofigSummaryCounts {
   total: number;
@@ -62,6 +62,7 @@ function getProofigResultDisplayStateFromCounts(
  */
 export function proofigIsAwaitingHumanReview(proofigData: ProofigDataSchema | undefined): boolean {
   if (!proofigData || proofigData.deleted) return false;
+  if (hasError(proofigData)) return false;
 
   const rr = proofigData.stages?.resultsReview;
   if (rr?.status === 'completed' && (rr.outcome === 'clean' || rr.outcome === 'flagged')) {

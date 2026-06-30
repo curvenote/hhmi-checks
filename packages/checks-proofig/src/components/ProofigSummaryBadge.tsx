@@ -1,5 +1,5 @@
 import type { ProofigDataSchema } from '../schema.js';
-import { ALL_PENDING_STAGES, getCurrentProofigStage } from '../schema.js';
+import { ALL_PENDING_STAGES, getCurrentProofigStage, hasError } from '../schema.js';
 import { getProofigResultDisplayState } from '../utils/proofigSummary.js';
 import { ui } from '@curvenote/scms-core';
 import { STAGE_LABELS } from './ProofigProgressComponent.js';
@@ -19,7 +19,7 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
   const isAtResults = currentStage === 'resultsReview';
   const outcome = metadata?.stages?.resultsReview?.outcome;
 
-  if (resultDisplayState.kind === 'awaiting-review') {
+  if (!hasError(metadata) && resultDisplayState.kind === 'awaiting-review') {
     return (
       <ui.Badge variant="warning" size="xs" className="uppercase tracking-wide min-w-[80px]">
         Awaiting review

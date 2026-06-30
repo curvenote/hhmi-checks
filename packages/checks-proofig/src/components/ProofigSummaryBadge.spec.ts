@@ -1,7 +1,7 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { describe, expect, it } from 'vitest';
 import { isValidElement, type ReactElement } from 'react';
-import type { ProofigDataSchema } from '../schema.js';
+import { KnownState, type ProofigDataSchema } from '../schema.js';
 import { ProofigSummaryBadge } from './ProofigSummaryBadge.js';
 
 const receivedAt = '2026-01-01T00:00:00.000Z';
@@ -25,5 +25,31 @@ describe('ProofigSummaryBadge', () => {
     const props = (badge as ReactElement<{ children: string; variant: string }>).props;
     expect(props.children).toBe('Awaiting review');
     expect(props.variant).toBe('warning');
+  });
+
+  it('shows the failed stage instead of awaiting review when a stage has errored', () => {
+    const badge = ProofigSummaryBadge({
+      metadata: {
+        summary: { state: KnownState.AwaitingReview },
+        stages: {
+          initialPost: { status: 'completed', history: [], timestamp: receivedAt },
+          subimageDetection: { status: 'completed', history: [], timestamp: receivedAt },
+          subimageSelection: { status: 'completed', history: [], timestamp: receivedAt },
+          integrityDetection: { status: 'completed', history: [], timestamp: receivedAt },
+          resultsReview: {
+            status: 'error',
+            error: 'Review failed',
+            history: [],
+            timestamp: receivedAt,
+          },
+        },
+      } as unknown as ProofigDataSchema,
+    });
+
+    expect(isValidElement(badge)).toBe(true);
+
+    const props = (badge as ReactElement<{ children: string; variant: string }>).props;
+    expect(props.children).toBe('Ready for results review');
+    expect(props.variant).toBe('destructive');
   });
 });
