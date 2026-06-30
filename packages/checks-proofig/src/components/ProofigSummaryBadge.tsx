@@ -1,6 +1,6 @@
 import type { ProofigDataSchema } from '../schema.js';
 import { ALL_PENDING_STAGES, getCurrentProofigStage } from '../schema.js';
-import { getProofigSummaryCounts } from '../utils/proofigSummary.js';
+import { getProofigSummaryCounts, proofigIsAwaitingHumanReview } from '../utils/proofigSummary.js';
 import { ui } from '@curvenote/scms-core';
 import { STAGE_LABELS } from './ProofigProgressComponent.js';
 
@@ -18,6 +18,7 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
   const { bad } = getProofigSummaryCounts(metadata);
   const isAtResults = currentStage === 'resultsReview';
   const outcome = metadata?.stages?.resultsReview?.outcome;
+  const awaitingHumanReview = proofigIsAwaitingHumanReview(metadata);
 
   // In progress: show current stage label with color by status (pending, processing, completed, error)
   if (!isAtResults || outcome === undefined) {
@@ -34,6 +35,14 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
     return (
       <ui.Badge variant={variant} size="xs" className="uppercase tracking-wide min-w-[80px]">
         {label}
+      </ui.Badge>
+    );
+  }
+
+  if (awaitingHumanReview) {
+    return (
+      <ui.Badge variant="warning" size="xs" className="uppercase tracking-wide min-w-[80px]">
+        Awaiting review
       </ui.Badge>
     );
   }
