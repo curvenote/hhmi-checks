@@ -358,8 +358,8 @@ export function isWaitingForPdfReport(data: TextIntegrityDataSchema | undefined)
 export function isWaitingForStoredPdfReport(data: TextIntegrityDataSchema | undefined): boolean {
   if (!data?.stages) return false;
   if (!canShowResults(data)) return false;
-  if (data.similarityReportPdfInvalidated === true) return false;
   if (isWaitingForPdfReport(data)) return true;
+  if (data.similarityReportPdfInvalidated === true) return false;
   if (data.stages.reportGeneration?.status !== 'completed') return false;
 
   const currentReportPdfId = data.reportPdfId ?? data.latest?.reportPdfId;

@@ -95,6 +95,24 @@ describe('shouldPollTextIntegrityChecks', () => {
     expect(shouldPollTextIntegrityChecks(done, 'run-1')).toBe(true);
   });
 
+  it('continues polling while an invalidated PDF is regenerating', () => {
+    const regenerating = dataWithReportStatus('processing');
+    regenerating.reportPdfId = 'pdf-stale';
+    regenerating.storedReportPdfId = 'pdf-stale';
+    regenerating.similarityReportStored = true;
+    regenerating.similarityReportPdfInvalidated = true;
+    expect(shouldPollTextIntegrityChecks(regenerating, 'run-1')).toBe(true);
+  });
+
+  it('stops polling when the completed PDF is invalidated and no regeneration is in flight', () => {
+    const invalidated = dataWithReportStatus('completed');
+    invalidated.reportPdfId = 'pdf-stale';
+    invalidated.storedReportPdfId = 'pdf-stale';
+    invalidated.similarityReportStored = true;
+    invalidated.similarityReportPdfInvalidated = true;
+    expect(shouldPollTextIntegrityChecks(invalidated, 'run-1')).toBe(false);
+  });
+
   it('stops polling when processing and the current PDF are complete', () => {
     const done = dataWithReportStatus('completed');
     done.reportPdfId = 'pdf-current';
