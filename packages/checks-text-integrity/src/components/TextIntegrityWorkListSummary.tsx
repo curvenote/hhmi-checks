@@ -1,7 +1,7 @@
 import { cn } from '@curvenote/scms-core';
 import type { TextIntegrityDataSchema } from '../schema.js';
 import { canShowResults } from '../schema.js';
-import { similarityScoreTextClassName } from './SimilarityPercentageBar.js';
+import { similarityScoreBarColorClass } from './SimilarityPercentageBar.js';
 import { TextIntegritySummaryBadge } from './TextIntegritySummaryBadge.js';
 import { TextIntegritySummaryTitle } from './TextIntegritySummaryTitle.js';
 
@@ -14,13 +14,11 @@ export function TextIntegrityWorkListSummary({ metadata }: TextIntegrityWorkList
     const overall = metadata.summaryReport.overallMatchPercentage ?? 0;
     return (
       <>
-        <span
-          className={cn(
-            'font-semibold tabular-nums leading-none',
-            similarityScoreTextClassName(overall),
-          )}
-        >
-          {overall}%
+        <span className="inline-flex flex-col gap-0.5 items-center leading-none">
+          <span className="font-semibold text-foreground tabular-nums">{overall}%</span>
+          <span
+            className={cn('h-0.5 w-full rounded-full', similarityScoreBarColorClass(overall))}
+          />
         </span>
         <span className="text-muted-foreground" aria-hidden>
           |
