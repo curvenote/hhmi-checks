@@ -18,7 +18,7 @@ function TextIntegrityWorkListSummaryLogo({
     <span
       className={cn(
         'flex items-center min-w-0 max-w-28',
-        compact ? 'h-4 [&_img]:max-h-3 [&_svg]:max-h-3' : 'h-5 [&_img]:max-h-4 [&_svg]:max-h-4',
+        compact ? 'h-4 [&_img]:max-h-2.5 [&_svg]:max-h-2.5' : 'h-5 [&_img]:max-h-4 [&_svg]:max-h-4',
       )}
     >
       <TextIntegritySummaryTitle metadata={metadata} />
