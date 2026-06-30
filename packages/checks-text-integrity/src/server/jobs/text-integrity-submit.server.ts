@@ -300,8 +300,7 @@ export async function textIntegritySubmitHandler(
       files: [{ url: manuscript.url, filename: manuscript.filename }],
       metadata: {
         title: workVersionRow.title,
-        owner: userIdentity,
-        submitter: userIdentity,
+        ...(userIdentity ? { submitter: userIdentity } : {}),
         relayContext: buildRelayContextEnvelope(
           mergedConfig.settings as TextIntegrityServiceSettings,
         ),
