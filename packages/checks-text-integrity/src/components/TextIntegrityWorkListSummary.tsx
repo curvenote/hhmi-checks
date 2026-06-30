@@ -1,13 +1,20 @@
 import { cn } from '@curvenote/scms-core';
 import type { TextIntegrityDataSchema } from '../schema.js';
-import { canShowResults } from '../schema.js';
+import { canShowResults, hasError } from '../schema.js';
 import { similarityScoreBarColorClass } from './SimilarityPercentageBar.js';
-import { TextIntegritySummaryBadge } from './TextIntegritySummaryBadge.js';
 import { TextIntegritySummaryTitle } from './TextIntegritySummaryTitle.js';
 
 type TextIntegrityWorkListSummaryProps = {
   metadata: TextIntegrityDataSchema | undefined;
 };
+
+function TextIntegrityWorkListSummaryLogo({ metadata }: TextIntegrityWorkListSummaryProps) {
+  return (
+    <span className="flex items-center min-w-0 max-w-28 [&_img]:max-h-4 [&_svg]:max-h-4">
+      <TextIntegritySummaryTitle metadata={metadata} />
+    </span>
+  );
+}
 
 export function TextIntegrityWorkListSummary({ metadata }: TextIntegrityWorkListSummaryProps) {
   if (canShowResults(metadata) && metadata?.summaryReport) {
@@ -23,19 +30,23 @@ export function TextIntegrityWorkListSummary({ metadata }: TextIntegrityWorkList
         <span className="text-muted-foreground" aria-hidden>
           |
         </span>
-        <span className="flex items-center min-w-0 max-w-28 [&_img]:max-h-4 [&_svg]:max-h-4">
-          <TextIntegritySummaryTitle metadata={metadata} />
-        </span>
+        <TextIntegrityWorkListSummaryLogo metadata={metadata} />
       </>
     );
   }
 
+  const label = !metadata?.stages ? 'Pending' : hasError(metadata) ? 'Error' : 'In progress';
+  const labelClassName = hasError(metadata) ? 'text-destructive' : 'text-foreground';
+
   return (
     <>
-      <span className="flex items-center min-w-0 max-w-28 [&_img]:max-h-4 [&_svg]:max-h-4">
-        <TextIntegritySummaryTitle metadata={metadata} />
+      <span className={cn('font-medium leading-none whitespace-nowrap', labelClassName)}>
+        {label}
       </span>
-      <TextIntegritySummaryBadge metadata={metadata} />
+      <span className="text-muted-foreground" aria-hidden>
+        |
+      </span>
+      <TextIntegrityWorkListSummaryLogo metadata={metadata} />
     </>
   );
 }
