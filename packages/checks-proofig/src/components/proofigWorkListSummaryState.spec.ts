@@ -32,7 +32,7 @@ describe('getProofigWorkListSummaryState', () => {
     });
   });
 
-  it('shows OK only after review completes with no confirmed problems', () => {
+  it('shows all clear only after review completes with no confirmed problems', () => {
     const state = getProofigWorkListSummaryState({
       summary: {
         state: KnownState.ReportClean,
@@ -53,12 +53,12 @@ describe('getProofigWorkListSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      label: 'OK',
+      label: 'ALL CLEAR',
       underlineClassName: 'bg-success',
     });
   });
 
-  it('shows only the problem count after review completes with confirmed problems', () => {
+  it('shows the problem count label after review completes with confirmed problems', () => {
     const state = getProofigWorkListSummaryState({
       summary: {
         state: KnownState.ReportFlagged,
@@ -79,7 +79,7 @@ describe('getProofigWorkListSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      label: '3',
+      label: '3 PROBLEMS',
       underlineClassName: 'bg-destructive',
     });
   });
