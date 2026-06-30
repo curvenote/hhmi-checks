@@ -8,10 +8,6 @@ export type ProofigWorkListSummaryState = {
   underlineClassName: string;
 };
 
-function problemLabel(count: number) {
-  return `${count} ${count === 1 ? 'PROBLEM' : 'PROBLEMS'}`;
-}
-
 export function getProofigWorkListSummaryState(
   metadata: ProofigDataSchema | undefined,
 ): ProofigWorkListSummaryState {
@@ -37,12 +33,12 @@ export function getProofigWorkListSummaryState(
 
   if (hasFinalReport) {
     if (matchesReview === 0 && matchesReport === 0 && inspectsReport === 0) {
-      return { label: 'ALL CLEAR', underlineClassName: 'bg-success' };
+      return { label: 'OK', underlineClassName: 'bg-success' };
     }
     if (matchesReview > 0 && matchesReport === 0 && inspectsReport === 0) {
-      return { label: 'CONFIRMED ALL CLEAR', underlineClassName: 'bg-success' };
+      return { label: 'OK', underlineClassName: 'bg-success' };
     }
-    return { label: problemLabel(bad), underlineClassName: 'bg-destructive' };
+    return { label: String(bad), underlineClassName: 'bg-destructive' };
   }
 
   const status = (currentStageData as { status?: string } | undefined)?.status;

@@ -32,7 +32,7 @@ describe('getProofigWorkListSummaryState', () => {
     });
   });
 
-  it('shows confirmed all clear only after review completes with no confirmed problems', () => {
+  it('shows OK only after review completes with no confirmed problems', () => {
     const state = getProofigWorkListSummaryState({
       summary: {
         state: KnownState.ReportClean,
@@ -53,8 +53,34 @@ describe('getProofigWorkListSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      label: 'CONFIRMED ALL CLEAR',
+      label: 'OK',
       underlineClassName: 'bg-success',
+    });
+  });
+
+  it('shows only the problem count after review completes with confirmed problems', () => {
+    const state = getProofigWorkListSummaryState({
+      summary: {
+        state: KnownState.ReportFlagged,
+        receivedAt,
+        subimagesTotal: 23,
+        matchesReview: 4,
+        matchesReport: 2,
+        inspectsReport: 1,
+      },
+      stages: {
+        resultsReview: {
+          status: 'completed',
+          outcome: 'flagged',
+          history: [],
+          timestamp: receivedAt,
+        },
+      },
+    } as unknown as ProofigDataSchema);
+
+    expect(state).toEqual({
+      label: '3',
+      underlineClassName: 'bg-destructive',
     });
   });
 });
