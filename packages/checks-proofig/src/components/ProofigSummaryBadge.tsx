@@ -64,11 +64,4 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
       </ui.Badge>
     );
   }
-
-  // Results: awaiting review (or mix)
-  return (
-    <ui.Badge variant="warning" size="xs" className="uppercase tracking-wide min-w-[80px]">
-      Awaiting review
-    </ui.Badge>
-  );
 }
