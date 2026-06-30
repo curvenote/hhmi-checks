@@ -168,6 +168,12 @@ export function linearStageIsDone(status: ProofigStageStatus | undefined): boole
   return status === 'completed' || status === 'notify-skipped';
 }
 
+/** True if any Proofig stage has errored. */
+export function hasError(data: ProofigDataSchema | undefined): boolean {
+  if (!data?.stages) return false;
+  return Object.values(data.stages).some((stage) => stage?.status === 'error');
+}
+
 export const MINIMAL_PROOFIG_SERVICE_DATA: ProofigDataSchema = {
   stages: {
     initialPost: { status: 'pending', history: [], timestamp: new Date().toISOString() },

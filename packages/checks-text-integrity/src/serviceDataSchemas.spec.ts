@@ -4,6 +4,7 @@ import {
   type LinearStage,
   type LinearStageStatus,
   type TextIntegrityDataSchema,
+  hasError,
   isAwaitingInitialTextIntegrityStages,
   isWaitingForPdfReport,
   shouldPollTextIntegrityChecks,
@@ -28,6 +29,33 @@ function dataWithReportStatus(
     },
   };
 }
+
+describe('hasError', () => {
+  it('returns true when any Text Integrity stage has errored', () => {
+    expect(
+      hasError({
+        stages: {
+          submission: stage('completed'),
+          processing: stage('error'),
+          reportGeneration: stage('pending'),
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it('returns false when stages are missing or no stage has errored', () => {
+    expect(hasError(undefined)).toBe(false);
+    expect(
+      hasError({
+        stages: {
+          submission: stage('completed'),
+          processing: stage('processing'),
+          reportGeneration: stage('pending'),
+        },
+      }),
+    ).toBe(false);
+  });
+});
 
 describe('isWaitingForPdfReport', () => {
   it.each<LinearStageStatus>(['pending', 'processing'])(
