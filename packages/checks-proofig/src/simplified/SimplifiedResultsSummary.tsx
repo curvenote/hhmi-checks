@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { ProofigDataSchema } from '../schema.js';
-import { getProofigSummaryCounts, proofigIsAwaitingHumanReview } from '../utils/proofigSummary.js';
+import { getProofigResultDisplayState } from '../utils/proofigSummary.js';
 import { plural } from '@curvenote/scms-core';
 import { LogoMono } from '../icons.js';
 import { ReportNoLongerAvailable } from '../components/ReportNoLongerAvailable.js';
@@ -22,9 +22,10 @@ export function SimplifiedResultsSummary({
   checkRunId?: string;
   remoteStatusActionPath?: string;
 }) {
+  const resultDisplayState = getProofigResultDisplayState(proofigData);
   const { total, matchesReview, matchesNotBad, matchesReport, inspectsReport, bad } =
-    getProofigSummaryCounts(proofigData);
-  const awaitingHumanReview = proofigIsAwaitingHumanReview(proofigData);
+    resultDisplayState.counts;
+  const awaitingHumanReview = resultDisplayState.kind === 'awaiting-review';
   const reportUrl = proofigData?.reportUrl;
   const deleted = proofigData?.deleted;
   const showOpenReport = !!reportUrl && !deleted && matchesReview > 0;
@@ -89,7 +90,7 @@ export function SimplifiedResultsSummary({
         <div className="text-sm text-muted-foreground">No figures were detected.</div>
       </div>
     );
-  } else if (awaitingHumanReview) {
+  } else if (resultDisplayState.kind === 'awaiting-review') {
     body = (
       <div className="space-y-1">
         <div className="flex flex-wrap gap-2 items-baseline">
@@ -105,14 +106,14 @@ export function SimplifiedResultsSummary({
         </div>
       </div>
     );
-  } else if (matchesReview === 0 && matchesReport === 0 && inspectsReport === 0) {
+  } else if (resultDisplayState.kind === 'all-clear') {
     body = (
       <div className="space-y-1">
         <div className={`text-3xl font-medium ${CLEAR}`}>All Clear</div>
         <div className="text-base font-bold">No issues flagged with your figures</div>
       </div>
     );
-  } else if (matchesReview === 0 && matchesReport === 0 && inspectsReport > 0) {
+  } else if (resultDisplayState.kind === 'manual-problems') {
     body = (
       <div className="space-y-1">
         <div className={`text-3xl font-medium ${PROBLEM}`}>
@@ -126,7 +127,7 @@ export function SimplifiedResultsSummary({
         </div>
       </div>
     );
-  } else if (matchesReview > 0 && inspectsReport === 0 && matchesReport === 0) {
+  } else if (resultDisplayState.kind === 'confirmed-all-clear') {
     body = (
       <div className="space-y-1">
         <div className={`text-3xl font-medium ${CLEAR}`}>Confirmed All Clear</div>

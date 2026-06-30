@@ -1,6 +1,6 @@
 import type { ProofigDataSchema } from '../schema.js';
 import { ALL_PENDING_STAGES, getCurrentProofigStage } from '../schema.js';
-import { getProofigSummaryCounts, proofigIsAwaitingHumanReview } from '../utils/proofigSummary.js';
+import { getProofigResultDisplayState } from '../utils/proofigSummary.js';
 import { ui } from '@curvenote/scms-core';
 import { STAGE_LABELS } from './ProofigProgressComponent.js';
 
@@ -15,12 +15,11 @@ interface ProofigSummaryBadgeProps {
 export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
   const stages = { ...ALL_PENDING_STAGES, ...metadata?.stages };
   const { currentStage, currentStageData } = getCurrentProofigStage(stages);
-  const { bad } = getProofigSummaryCounts(metadata);
+  const resultDisplayState = getProofigResultDisplayState(metadata);
   const isAtResults = currentStage === 'resultsReview';
   const outcome = metadata?.stages?.resultsReview?.outcome;
-  const awaitingHumanReview = proofigIsAwaitingHumanReview(metadata);
 
-  if (awaitingHumanReview) {
+  if (resultDisplayState.kind === 'awaiting-review') {
     return (
       <ui.Badge variant="warning" size="xs" className="uppercase tracking-wide min-w-[80px]">
         Awaiting review
@@ -48,7 +47,10 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
   }
 
   // Results: all clear
-  if (bad === 0) {
+  if (
+    resultDisplayState.kind === 'all-clear' ||
+    resultDisplayState.kind === 'confirmed-all-clear'
+  ) {
     return (
       <ui.Badge variant="success" size="xs" className="uppercase tracking-wide min-w-[80px]">
         All clear
@@ -56,10 +58,14 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
     );
   }
 
-  // Results: confirmed problems only
-  return (
-    <ui.Badge variant="destructive" size="xs" className="uppercase tracking-wide min-w-[80px]">
-      {bad} {bad === 1 ? 'problem' : 'problems'} found
-    </ui.Badge>
-  );
+  if (resultDisplayState.kind === 'manual-problems' || resultDisplayState.kind === 'problems') {
+    return (
+      <ui.Badge variant="destructive" size="xs" className="uppercase tracking-wide min-w-[80px]">
+        {resultDisplayState.problemCount}{' '}
+        {resultDisplayState.problemCount === 1 ? 'problem' : 'problems'} found
+      </ui.Badge>
+    );
+  }
+
+  return null;
 }

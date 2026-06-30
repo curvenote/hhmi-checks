@@ -1,6 +1,10 @@
 import { KnownState, type ProofigDataSchema } from '../schema.js';
 import { ALL_PENDING_STAGES, getCurrentProofigStage } from '../schema.js';
-import { getProofigSummaryCounts, proofigIsAwaitingHumanReview } from '../utils/proofigSummary.js';
+import {
+  getProofigResultDisplayState,
+  getProofigSummaryCounts,
+  proofigIsAwaitingHumanReview,
+} from '../utils/proofigSummary.js';
 import { STAGE_LABELS } from './ProofigProgressComponent.js';
 
 export type ProofigWorkListSummaryState = {
@@ -30,8 +34,8 @@ export function getProofigWorkListSummaryState(
 ): ProofigWorkListSummaryState {
   const stages = { ...ALL_PENDING_STAGES, ...metadata?.stages };
   const { currentStage, currentStageData } = getCurrentProofigStage(stages);
-  const { total, matchesReview, bad } = getProofigSummaryCounts(metadata);
-  const awaitingHumanReview = proofigIsAwaitingHumanReview(metadata);
+  const resultDisplayState = getProofigResultDisplayState(metadata);
+  const { total, matchesReview } = resultDisplayState.counts;
   const reportOutcome = metadata?.stages?.resultsReview?.outcome;
   const summaryState = metadata?.summary?.state;
   const hasFinalReport =
@@ -40,7 +44,7 @@ export function getProofigWorkListSummaryState(
     summaryState === KnownState.ReportClean ||
     summaryState === KnownState.ReportFlagged;
 
-  if (awaitingHumanReview) {
+  if (resultDisplayState.kind === 'awaiting-review') {
     return {
       label: total > 0 ? `${matchesReview}/${total} AWAITING REVIEW` : 'AWAITING REVIEW',
       underlineClassName: 'bg-warning',
@@ -48,12 +52,18 @@ export function getProofigWorkListSummaryState(
   }
 
   if (hasFinalReport) {
-    // Proofig can keep a final `flagged` outcome after reviewers resolve/remove all problem
-    // images; it updates the counts but does not send a later clean notification.
-    if (bad === 0) {
+    if (
+      resultDisplayState.kind === 'all-clear' ||
+      resultDisplayState.kind === 'confirmed-all-clear'
+    ) {
       return { label: 'ALL CLEAR', underlineClassName: 'bg-success' };
     }
-    return { label: problemLabel(bad), underlineClassName: 'bg-destructive' };
+    if (resultDisplayState.kind === 'manual-problems' || resultDisplayState.kind === 'problems') {
+      return {
+        label: problemLabel(resultDisplayState.problemCount),
+        underlineClassName: 'bg-destructive',
+      };
+    }
   }
 
   const status = (currentStageData as { status?: string } | undefined)?.status;
