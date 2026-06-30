@@ -112,7 +112,7 @@ describe('getProofigWorkListSummaryState', () => {
     });
   });
 
-  it('does not show all clear for flagged final reports with review-only counts', () => {
+  it('shows all clear for flagged final reports when resolved counts have no confirmed problems', () => {
     const state = getProofigWorkListSummaryState({
       summary: {
         state: KnownState.ReportFlagged,
@@ -133,8 +133,8 @@ describe('getProofigWorkListSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      label: '0 PROBLEMS',
-      underlineClassName: 'bg-destructive',
+      label: 'ALL CLEAR',
+      underlineClassName: 'bg-success',
     });
   });
 

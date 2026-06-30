@@ -30,15 +30,10 @@ export function getProofigWorkListSummaryState(
 ): ProofigWorkListSummaryState {
   const stages = { ...ALL_PENDING_STAGES, ...metadata?.stages };
   const { currentStage, currentStageData } = getCurrentProofigStage(stages);
-  const { total, matchesReview, matchesReport, inspectsReport, bad } =
-    getProofigSummaryCounts(metadata);
+  const { total, matchesReview, bad } = getProofigSummaryCounts(metadata);
   const awaitingHumanReview = proofigIsAwaitingHumanReview(metadata);
   const reportOutcome = metadata?.stages?.resultsReview?.outcome;
   const summaryState = metadata?.summary?.state;
-  const reportOutcomeIsUnset = reportOutcome == null;
-  const summaryIsCleanReport = summaryState === KnownState.ReportClean;
-  const hasCleanFinalReport =
-    reportOutcome === 'clean' || (reportOutcomeIsUnset && summaryIsCleanReport);
   const hasFinalReport =
     reportOutcome === 'clean' ||
     reportOutcome === 'flagged' ||
@@ -53,10 +48,9 @@ export function getProofigWorkListSummaryState(
   }
 
   if (hasFinalReport) {
-    if (hasCleanFinalReport && matchesReview === 0 && matchesReport === 0 && inspectsReport === 0) {
-      return { label: 'ALL CLEAR', underlineClassName: 'bg-success' };
-    }
-    if (hasCleanFinalReport && matchesReview > 0 && matchesReport === 0 && inspectsReport === 0) {
+    // Proofig can keep a final `flagged` outcome after reviewers resolve/remove all problem
+    // images; it updates the counts but does not send a later clean notification.
+    if (bad === 0) {
       return { label: 'ALL CLEAR', underlineClassName: 'bg-success' };
     }
     return { label: problemLabel(bad), underlineClassName: 'bg-destructive' };
