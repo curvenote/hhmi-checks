@@ -33,6 +33,7 @@ export function TextIntegrityPdfReportStatus({
   const revalidator = useRevalidator();
   const retryFetcher = useFetcher<RetryFetcherData>();
   const lastRetryRef = useRef<unknown>(undefined);
+  const retryReachedWaitingRef = useRef(false);
   const [retried, setRetried] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const {
@@ -59,6 +60,26 @@ export function TextIntegrityPdfReportStatus({
       revalidator.revalidate();
     }
   }, [retryFetcher.state, retryFetcher.data, revalidator]);
+
+  useEffect(() => {
+    setRetried(false);
+    retryReachedWaitingRef.current = false;
+  }, [checkRunId]);
+
+  useEffect(() => {
+    if (!retried) {
+      retryReachedWaitingRef.current = false;
+      return;
+    }
+    if (waitingForReport) {
+      retryReachedWaitingRef.current = true;
+      return;
+    }
+    if (retryReachedWaitingRef.current && (reportGenerationFailed || reportPdfAvailable)) {
+      setRetried(false);
+      retryReachedWaitingRef.current = false;
+    }
+  }, [retried, waitingForReport, reportGenerationFailed, reportPdfAvailable]);
 
   const downloadUrl = checkRunId
     ? `/app/checks-text-integrity/download-pdf/${encodeURIComponent(checkRunId)}`
