@@ -12,14 +12,14 @@ export function ProofigWorkListSummary({ metadata }: ProofigWorkListSummaryProps
 
   return (
     <>
-      <span className="inline-flex flex-col gap-0.5 items-center leading-none">
+      <span className="inline-flex flex-col gap-0.5 justify-center items-center h-5 leading-none">
         <span className="font-medium text-foreground whitespace-nowrap">{label}</span>
         <span className={cn('h-0.5 w-full rounded-full', underlineClassName)} />
       </span>
-      <span className="text-muted-foreground" aria-hidden>
+      <span className="inline-flex items-center h-5 text-muted-foreground" aria-hidden>
         |
       </span>
-      <span className="flex items-center min-w-0 max-w-28 [&_img]:max-h-4 [&_svg]:max-h-4">
+      <span className="flex items-center h-5 min-w-0 max-w-28 [&_img]:max-h-4 [&_svg]:max-h-4">
         <ProofigSummaryTitle metadata={metadata} />
       </span>
     </>
