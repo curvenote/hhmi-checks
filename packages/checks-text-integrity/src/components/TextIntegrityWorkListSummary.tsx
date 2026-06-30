@@ -36,12 +36,13 @@ export function TextIntegrityWorkListSummary({ metadata }: TextIntegrityWorkList
   }
 
   const label = !metadata?.stages ? 'PENDING' : hasError(metadata) ? 'ERROR' : 'IN PROGRESS';
-  const labelClassName = hasError(metadata) ? 'text-destructive' : 'text-foreground';
+  const underlineClassName = hasError(metadata) ? 'bg-destructive' : 'bg-warning';
 
   return (
     <>
-      <span className={cn('font-medium leading-none whitespace-nowrap', labelClassName)}>
-        {label}
+      <span className="inline-flex flex-col gap-0.5 items-center leading-none">
+        <span className="font-medium text-foreground whitespace-nowrap">{label}</span>
+        <span className={cn('h-0.5 w-full rounded-full', underlineClassName)} />
       </span>
       <span className="text-muted-foreground" aria-hidden>
         |
