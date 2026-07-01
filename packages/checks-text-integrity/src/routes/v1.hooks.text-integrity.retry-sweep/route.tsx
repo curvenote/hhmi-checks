@@ -44,9 +44,11 @@ export async function action(args: ActionFunctionArgs) {
     return unauthorized();
   }
 
-  void runTextIntegrityRetrySweep().catch((error) => {
+  try {
+    const result = await runTextIntegrityRetrySweep();
+    return Response.json({ status: 'ok', ...result }, { status: 200 });
+  } catch (error) {
     console.error('[text-integrity retry-sweep] failed', error);
-  });
-
-  return Response.json({ status: 'accepted' }, { status: 202 });
+    return Response.json({ status: 'error', message: 'Retry sweep failed' }, { status: 500 });
+  }
 }

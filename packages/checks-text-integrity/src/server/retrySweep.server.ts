@@ -9,7 +9,10 @@ import {
 } from '@curvenote/scms-server';
 import type { ExtensionCheckHandleActionArgs } from '@curvenote/scms-core';
 import { getTextIntegrityConfigWithOverrides } from './config.server.js';
-import { retryTextIntegrityCheckRun } from './retryCheckRun.server.js';
+import {
+  releaseTextIntegrityRunRetrySweepClaim,
+  tryClaimTextIntegrityRunForRetrySweep,
+} from './runSuperseded.server.js';
 import {
   computeTextIntegrityRetryScheduledAt,
   getTextIntegrityRetryPolicy,
@@ -23,6 +26,7 @@ const DEFAULT_SWEEP_LIMIT = 25;
 export type TextIntegrityRetrySweepResult = {
   scanned: number;
   retried: number;
+  skippedClaimed: number;
   skippedEula: number;
   failed: number;
   errors: { runId: string; message: string }[];
@@ -71,12 +75,19 @@ export async function runTextIntegrityRetrySweep(options?: {
   const result: TextIntegrityRetrySweepResult = {
     scanned: candidates.length,
     retried: 0,
+    skippedClaimed: 0,
     skippedEula: 0,
     failed: 0,
     errors: [],
   };
 
   for (const sourceRun of candidates) {
+    const claimed = await tryClaimTextIntegrityRunForRetrySweep(sourceRun.id);
+    if (!claimed) {
+      result.skippedClaimed += 1;
+      continue;
+    }
+
     const scheduledAt = computeTextIntegrityRetryScheduledAt(sourceRun.attempt ?? 1, policy);
     const outcome = await retryTextIntegrityCheckRun(
       ctx,
@@ -92,10 +103,12 @@ export async function runTextIntegrityRetrySweep(options?: {
     }
 
     if ((outcome as { eulaSkip?: boolean }).eulaSkip) {
+      await releaseTextIntegrityRunRetrySweepClaim(sourceRun.id);
       result.skippedEula += 1;
       continue;
     }
 
+    await releaseTextIntegrityRunRetrySweepClaim(sourceRun.id);
     result.failed += 1;
     result.errors.push({
       runId: sourceRun.id,

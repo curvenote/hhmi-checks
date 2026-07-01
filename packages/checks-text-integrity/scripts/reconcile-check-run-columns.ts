@@ -34,13 +34,13 @@ async function main() {
     for (const run of rows) {
       scanned += 1;
       const failed = isTextIntegrityRunFailed(run);
-      const targetStatus = failed ? 'error' : run.status === 'healthy' ? 'healthy' : run.status;
+      const targetStatus = failed ? 'error' : 'healthy';
       const targetFailedAt = failed
         ? (run.failed_at ?? deriveTextIntegrityFailedAt(run))
-        : run.failed_at;
+        : null;
 
       const needsStatus = run.status !== targetStatus;
-      const needsFailedAt = failed && run.failed_at !== targetFailedAt;
+      const needsFailedAt = run.failed_at !== targetFailedAt;
       if (!needsStatus && !needsFailedAt) continue;
 
       const patch = failed ? errorColumnPatch(targetFailedAt!) : healthyColumnPatch();
