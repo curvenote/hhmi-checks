@@ -1,7 +1,6 @@
-import type { CreateJob, CheckServiceRunData } from '@curvenote/scms-core';
+import type { CreateJob } from '@curvenote/scms-core';
 import type { Context } from '@curvenote/scms-server';
 import { JobStatus } from '@curvenote/scms-db';
-import type { Prisma } from '@curvenote/scms-db';
 import { httpError, maintenanceGuardFromConfig } from '@curvenote/scms-core';
 import type { WorkVersionMetadataPayload } from '@curvenote/common';
 import { z } from 'zod';
@@ -11,7 +10,6 @@ import {
   hooksNotifyBaseUrl,
   signFilesInMetadata,
   jobs,
-  safeCheckServiceRunDataUpdate,
 } from '@curvenote/scms-server';
 import { getProofigConfigWithOverrides } from '../config.server.js';
 import { getProofingToken, invalidateProofingTokenCache } from '../proofigAuth.server.js';
@@ -23,13 +21,14 @@ import {
   rollingLogEntry,
   workVersionToPayload,
 } from './proofig-submit.utils.js';
-import { MINIMAL_PROOFIG_SERVICE_DATA, type ProofigDataSchema } from '../../schema.js';
+import { MINIMAL_PROOFIG_SERVICE_DATA } from '../../schema.js';
 import {
   completeInitialPostAndSetSubimageDetectionPending,
   completeDocumentPreparation,
   markInitialPostError,
   startInitialPostProcessing,
 } from '../stateMachine.server.js';
+import { patchProofigRunServiceData } from '../checkRunColumns.server.js';
 
 function getErrorMessage(err: unknown): string {
   return err instanceof Error
@@ -50,19 +49,13 @@ async function handleProofigSubmitJobFailure(
       rollingLog,
     },
   });
-  await safeCheckServiceRunDataUpdate(proofigRunId, (runData?: Prisma.JsonValue) => {
-    const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
-    const nextServiceData = markInitialPostError(
-      current.serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
+  await patchProofigRunServiceData(proofigRunId, (serviceData) =>
+    markInitialPostError(
+      serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
       errorMessage,
       new Date().toISOString(),
-    );
-    return {
-      ...current,
-      status: 'error',
-      serviceData: nextServiceData,
-    } satisfies CheckServiceRunData<ProofigDataSchema>;
-  });
+    ),
+  );
   return updatedJob;
 }
 
@@ -160,10 +153,13 @@ export async function proofigSubmitStreamHandler(
   const apiBaseUrl =
     (mergedConfig.apiBaseUrl as string | undefined) ?? process.env.PROOFIG_API_BASE_URL;
   if (!apiBaseUrl?.trim()) {
-    throw httpError(
-      503,
+    await handleProofigSubmitJobFailure(
+      job.id,
+      payload.proofig_run_id,
       'checks-proofig extension config missing apiBaseUrl; cannot run PROOFIG_SUBMIT_STREAM job',
+      rollingLog,
     );
+    return;
   }
 
   const notifyBaseUrlOverride =
@@ -188,18 +184,12 @@ export async function proofigSubmitStreamHandler(
   rollingLog.push(rollingLogEntry('job marked RUNNING', runningJob.id));
 
   const submitStartedAt = new Date().toISOString();
-  await safeCheckServiceRunDataUpdate(payload.proofig_run_id, (runData?: Prisma.JsonValue) => {
-    const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
-    let serviceData = current.serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA;
-    if (serviceData.stages?.documentPreparation?.status === 'processing') {
-      serviceData = completeDocumentPreparation(serviceData, submitStartedAt);
+  await patchProofigRunServiceData(payload.proofig_run_id, (serviceData) => {
+    let next = serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA;
+    if (next.stages?.documentPreparation?.status === 'processing') {
+      next = completeDocumentPreparation(next, submitStartedAt);
     }
-    const nextServiceData = startInitialPostProcessing(serviceData, submitStartedAt);
-    return {
-      ...current,
-      status: 'healthy',
-      serviceData: nextServiceData,
-    } satisfies CheckServiceRunData<ProofigDataSchema>;
+    return startInitialPostProcessing(next, submitStartedAt);
   });
 
   async function fetchPdfForSubmit(): Promise<Response> {
@@ -262,18 +252,12 @@ export async function proofigSubmitStreamHandler(
 
     // Transition run stages: initialPost completed, subimageDetection pending
     const receivedAt = new Date().toISOString();
-    await safeCheckServiceRunDataUpdate(payload.proofig_run_id, (runData?: Prisma.JsonValue) => {
-      const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
-      const nextServiceData = completeInitialPostAndSetSubimageDetectionPending(
-        current.serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
+    await patchProofigRunServiceData(payload.proofig_run_id, (serviceData) =>
+      completeInitialPostAndSetSubimageDetectionPending(
+        serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
         receivedAt,
-      );
-      return {
-        ...current,
-        status: 'healthy',
-        serviceData: nextServiceData,
-      } satisfies CheckServiceRunData<ProofigDataSchema>;
-    });
+      ),
+    );
 
     const completed = await jobs.dbUpdateJob(job.id, {
       status: JobStatus.COMPLETED,

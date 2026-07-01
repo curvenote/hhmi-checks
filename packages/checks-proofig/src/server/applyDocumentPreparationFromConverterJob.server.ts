@@ -1,16 +1,11 @@
-import type { CheckServiceRunData } from '@curvenote/scms-core';
-import type { Prisma } from '@curvenote/scms-db';
 import { JobStatus } from '@curvenote/scms-db';
-import { getPrismaClient, safeCheckServiceRunDataUpdate } from '@curvenote/scms-server';
-import {
-  isProofigAwaitingDocumentPreparationInUi,
-  proofigDataSchema,
-  type ProofigDataSchema,
-} from '../schema.js';
+import { getPrismaClient } from '@curvenote/scms-server';
+import { isProofigAwaitingDocumentPreparationInUi, proofigDataSchema } from '../schema.js';
 import {
   completeDocumentPreparation,
   markDocumentPreparationError,
 } from './stateMachine.server.js';
+import { patchProofigRunServiceData } from './checkRunColumns.server.js';
 
 function lastJobMessage(messages: string[] | null | undefined): string | undefined {
   if (!messages?.length) return undefined;
@@ -38,7 +33,7 @@ export async function applyDocumentPreparationFromConverterJob(
     return { ok: false, message: 'Proofig check run not found.' };
   }
 
-  const rowData = run.data as { serviceData?: unknown; status?: string } | null;
+  const rowData = run.data as { serviceData?: unknown } | null;
   const parsed = proofigDataSchema.safeParse(rowData?.serviceData);
   if (!parsed.success || !parsed.data.stages) {
     return { ok: true, updated: false };
@@ -56,7 +51,6 @@ export async function applyDocumentPreparationFromConverterJob(
 
   const job = await prisma.job.findUnique({ where: { id: converterJobId } });
   if (!job) {
-    // Job row may not be visible yet immediately after dispatch; poll again later.
     return { ok: true, updated: false };
   }
 
@@ -71,21 +65,10 @@ export async function applyDocumentPreparationFromConverterJob(
   const receivedAt = new Date().toISOString();
 
   if (job.status === JobStatus.COMPLETED) {
-    let didUpdate = false;
-    await safeCheckServiceRunDataUpdate(checkRunId, (runData?: Prisma.JsonValue) => {
-      const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
-      const nextServiceData = completeDocumentPreparation(
-        current.serviceData ?? serviceData,
-        receivedAt,
-      );
-      didUpdate = true;
-      return {
-        ...current,
-        status: 'healthy',
-        serviceData: nextServiceData,
-      } satisfies CheckServiceRunData<ProofigDataSchema>;
-    });
-    return { ok: true, updated: didUpdate };
+    await patchProofigRunServiceData(checkRunId, (current) =>
+      completeDocumentPreparation(current ?? serviceData, receivedAt),
+    );
+    return { ok: true, updated: true };
   }
 
   if (job.status === JobStatus.FAILED || job.status === JobStatus.CANCELLED) {
@@ -94,22 +77,10 @@ export async function applyDocumentPreparationFromConverterJob(
       (job.status === JobStatus.CANCELLED
         ? 'Document conversion was cancelled.'
         : 'Document conversion failed.');
-    let didUpdate = false;
-    await safeCheckServiceRunDataUpdate(checkRunId, (runData?: Prisma.JsonValue) => {
-      const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
-      const nextServiceData = markDocumentPreparationError(
-        current.serviceData ?? serviceData,
-        errorMessage,
-        receivedAt,
-      );
-      didUpdate = true;
-      return {
-        ...current,
-        status: 'error',
-        serviceData: nextServiceData,
-      } satisfies CheckServiceRunData<ProofigDataSchema>;
-    });
-    return { ok: true, updated: didUpdate };
+    await patchProofigRunServiceData(checkRunId, (current) =>
+      markDocumentPreparationError(current ?? serviceData, errorMessage, receivedAt),
+    );
+    return { ok: true, updated: true };
   }
 
   return { ok: true, updated: false };

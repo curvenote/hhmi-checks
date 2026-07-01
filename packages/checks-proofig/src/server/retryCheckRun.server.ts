@@ -2,7 +2,7 @@ import type {
   ExtensionCheckHandleActionArgs,
   ExtensionCheckHandleActionResult,
 } from '@curvenote/scms-core';
-import { getPrismaClient } from '@curvenote/scms-server';
+import { getConfig, getPrismaClient } from '@curvenote/scms-server';
 import { isProofigRunFailed } from './isRunFailed.server.js';
 import {
   isProofigRunSupersededByRetry,
@@ -50,7 +50,8 @@ export async function retryProofigCheckRun(
     };
   }
 
-  const retriedAt = new Date().toISOString();
+  const appConfig = await getConfig();
+  const serviceAccountId = appConfig.api.submissionsServiceAccount?.id ?? ctx.user?.id;
   const createdById =
     mode === 'admin'
       ? (sourceRun.created_by_id ?? ctx.user?.id ?? undefined)
@@ -58,11 +59,10 @@ export async function retryProofigCheckRun(
 
   const result = await startProofigCheckRun(ctx, workVersionId, {
     createdById,
-    invokedById: ctx.user?.id,
+    invokedById: serviceAccountId,
     lineage: {
       retryOfRunId: sourceRun.id,
-      retriedAt,
-      retriedByUserId: ctx.user?.id,
+      sourceAttempt: (sourceRun.attempt ?? 1) + 1,
     },
   });
 
@@ -75,8 +75,6 @@ export async function retryProofigCheckRun(
   try {
     await markProofigSourceRunSupersededByRetry(sourceRun.id, result.checkRunId, ctx.user?.id);
   } catch (err) {
-    // The new run already exists; do not fail the retry. The source may briefly
-    // remain in the failed-runs list until the mark succeeds on a later attempt.
     console.error(
       `Proofig retry created run ${result.checkRunId} but failed to mark source ${sourceRun.id} as superseded`,
       err,

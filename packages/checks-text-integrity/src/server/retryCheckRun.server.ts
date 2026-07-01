@@ -2,7 +2,7 @@ import type {
   ExtensionCheckHandleActionArgs,
   ExtensionCheckHandleActionResult,
 } from '@curvenote/scms-core';
-import { getPrismaClient } from '@curvenote/scms-server';
+import { getConfig, getPrismaClient } from '@curvenote/scms-server';
 import {
   assertOriginalSubmitterEulaCurrent,
   assertSubmitterEulaAccepted,
@@ -19,6 +19,10 @@ const TEXT_INTEGRITY_KIND = 'checks-text-integrity';
 
 export type TextIntegrityRetryMode = 'user' | 'admin';
 
+export type TextIntegrityRetryOptions = {
+  scheduledAt?: string;
+};
+
 /**
  * Retry a failed Text Integrity check run by creating a new run on the same work version.
  */
@@ -27,6 +31,7 @@ export async function retryTextIntegrityCheckRun(
   workVersionId: string,
   sourceCheckRunId: string,
   mode: TextIntegrityRetryMode,
+  options: TextIntegrityRetryOptions = {},
 ): Promise<ExtensionCheckHandleActionResult> {
   const prisma = await getPrismaClient();
   const sourceRun = await prisma.checkServiceRun.findFirst({
@@ -81,17 +86,18 @@ export async function retryTextIntegrityCheckRun(
     }
   }
 
-  const retriedAt = new Date().toISOString();
+  const appConfig = await getConfig();
+  const serviceAccountId = appConfig.api.submissionsServiceAccount?.id ?? ctx.user?.id;
   const createdById =
     mode === 'admin' ? (sourceRun.created_by_id ?? undefined) : (ctx.user?.id ?? undefined);
 
   const result = await startTextIntegrityCheckRun(ctx, workVersionId, {
     createdById,
-    invokedById: ctx.user?.id,
+    invokedById: serviceAccountId,
+    scheduledAt: options.scheduledAt,
     lineage: {
       retryOfRunId: sourceRun.id,
-      retriedAt,
-      retriedByUserId: ctx.user?.id,
+      sourceAttempt: (sourceRun.attempt ?? 1) + 1,
     },
   });
 
@@ -108,8 +114,6 @@ export async function retryTextIntegrityCheckRun(
       ctx.user?.id,
     );
   } catch (err) {
-    // The new run already exists; do not fail the retry. The source may briefly
-    // remain in the failed-runs list until the mark succeeds on a later attempt.
     console.error(
       `Text Integrity retry created run ${result.checkRunId} but failed to mark source ${sourceRun.id} as superseded`,
       err,

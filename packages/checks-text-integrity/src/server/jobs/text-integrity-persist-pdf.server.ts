@@ -1,6 +1,5 @@
 import type { CreateJob } from '@curvenote/scms-core';
 import { JobStatus } from '@curvenote/scms-db';
-import type { Prisma } from '@curvenote/scms-db';
 import { httpError } from '@curvenote/scms-core';
 import { uuidv7 } from 'uuidv7';
 import { z } from 'zod';
@@ -9,12 +8,12 @@ import {
   type StorageBackend,
   getPrismaClient,
   jobs,
-  safeCheckServiceRunDataUpdate,
   File,
 } from '@curvenote/scms-server';
 import type { TextIntegrityDataSchema } from '../../schema.js';
 import { textIntegrityDataSchema } from '../../schema.js';
 import { getTextIntegrityConfigWithOverrides } from '../config.server.js';
+import { patchTextIntegrityRunServiceData } from '../checkRunColumns.server.js';
 import { fetchSimilarityReportPdfFromRelay } from '../fetch-similarity-report-from-relay.server.js';
 import { resolveRelayInstanceId } from '../relay-urls.server.js';
 import { getAppChecksFromContext, resolveServiceName } from '../relay-config.server.js';
@@ -37,7 +36,6 @@ export type TextIntegrityPersistPdfJobPayload = z.infer<
 >;
 
 type CheckServiceRunData = {
-  status: string;
   serviceData?: TextIntegrityDataSchema;
 };
 
@@ -145,31 +143,21 @@ export async function textIntegrityPersistPdfHandler(
     const uploadDate = new Date().toISOString();
     const fileEntry = buildSimilarityReportFileEntry(storagePath, size, md5, uploadDate);
 
-    await safeCheckServiceRunDataUpdate(
-      payload.check_service_run_id,
-      (currentRunData?: Prisma.JsonValue) => {
-        const current = (currentRunData ?? {}) as CheckServiceRunData;
-        const sdParsed = textIntegrityDataSchema.safeParse(current.serviceData);
-        const sd = sdParsed.success ? sdParsed.data : serviceData;
-        const nextFiles = { ...(sd.files ?? {}) };
-        for (const key of Object.keys(nextFiles)) {
-          if (nextFiles[key]?.slot === fileEntry.slot) {
-            delete nextFiles[key];
-          }
+    await patchTextIntegrityRunServiceData(payload.check_service_run_id, (sd) => {
+      const nextFiles = { ...(sd.files ?? {}) };
+      for (const key of Object.keys(nextFiles)) {
+        if (nextFiles[key]?.slot === fileEntry.slot) {
+          delete nextFiles[key];
         }
-        nextFiles[storagePath] = fileEntry;
-        const nextServiceData: TextIntegrityDataSchema = {
-          ...sd,
-          files: nextFiles,
-          similarityReportStored: true,
-          storedReportPdfId: pdfId,
-        };
-        return {
-          ...current,
-          serviceData: nextServiceData,
-        } as Prisma.JsonObject;
-      },
-    );
+      }
+      nextFiles[storagePath] = fileEntry;
+      return {
+        ...sd,
+        files: nextFiles,
+        similarityReportStored: true,
+        storedReportPdfId: pdfId,
+      };
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to persist similarity PDF';
     await jobs.dbUpdateJob(job.id, {

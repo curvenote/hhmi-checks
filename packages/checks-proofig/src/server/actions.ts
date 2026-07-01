@@ -19,8 +19,9 @@ import { postProofigRemoteStatus } from './proofigRemoteStatus.server.js';
 import { applyNotifyPayloadToCheckRun } from './applyNotifyPayloadToCheckRun.server.js';
 import { getProofingToken } from './proofigAuth.server.js';
 import { proofigReportUrlWithAccessToken } from './proofigReportUrl.server.js';
-import { startProofigCheckRun } from './startCheckRun.server.js';
+import { checkRunCoarseStatus } from './checkRunColumns.server.js';
 import { retryProofigCheckRun } from './retryCheckRun.server.js';
+import { startProofigCheckRun } from './startCheckRun.server.js';
 
 async function findProofigRunForWorkVersion(
   workVersionId: string,
@@ -541,8 +542,8 @@ export async function proofigStatus(args: ExtensionCheckStatusArgs): Promise<any
   if (!run) {
     return { status: 'unknown', message: 'Check run not found' };
   }
+  const status = checkRunCoarseStatus(run.status);
   const runData = run.data as Record<string, unknown> | null;
-  const status = (runData?.status as string) ?? 'unknown';
   const serviceData = runData?.serviceData;
   return { status, serviceData };
 }

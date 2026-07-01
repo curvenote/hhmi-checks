@@ -1,20 +1,8 @@
-import { safeCheckServiceRunDataUpdate } from '@curvenote/scms-server';
-import type { Prisma } from '@curvenote/scms-db';
 import type { RelayNotifyEnvelope } from '@curvenote/check-relay-types';
-import {
-  hasError,
-  MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
-  parseNotifyWebhookJson,
-  textIntegrityDataSchema,
-} from '../schema.js';
+import { parseNotifyWebhookJson } from '../schema.js';
 import type { TextIntegrityDataSchema } from '../schema.js';
 import { applyWebhookEvent } from './stateMachine.server.js';
-
-type CheckServiceRunData = {
-  status: string;
-  serviceData?: TextIntegrityDataSchema;
-  serviceDataSchema?: Record<string, unknown>;
-};
+import { patchTextIntegrityRunServiceData } from './checkRunColumns.server.js';
 
 /**
  * Apply relay check-status notify envelopes (same shapes as ingest `notify_url`) to a run.
@@ -35,22 +23,14 @@ export async function applyRelayCheckStatusEnvelopes(
     const receivedAt = new Date().toISOString();
 
     try {
-      await safeCheckServiceRunDataUpdate(checkServiceRunId, (runData?: Prisma.JsonValue) => {
-        const current = (runData ?? {}) as CheckServiceRunData;
-        const sd = textIntegrityDataSchema.safeParse(current.serviceData);
-        const currentServiceData = sd.success ? sd.data : MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
-
-        const nextServiceData = applyWebhookEvent(currentServiceData, webhook, receivedAt);
-        if (!nextServiceData) {
-          return current as Prisma.JsonObject;
-        }
-
-        return {
-          ...current,
-          status: hasError(nextServiceData) ? 'error' : 'healthy',
-          serviceData: nextServiceData,
-        } as Prisma.JsonObject;
-      });
+      await patchTextIntegrityRunServiceData(
+        checkServiceRunId,
+        (currentServiceData: TextIntegrityDataSchema) => {
+          const nextServiceData = applyWebhookEvent(currentServiceData, webhook, receivedAt);
+          return nextServiceData ?? currentServiceData;
+        },
+        receivedAt,
+      );
     } catch (err) {
       return {
         ok: false,

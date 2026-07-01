@@ -14,6 +14,9 @@ vi.mock('@curvenote/scms-server', () => ({
   getPrismaClient: vi.fn(async () => ({
     checkServiceRun: { findFirst: mockFindFirst },
   })),
+  getConfig: vi.fn(async () => ({
+    api: { submissionsServiceAccount: { id: 'service-account' } },
+  })),
 }));
 
 vi.mock('./startCheckRun.server.js', () => ({
@@ -51,7 +54,9 @@ const failedRun = {
   kind: 'checks-text-integrity',
   work_version_id: 'wv-1',
   created_by_id: 'original-user',
-  data: { status: 'error' },
+  status: 'error',
+  attempt: 1,
+  data: {},
 };
 
 describe('retryTextIntegrityCheckRun', () => {
@@ -95,8 +100,8 @@ describe('retryTextIntegrityCheckRun', () => {
       'wv-1',
       expect.objectContaining({
         createdById: 'original-user',
-        invokedById: 'admin-user',
-        lineage: expect.objectContaining({ retryOfRunId: 'run-1' }),
+        invokedById: 'service-account',
+        lineage: expect.objectContaining({ retryOfRunId: 'run-1', sourceAttempt: 2 }),
       }),
     );
   });

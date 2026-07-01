@@ -22,6 +22,7 @@ import { isTextIntegrityUploadEligible } from './uploadEligibility.js';
 import { registerRoutes } from './routes.js';
 import { TextIntegritySectionHeader } from './components/TextIntegritySectionHeader.js';
 import { getExtensionAdminActionHandlers } from './admin/actionHandlers.server.js';
+import { seedTextIntegrityRetrySweepCronJob } from './server/retrySweep.server.js';
 
 export { TEXT_INTEGRITY_SUBMIT, TEXT_INTEGRITY_PERSIST_PDF };
 export { getTextIntegrityConfigWithOverrides } from './server/config.server.js';
@@ -75,3 +76,7 @@ export const extension: ServerExtension = {
   getJobs: (): JobRegistration[] => TEXT_INTEGRITY_JOB_REGISTRATIONS,
   registerRoutes,
 };
+
+void seedTextIntegrityRetrySweepCronJob().catch((err) => {
+  console.error('[checks-text-integrity] failed to seed retry-sweep CronJob', err);
+});

@@ -5,10 +5,18 @@ import type { TextIntegrityDataSchema } from '../schema.js';
 
 const scmsServerMocks = vi.hoisted(() => ({
   getPrismaClient: vi.fn(),
-  safeCheckServiceRunDataUpdate: vi.fn(),
+}));
+
+const checkRunColumnMocks = vi.hoisted(() => ({
+  safeCheckServiceRunPatch: vi.fn(),
+  patchTextIntegrityRunServiceData: vi.fn(),
+  checkRunCoarseStatus: vi.fn((s: string) => s),
+  errorColumnPatch: vi.fn(),
 }));
 
 vi.mock('@curvenote/scms-server', () => scmsServerMocks);
+
+vi.mock('./checkRunColumns.server.js', () => checkRunColumnMocks);
 
 vi.mock('./config.server.js', () => ({
   getTextIntegrityConfigWithOverrides: vi.fn(async () => ({
@@ -81,10 +89,11 @@ describe('handleTextIntegrityAction restart-similarity-pdf', () => {
         findUnique: vi.fn(async () => ({ id: checkRunId, data: runData })),
       },
     });
-    scmsServerMocks.safeCheckServiceRunDataUpdate.mockImplementation(
+    checkRunColumnMocks.safeCheckServiceRunPatch.mockImplementation(
       async (_id: string, update: (data?: Prisma.JsonValue) => Prisma.JsonObject | null) => {
         const next = update(runData as Prisma.JsonValue);
         if (next) runData = next as CheckServiceRunData;
+        return { id: checkRunId, data: runData };
       },
     );
   });

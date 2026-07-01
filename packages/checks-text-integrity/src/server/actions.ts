@@ -1,5 +1,5 @@
 import { uuidv7 as uuid } from 'uuidv7';
-import { getPrismaClient, safeCheckServiceRunDataUpdate } from '@curvenote/scms-server';
+import { getPrismaClient } from '@curvenote/scms-server';
 import {
   type ExtensionCheckHandleActionArgs,
   type ExtensionCheckHandleActionResult,
@@ -50,6 +50,12 @@ import {
   recordUserEulaAcceptance,
 } from './eula.server.js';
 import { buildRelayContextEnvelope } from './relay-context.server.js';
+import {
+  checkRunCoarseStatus,
+  errorColumnPatch,
+  patchTextIntegrityRunServiceData,
+  safeCheckServiceRunPatch,
+} from './checkRunColumns.server.js';
 
 type AppChecksConfig = {
   relayBaseUrl?: string;
@@ -95,8 +101,8 @@ async function recordTextIntegrityExecuteFailure(
       kind: 'checks-text-integrity',
       work_version_id: workVersionId,
       created_by_id: ctx.user?.id ?? undefined,
+      ...errorColumnPatch(timestamp),
       data: {
-        status: 'error',
         serviceDataSchema: {},
         serviceData: serviceData as Prisma.JsonObject,
       },
@@ -206,7 +212,7 @@ async function planRelayRecovery(
   const leaseExpiresAt = new Date(requestedAt.getTime() + RELAY_RECOVERY_LEASE_MS).toISOString();
   const planRef: { current: RelayRecoveryAction } = { current: { action: 'skip' } };
 
-  const row = await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
+  const row = await safeCheckServiceRunPatch(checkRunId, (data?: Prisma.JsonValue) => {
     const next = planRelayRecoveryData(data, recovery, {
       leaseOwner,
       requestedAt,
@@ -237,7 +243,7 @@ async function planRelayRecovery(
 
 async function markRelayRecoveryStarted(checkRunId: string, leaseOwner: string): Promise<boolean> {
   const startedAt = new Date().toISOString();
-  const row = await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
+  const row = await safeCheckServiceRunPatch(checkRunId, (data?: Prisma.JsonValue) => {
     const next = markRelayRecoveryStartedData(data, leaseOwner, new Date(startedAt));
     return next as Prisma.JsonObject | null;
   });
@@ -254,7 +260,7 @@ async function markRelayRecoveryLocalProcessingStarted(
   leaseOwner: string,
 ): Promise<void> {
   const localProcessingStartedAt = new Date().toISOString();
-  await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
+  await safeCheckServiceRunPatch(checkRunId, (data?: Prisma.JsonValue) => {
     const next = markRelayRecoveryLocalProcessingStartedData(
       data,
       leaseOwner,
@@ -298,7 +304,7 @@ function shouldStartSimilarityPdf(serviceData: TextIntegrityDataSchema): boolean
 
 async function claimSimilarityPdfStart(checkRunId: string): Promise<boolean> {
   const didClaim = { current: false };
-  await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
+  await safeCheckServiceRunPatch(checkRunId, (data?: Prisma.JsonValue) => {
     didClaim.current = false;
     const current = (data ?? {}) as CheckServiceRunData;
     const serviceData = readServiceDataFromRunData(current) ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
@@ -313,14 +319,9 @@ async function claimSimilarityPdfStart(checkRunId: string): Promise<boolean> {
 }
 
 async function markSimilarityPdfStartError(checkRunId: string, message: string): Promise<void> {
-  await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
-    const current = (data ?? {}) as CheckServiceRunData;
-    const serviceData = readServiceDataFromRunData(current) ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+  await patchTextIntegrityRunServiceData(checkRunId, (serviceData) => {
     if (serviceData.stages?.reportGeneration?.status !== 'processing') return null;
-    return {
-      ...current,
-      serviceData: markSimilarityPdfJobStartFailed(serviceData, message),
-    } as Prisma.JsonObject;
+    return markSimilarityPdfJobStartFailed(serviceData, message);
   });
 }
 
@@ -328,7 +329,7 @@ async function recordSimilarityPdfStartAccepted(
   checkRunId: string,
   newPdfId: string,
 ): Promise<void> {
-  await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
+  await safeCheckServiceRunPatch(checkRunId, (data?: Prisma.JsonValue) => {
     const current = (data ?? {}) as CheckServiceRunData;
     const serviceData = readServiceDataFromRunData(current) ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
     if (serviceData.stages?.reportGeneration?.status !== 'processing') return null;
@@ -948,8 +949,7 @@ export async function textIntegrityStatus(args: ExtensionCheckStatusArgs): Promi
   if (!run) {
     return Response.json({ status: 'unknown', serviceData: undefined });
   }
-  const runData = run.data as Record<string, unknown> | null;
-  const status = typeof runData?.status === 'string' ? runData.status : 'unknown';
-  const serviceData = readServiceDataFromRunData(runData);
+  const status = checkRunCoarseStatus(run.status);
+  const serviceData = readServiceDataFromRunData(run.data);
   return Response.json({ status, serviceData });
 }

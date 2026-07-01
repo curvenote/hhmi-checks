@@ -10,6 +10,9 @@ vi.mock('@curvenote/scms-server', () => ({
   getPrismaClient: vi.fn(async () => ({
     checkServiceRun: { findFirst: mockFindFirst },
   })),
+  getConfig: vi.fn(async () => ({
+    api: { submissionsServiceAccount: { id: 'service-account' } },
+  })),
 }));
 
 vi.mock('./startCheckRun.server.js', () => ({
@@ -42,7 +45,8 @@ describe('retryProofigCheckRun', () => {
       kind: 'proofig',
       work_version_id: 'wv-1',
       created_by_id: 'user-1',
-      data: { status: 'processing', serviceData: { stages: {} } },
+      status: 'healthy',
+      data: { serviceData: { stages: {} } },
     });
 
     const result = await retryProofigCheckRun(ctx, 'wv-1', 'run-1', 'user');
@@ -57,7 +61,9 @@ describe('retryProofigCheckRun', () => {
       kind: 'proofig',
       work_version_id: 'wv-1',
       created_by_id: 'original-user',
-      data: { status: 'error' },
+      status: 'error',
+      attempt: 1,
+      data: {},
     });
     mockStart.mockResolvedValue({ ok: true, checkRunId: 'run-2' });
 
@@ -68,8 +74,8 @@ describe('retryProofigCheckRun', () => {
       'wv-1',
       expect.objectContaining({
         createdById: 'admin-user',
-        invokedById: 'admin-user',
-        lineage: expect.objectContaining({ retryOfRunId: 'run-1' }),
+        invokedById: 'service-account',
+        lineage: expect.objectContaining({ retryOfRunId: 'run-1', sourceAttempt: 2 }),
       }),
     );
   });
@@ -80,7 +86,9 @@ describe('retryProofigCheckRun', () => {
       kind: 'proofig',
       work_version_id: 'wv-1',
       created_by_id: 'original-user',
-      data: { status: 'error' },
+      status: 'error',
+      attempt: 1,
+      data: {},
     });
     mockStart.mockResolvedValue({ ok: true, checkRunId: 'run-2' });
 
@@ -90,7 +98,7 @@ describe('retryProofigCheckRun', () => {
       'wv-1',
       expect.objectContaining({
         createdById: 'original-user',
-        invokedById: 'admin-user',
+        invokedById: 'service-account',
       }),
     );
   });
@@ -101,7 +109,9 @@ describe('retryProofigCheckRun', () => {
       kind: 'proofig',
       work_version_id: 'wv-1',
       created_by_id: 'original-user',
-      data: { status: 'error' },
+      status: 'error',
+      attempt: 1,
+      data: {},
     });
     mockStart.mockResolvedValue({ ok: true, checkRunId: 'run-2' });
     mockMarkSuperseded.mockRejectedValue(new Error('OCC exhausted'));
