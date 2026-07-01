@@ -18,6 +18,7 @@ import {
   getTextIntegrityRetryPolicy,
   textIntegrityRetryEligibilityCutoff,
 } from './retryPolicy.server.js';
+import { retryTextIntegrityCheckRun } from './retryCheckRun.server.js';
 
 const TEXT_INTEGRITY_KIND = 'checks-text-integrity';
 const RETRY_SWEEP_CRON_ID = 'text-integrity-retry-sweep';
