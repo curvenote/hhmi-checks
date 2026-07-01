@@ -6,7 +6,7 @@ export const THIRTY_SEC_AGO_ISO = new Date(Date.now() - 30 * 1000).toISOString()
 
 const BASE_MANIFEST = {
   name: 'demo-text-integrity',
-  title: 'Demo Text Integrity Service',
+  title: 'Text Integrity',
   logo: '',
   version: '1.0.0',
 } as const;
