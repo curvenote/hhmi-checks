@@ -16,9 +16,7 @@ export function isTextIntegrityRunSupersededByRetry(run: RunRow): boolean {
  * Atomically claim a failed run for automated sweep retry.
  * Uses retried_at as a short-lived claim marker (cleared on failure via release).
  */
-export async function tryClaimTextIntegrityRunForRetrySweep(
-  sourceRunId: string,
-): Promise<boolean> {
+export async function tryClaimTextIntegrityRunForRetrySweep(sourceRunId: string): Promise<boolean> {
   const claimedAt = new Date().toISOString();
   const prisma = await getPrismaClient();
   const result = await prisma.checkServiceRun.updateMany({
@@ -39,9 +37,7 @@ export async function tryClaimTextIntegrityRunForRetrySweep(
 }
 
 /** Release a sweep claim when retry did not complete (failure, skip, or error). */
-export async function releaseTextIntegrityRunRetrySweepClaim(
-  sourceRunId: string,
-): Promise<void> {
+export async function releaseTextIntegrityRunRetrySweepClaim(sourceRunId: string): Promise<void> {
   const prisma = await getPrismaClient();
   await prisma.checkServiceRun.updateMany({
     where: {

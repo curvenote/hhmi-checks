@@ -15,6 +15,7 @@ export type CheckRunColumnPatch = {
   retried_at?: string | null;
   retry_of_id?: string | null;
   successor_id?: string | null;
+  no_auto_retry?: boolean;
 };
 
 export type CheckRunRowForReader = {
@@ -45,6 +46,16 @@ export function errorColumnPatch(failedAt = new Date().toISOString()): CheckRunC
 
 export function healthyColumnPatch(): CheckRunColumnPatch {
   return { status: 'healthy', failed_at: null };
+}
+
+/** Exclude this run from platform cron / auto-retry sweeps (idempotent; manual retry unaffected). */
+export async function markCheckServiceRunNoAutoRetry(checkServiceRunId: string): Promise<void> {
+  const prisma = await getPrismaClient();
+  const timestamp = new Date().toISOString();
+  await prisma.checkServiceRun.updateMany({
+    where: { id: checkServiceRunId, no_auto_retry: false },
+    data: { no_auto_retry: true, date_modified: timestamp },
+  });
 }
 
 export function columnsForTextIntegrityServiceData(

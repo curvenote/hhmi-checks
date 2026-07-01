@@ -25,7 +25,10 @@ import {
 } from '../config.server.js';
 import { buildRelayContextEnvelope } from '../relay-context.server.js';
 import { checksRelayUploadUrl, resolveRelayInstanceId } from '../relay-urls.server.js';
-import { patchTextIntegrityRunServiceData } from '../checkRunColumns.server.js';
+import {
+  patchTextIntegrityRunServiceData,
+  markCheckServiceRunNoAutoRetry,
+} from '../checkRunColumns.server.js';
 import {
   assertOriginalSubmitterEulaCurrent,
   buildUploadEulaMetadata,
@@ -236,6 +239,7 @@ export async function textIntegritySubmitHandler(
 
     const eulaCheck = await assertOriginalSubmitterEulaCurrent(ctx, submitterId);
     if (!eulaCheck.ok) {
+      await markCheckServiceRunNoAutoRetry(payload.check_service_run_id);
       throw httpError(400, eulaCheck.message);
     }
 
@@ -330,6 +334,7 @@ export async function textIntegritySubmitHandler(
           result: relayJson.result,
         })
       ) {
+        await markCheckServiceRunNoAutoRetry(payload.check_service_run_id);
         const userMessage = await resolveEulaSubmitFailureMessage(ctx, mergedConfig, detail);
         throw httpError(400, userMessage);
       }

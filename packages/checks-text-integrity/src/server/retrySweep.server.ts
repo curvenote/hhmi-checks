@@ -13,6 +13,7 @@ import {
   releaseTextIntegrityRunRetrySweepClaim,
   tryClaimTextIntegrityRunForRetrySweep,
 } from './runSuperseded.server.js';
+import { markCheckServiceRunNoAutoRetry } from './checkRunColumns.server.js';
 import {
   computeTextIntegrityRetryScheduledAt,
   getTextIntegrityRetryPolicy,
@@ -65,6 +66,7 @@ export async function runTextIntegrityRetrySweep(options?: {
       kind: TEXT_INTEGRITY_KIND,
       status: 'error',
       retried: false,
+      no_auto_retry: false,
       attempt: { lt: policy.maxAttempts },
       failed_at: { lte: cutoff },
     },
@@ -104,6 +106,7 @@ export async function runTextIntegrityRetrySweep(options?: {
     }
 
     if ((outcome as { eulaSkip?: boolean }).eulaSkip) {
+      await markCheckServiceRunNoAutoRetry(sourceRun.id);
       await releaseTextIntegrityRunRetrySweepClaim(sourceRun.id);
       result.skippedEula += 1;
       continue;
