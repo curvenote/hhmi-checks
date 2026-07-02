@@ -73,17 +73,10 @@ async function buildRootFailedAtCache(
       where: { id: { in: ids } },
       select: { id: true, retry_of_id: true, failed_at: true },
     });
-    const found = new Set<string>();
     for (const row of rows) {
       runsById.set(row.id, row);
-      found.add(row.id);
       if (row.retry_of_id && !runsById.has(row.retry_of_id)) {
         pendingIds.add(row.retry_of_id);
-      }
-    }
-    for (const id of ids) {
-      if (!found.has(id)) {
-        runsById.set(id, { id, retry_of_id: null, failed_at: null });
       }
     }
   }

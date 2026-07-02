@@ -151,6 +151,33 @@ describe('runTextIntegrityRetrySweep', () => {
     expect(mockRetry).not.toHaveBeenCalled();
   });
 
+  it('uses the nearest known failed_at when a retry ancestor row is missing', async () => {
+    const orphanFailedAt = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+    const chainedRun = {
+      id: 'run-orphan',
+      work_version_id: 'wv-1',
+      attempt: 2,
+      failed_at: orphanFailedAt,
+      retry_of_id: 'missing-parent',
+    };
+
+    mockFindMany.mockResolvedValueOnce([chainedRun]).mockResolvedValueOnce([]);
+
+    const result = await runTextIntegrityRetrySweep();
+
+    expect(result.scanned).toBe(1);
+    expect(result.skippedNotEligible).toBe(1);
+    expect(result.retried).toBe(0);
+    expect(mockFindMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: { in: ['missing-parent'] } },
+      }),
+    );
+    expect(mockClaim).not.toHaveBeenCalled();
+    expect(mockRetry).not.toHaveBeenCalled();
+  });
+
   it('excludes runs with no_auto_retry from candidate query', async () => {
     mockRetry.mockResolvedValue({ success: true, checkRunId: 'run-2' });
     await runTextIntegrityRetrySweep();
