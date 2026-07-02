@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useFetcher } from 'react-router';
 import { ui } from '@curvenote/scms-core';
+import { resolveRetryCronDisplaySnapshot } from './resolveRetryCronDisplay.js';
 
 const STATUS_INTENT = 'text-integrity-retry-cron-status';
 const INSTALL_INTENT = 'text-integrity-install-retry-cron';
@@ -39,16 +40,12 @@ export function TextIntegrityRetryCronPanel() {
   const statusFetcher = useFetcher<StatusResponse>();
   const installFetcher = useFetcher<StatusResponse>();
   const handledInstallRef = useRef<StatusResponse | null>(null);
-  const pendingInstallStatusRefreshRef = useRef(false);
 
   const busy = statusFetcher.state !== 'idle' || installFetcher.state !== 'idle';
-  const statusRetryCron = statusFetcher.data?.retryCron;
-  const installRetryCron = installFetcher.data?.retryCron;
-  const useInstallSnapshot =
-    pendingInstallStatusRefreshRef.current &&
-    statusFetcher.state !== 'idle' &&
-    installRetryCron?.installed === true;
-  const retryCron = useInstallSnapshot ? installRetryCron : (statusRetryCron ?? installRetryCron);
+  const retryCron = resolveRetryCronDisplaySnapshot(
+    statusFetcher.data?.retryCron,
+    installFetcher.data?.retryCron,
+  );
   const installed = retryCron?.installed === true;
   const cronJob = retryCron?.cronJob;
 
@@ -68,12 +65,6 @@ export function TextIntegrityRetryCronPanel() {
   }, [statusFetcher.state, statusFetcher.data]);
 
   useEffect(() => {
-    if (pendingInstallStatusRefreshRef.current && statusFetcher.state === 'idle') {
-      pendingInstallStatusRefreshRef.current = false;
-    }
-  }, [statusFetcher.state]);
-
-  useEffect(() => {
     if (installFetcher.state !== 'idle' || !installFetcher.data) return;
     if (handledInstallRef.current === installFetcher.data) return;
     handledInstallRef.current = installFetcher.data;
@@ -86,7 +77,6 @@ export function TextIntegrityRetryCronPanel() {
     if (installFetcher.data.success) {
       if (installFetcher.data.retryCron?.installed) {
         ui.toastSuccess('Auto-retry cron job installed');
-        pendingInstallStatusRefreshRef.current = true;
         loadStatus();
       } else {
         ui.toastError('Install did not register the cron job');
