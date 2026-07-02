@@ -79,6 +79,11 @@ const installedCronJob = {
   nextRunAt: '2026-07-01T12:00:00.000Z',
 };
 
+const installSuccessData = {
+  success: true,
+  retryCron: { installed: true, cronJob: installedCronJob },
+};
+
 describe('TextIntegrityRetryCronPanel install/status precedence', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -118,14 +123,19 @@ describe('TextIntegrityRetryCronPanel install/status precedence', () => {
     return container.textContent ?? '';
   }
 
+  function completePostInstallStatusRefresh(statusData: NonNullable<FetcherMock['data']>) {
+    routerMocks.status.state = 'submitting';
+    renderPanel();
+    routerMocks.status.state = 'idle';
+    routerMocks.status.data = statusData;
+    renderPanel();
+  }
+
   it('shows install snapshot on the first render after install success', () => {
     renderPanel();
     expect(text()).toContain('Install retry cron job');
 
-    routerMocks.install.data = {
-      success: true,
-      retryCron: { installed: true, cronJob: installedCronJob },
-    };
+    routerMocks.install.data = installSuccessData;
     renderPanel();
 
     expect(text()).toContain('Installed (enabled)');
@@ -135,22 +145,17 @@ describe('TextIntegrityRetryCronPanel install/status precedence', () => {
   it('uses refreshed status after post-install load completes', () => {
     renderPanel();
 
-    routerMocks.install.data = {
-      success: true,
-      retryCron: { installed: true, cronJob: installedCronJob },
-    };
+    routerMocks.install.data = installSuccessData;
     renderPanel();
     expect(text()).toContain('Installed (enabled)');
 
-    routerMocks.status.state = 'idle';
-    routerMocks.status.data = {
+    completePostInstallStatusRefresh({
       success: true,
       retryCron: {
         installed: true,
         cronJob: { ...installedCronJob, enabled: false, schedule: '0 * * * *' },
       },
-    };
-    renderPanel();
+    });
 
     expect(text()).toContain('Installed (disabled)');
     expect(text()).toContain('0 * * * *');
@@ -163,11 +168,11 @@ describe('TextIntegrityRetryCronPanel install/status precedence', () => {
       success: true,
       retryCron: { installed: true, cronJob: installedCronJob },
     };
-    routerMocks.install.data = {
+    routerMocks.install.data = installSuccessData;
+    completePostInstallStatusRefresh({
       success: true,
       retryCron: { installed: true, cronJob: installedCronJob },
-    };
-    renderPanel();
+    });
     expect(text()).toContain('Installed (enabled)');
 
     routerMocks.status.data = {
@@ -180,5 +185,22 @@ describe('TextIntegrityRetryCronPanel install/status precedence', () => {
     renderPanel();
 
     expect(text()).toContain('15 * * * *');
+  });
+
+  it('shows not registered after refresh when cron was removed externally', () => {
+    renderPanel();
+
+    routerMocks.install.data = installSuccessData;
+    completePostInstallStatusRefresh({
+      success: true,
+      retryCron: { installed: true, cronJob: installedCronJob },
+    });
+    expect(text()).toContain('Installed (enabled)');
+
+    routerMocks.status.data = { success: true, retryCron: { installed: false } };
+    renderPanel();
+
+    expect(text()).toContain('not registered');
+    expect(text()).not.toContain('Installed (enabled)');
   });
 });

@@ -13,12 +13,12 @@ export type RetryCronDisplaySnapshot = {
   };
 };
 
-/** Prefer install response only while status still reports not installed. */
+/** Resolve displayed cron state; install snapshot is only used during post-install refresh. */
 export function resolveRetryCronDisplaySnapshot(
   statusRetryCron: RetryCronDisplaySnapshot | undefined,
   installRetryCron: RetryCronDisplaySnapshot | undefined,
+  preferInstallSnapshot = false,
 ): RetryCronDisplaySnapshot | undefined {
-  const preferInstallSnapshot =
-    installRetryCron?.installed === true && statusRetryCron?.installed !== true;
-  return preferInstallSnapshot ? installRetryCron : (statusRetryCron ?? installRetryCron);
+  const useInstallSnapshot = preferInstallSnapshot && installRetryCron?.installed === true;
+  return useInstallSnapshot ? installRetryCron : (statusRetryCron ?? installRetryCron);
 }

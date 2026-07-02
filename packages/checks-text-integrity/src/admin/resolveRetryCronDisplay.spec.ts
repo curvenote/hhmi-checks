@@ -31,10 +31,16 @@ describe('resolveRetryCronDisplaySnapshot', () => {
     expect(resolveRetryCronDisplaySnapshot(disabledCron, installedCron)).toBe(disabledCron);
   });
 
-  it('prefers install snapshot while status still reports not installed', () => {
-    expect(resolveRetryCronDisplaySnapshot({ installed: false }, installedCron)).toBe(
+  it('prefers install snapshot only during the post-install refresh window', () => {
+    expect(resolveRetryCronDisplaySnapshot({ installed: false }, installedCron, true)).toBe(
       installedCron,
     );
+  });
+
+  it('uses status not-installed after refresh even when install data is stale', () => {
+    expect(resolveRetryCronDisplaySnapshot({ installed: false }, installedCron, false)).toEqual({
+      installed: false,
+    });
   });
 
   it('falls back to install when status is missing', () => {

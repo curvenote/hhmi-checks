@@ -40,11 +40,39 @@ export function TextIntegrityRetryCronPanel() {
   const statusFetcher = useFetcher<StatusResponse>();
   const installFetcher = useFetcher<StatusResponse>();
   const handledInstallRef = useRef<StatusResponse | null>(null);
+  const pendingInstallStatusRefreshRef = useRef(false);
+  const statusWasLoadingAfterInstallRef = useRef(false);
+  const trackedInstallDataRef = useRef<StatusResponse | null>(null);
+
+  if (
+    installFetcher.state === 'idle' &&
+    installFetcher.data?.success &&
+    installFetcher.data.retryCron?.installed &&
+    trackedInstallDataRef.current !== installFetcher.data
+  ) {
+    pendingInstallStatusRefreshRef.current = true;
+    statusWasLoadingAfterInstallRef.current = false;
+    trackedInstallDataRef.current = installFetcher.data;
+  }
+
+  if (pendingInstallStatusRefreshRef.current && statusFetcher.state !== 'idle') {
+    statusWasLoadingAfterInstallRef.current = true;
+  }
+
+  if (
+    pendingInstallStatusRefreshRef.current &&
+    statusWasLoadingAfterInstallRef.current &&
+    statusFetcher.state === 'idle'
+  ) {
+    pendingInstallStatusRefreshRef.current = false;
+    statusWasLoadingAfterInstallRef.current = false;
+  }
 
   const busy = statusFetcher.state !== 'idle' || installFetcher.state !== 'idle';
   const retryCron = resolveRetryCronDisplaySnapshot(
     statusFetcher.data?.retryCron,
     installFetcher.data?.retryCron,
+    pendingInstallStatusRefreshRef.current,
   );
   const installed = retryCron?.installed === true;
   const cronJob = retryCron?.cronJob;
