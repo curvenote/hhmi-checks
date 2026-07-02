@@ -2,6 +2,7 @@ import {
   CronEndpointScopes,
   CronJobTargetAuth,
   CronJobTargetType,
+  dbGetCronJob,
   dbSeedBuiltinCronJob,
   getConfig,
   getPrismaClient,
@@ -22,8 +23,85 @@ import {
 import { retryTextIntegrityCheckRun } from './retryCheckRun.server.js';
 
 const TEXT_INTEGRITY_KIND = 'checks-text-integrity';
-const RETRY_SWEEP_CRON_ID = 'text-integrity-retry-sweep';
+export const TEXT_INTEGRITY_RETRY_SWEEP_CRON_ID = 'text-integrity-retry-sweep';
 const DEFAULT_SWEEP_LIMIT = 25;
+
+export type TextIntegrityRetrySweepCronJobSummary = {
+  id: string;
+  name: string;
+  schedule: string;
+  enabled: boolean;
+  targetUrl: string | null;
+  targetScope: string | null;
+  lastRunAt: string | null;
+  lastStatus: string | null;
+  nextRunAt: string | null;
+};
+
+export type TextIntegrityRetrySweepCronStatus = {
+  installed: boolean;
+  cronJob?: TextIntegrityRetrySweepCronJobSummary;
+};
+
+function mapRetrySweepCronJob(
+  job: NonNullable<Awaited<ReturnType<typeof dbGetCronJob>>>,
+): TextIntegrityRetrySweepCronJobSummary {
+  return {
+    id: job.id,
+    name: job.name,
+    schedule: job.schedule,
+    enabled: job.enabled,
+    targetUrl: job.target_url,
+    targetScope: job.target_scope,
+    lastRunAt: job.last_run_at,
+    lastStatus: job.last_status,
+    nextRunAt: job.next_run_at,
+  };
+}
+
+/** Whether the built-in Text Integrity retry sweep CronJob is registered. */
+export async function getTextIntegrityRetrySweepCronStatus(): Promise<TextIntegrityRetrySweepCronStatus> {
+  const job = await dbGetCronJob(TEXT_INTEGRITY_RETRY_SWEEP_CRON_ID);
+  if (!job) {
+    return { installed: false };
+  }
+  return { installed: true, cronJob: mapRetrySweepCronJob(job) };
+}
+
+async function buildRetrySweepCronSeedInput() {
+  const config = await getConfig();
+  const apiBase = config.api.tasksCallbackUrl ?? config.api.url ?? '';
+  const targetUrl = hooksNotifyBaseUrl('text-integrity/retry-sweep', apiBase.replace(/\/$/, ''));
+
+  return {
+    name: 'Text Integrity retry sweep',
+    description:
+      'Automatically retries eligible failed Text Integrity check runs with exponential backoff.',
+    schedule: '*/5 * * * *',
+    timezone: 'UTC',
+    enabled: true,
+    target_type: CronJobTargetType.HTTP,
+    target_url: targetUrl,
+    http_method: 'POST',
+    target_auth: CronJobTargetAuth.HANDSHAKE,
+    target_scope: CronEndpointScopes.TEXT_INTEGRITY_RETRY_SWEEP,
+    payload: {},
+  } as const;
+}
+
+/** Idempotent seed for the built-in retry sweep CronJob (register via admin if seed is skipped). */
+export async function seedTextIntegrityRetrySweepCronJob(): Promise<void> {
+  await dbSeedBuiltinCronJob(
+    TEXT_INTEGRITY_RETRY_SWEEP_CRON_ID,
+    await buildRetrySweepCronSeedInput(),
+  );
+}
+
+/** Admin install: create the CronJob row when missing; returns current status. */
+export async function installTextIntegrityRetrySweepCronJob(): Promise<TextIntegrityRetrySweepCronStatus> {
+  await seedTextIntegrityRetrySweepCronJob();
+  return getTextIntegrityRetrySweepCronStatus();
+}
 
 export type TextIntegrityRetrySweepResult = {
   scanned: number;
@@ -121,26 +199,4 @@ export async function runTextIntegrityRetrySweep(options?: {
   }
 
   return result;
-}
-
-/** Idempotent seed for the built-in retry sweep CronJob (register via admin if seed is skipped). */
-export async function seedTextIntegrityRetrySweepCronJob(): Promise<void> {
-  const config = await getConfig();
-  const apiBase = config.api.tasksCallbackUrl ?? config.api.url ?? '';
-  const targetUrl = hooksNotifyBaseUrl('text-integrity/retry-sweep', apiBase.replace(/\/$/, ''));
-
-  await dbSeedBuiltinCronJob(RETRY_SWEEP_CRON_ID, {
-    name: 'Text Integrity retry sweep',
-    description:
-      'Automatically retries eligible failed Text Integrity check runs with exponential backoff.',
-    schedule: '*/5 * * * *',
-    timezone: 'UTC',
-    enabled: true,
-    target_type: CronJobTargetType.HTTP,
-    target_url: targetUrl,
-    http_method: 'POST',
-    target_auth: CronJobTargetAuth.HANDSHAKE,
-    target_scope: CronEndpointScopes.TEXT_INTEGRITY_RETRY_SWEEP,
-    payload: {},
-  });
 }

@@ -37,6 +37,10 @@ import {
   retryTextIntegrityCheckRun,
   retryTextIntegrityFailedRunsBulk,
 } from '../server/retryCheckRun.server.js';
+import {
+  getTextIntegrityRetrySweepCronStatus,
+  installTextIntegrityRetrySweepCronJob,
+} from '../server/retrySweep.server.js';
 
 type AppChecksConfig = {
   relayBaseUrl?: string;
@@ -837,6 +841,30 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
         } catch (err) {
           const message =
             err instanceof Error ? err.message : 'Failed to save maintenance settings';
+          return { error: { type: 'general', message } };
+        }
+      },
+    },
+    {
+      name: 'text-integrity-retry-cron-status',
+      handler: async () => {
+        try {
+          const retryCron = await getTextIntegrityRetrySweepCronStatus();
+          return { success: true, retryCron };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to load retry cron status';
+          return { error: { type: 'general', message } };
+        }
+      },
+    },
+    {
+      name: 'text-integrity-install-retry-cron',
+      handler: async () => {
+        try {
+          const retryCron = await installTextIntegrityRetrySweepCronJob();
+          return { success: true, retryCron };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to install retry cron job';
           return { error: { type: 'general', message } };
         }
       },
