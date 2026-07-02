@@ -1,4 +1,4 @@
-import { canShowResults, hasError } from '../serviceDataSchemas.js';
+import { canShowResults, hasPipelineError } from '../serviceDataSchemas.js';
 import { textIntegrityDataSchema } from '../schema.js';
 
 const TEXT_INTEGRITY_KIND = 'checks-text-integrity';
@@ -26,7 +26,7 @@ export function isTextIntegrityRunFailed(run: RunRow): boolean {
   const top = run.data as Record<string, unknown>;
   if (top.status === 'error') return true;
   const serviceData = readServiceData(run.data);
-  if (hasError(serviceData)) return true;
+  if (hasPipelineError(serviceData)) return true;
   if (canShowResults(serviceData) && !serviceData?.summaryReport) return true;
   return false;
 }

@@ -274,14 +274,16 @@ export const ALL_PENDING_STAGES: TextIntegrityStages = {
 // UI query helpers — components should use these instead of a flat enum state
 // ---------------------------------------------------------------------------
 
-/** True if any stage has errored. */
+/** True when submission or processing failed (run-level / auto-retry semantics). */
+export function hasPipelineError(data: TextIntegrityDataSchema | undefined): boolean {
+  if (!data?.stages) return false;
+  return data.stages.submission.status === 'error' || data.stages.processing?.status === 'error';
+}
+
+/** True if any stage has errored (includes report PDF generation for UI). */
 export function hasError(data: TextIntegrityDataSchema | undefined): boolean {
   if (!data?.stages) return false;
-  return (
-    data.stages.submission.status === 'error' ||
-    data.stages.processing?.status === 'error' ||
-    data.stages.reportGeneration?.status === 'error'
-  );
+  return hasPipelineError(data) || data.stages.reportGeneration?.status === 'error';
 }
 
 /** First error message found across stages. */

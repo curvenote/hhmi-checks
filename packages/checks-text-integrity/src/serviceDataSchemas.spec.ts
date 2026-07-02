@@ -5,6 +5,7 @@ import {
   type LinearStageStatus,
   type TextIntegrityDataSchema,
   hasError,
+  hasPipelineError,
   isAwaitingInitialTextIntegrityStages,
   isWaitingForPdfReport,
   shouldPollTextIntegrityChecks,
@@ -30,7 +31,42 @@ function dataWithReportStatus(
   };
 }
 
+describe('hasPipelineError', () => {
+  it('returns true only for submission or processing errors', () => {
+    expect(
+      hasPipelineError({
+        stages: {
+          submission: stage('completed'),
+          processing: stage('error'),
+          reportGeneration: stage('pending'),
+        },
+      }),
+    ).toBe(true);
+    expect(
+      hasPipelineError({
+        stages: {
+          submission: stage('completed'),
+          processing: stage('completed'),
+          reportGeneration: stage('error'),
+        },
+      }),
+    ).toBe(false);
+  });
+});
+
 describe('hasError', () => {
+  it('returns true when report generation errored', () => {
+    expect(
+      hasError({
+        stages: {
+          submission: stage('completed'),
+          processing: stage('completed'),
+          reportGeneration: stage('error'),
+        },
+      }),
+    ).toBe(true);
+  });
+
   it('returns true when any Text Integrity stage has errored', () => {
     expect(
       hasError({

@@ -1,7 +1,7 @@
 import type { Prisma } from '@curvenote/scms-db';
 import { httpError } from '@curvenote/scms-core';
 import { getPrismaClient } from '@curvenote/scms-server';
-import { canShowResults, hasError } from '../serviceDataSchemas.js';
+import { canShowResults, hasPipelineError } from '../serviceDataSchemas.js';
 import type { TextIntegrityDataSchema } from '../schema.js';
 import { textIntegrityDataSchema } from '../schema.js';
 
@@ -35,7 +35,7 @@ export function resolveTextIntegrityCoarseStatus(
   serviceData: TextIntegrityDataSchema | undefined,
 ): CheckRunCoarseStatus {
   if (!serviceData) return 'healthy';
-  if (hasError(serviceData)) return 'error';
+  if (hasPipelineError(serviceData)) return 'error';
   if (canShowResults(serviceData) && !serviceData.summaryReport) return 'error';
   return 'healthy';
 }
@@ -81,11 +81,7 @@ export function deriveTextIntegrityFailedAt(run: {
 }): string {
   const serviceData = readServiceData(run.data);
   if (serviceData?.stages) {
-    for (const stage of [
-      serviceData.stages.reportGeneration,
-      serviceData.stages.processing,
-      serviceData.stages.submission,
-    ]) {
+    for (const stage of [serviceData.stages.processing, serviceData.stages.submission]) {
       if (stage?.status === 'error' && stage.timestamp?.trim()) {
         return stage.timestamp.trim();
       }
