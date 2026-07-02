@@ -40,55 +40,91 @@ const emptySweepResult = (): TextIntegrityRetrySweepResult => ({
   errors: [],
 });
 
-async function resolveRootFailedAt(
+async function buildRootFailedAtCache(
   prisma: Awaited<ReturnType<typeof getPrismaClient>>,
-  run: RetryChainRun,
-  cache: Map<string, string | null>,
-): Promise<string | null> {
-  if (cache.has(run.id)) {
-    return cache.get(run.id) ?? null;
+  candidates: RetryChainRun[],
+): Promise<Map<string, string | null>> {
+  const runsById = new Map<string, RetryChainRun>();
+  for (const candidate of candidates) {
+    runsById.set(candidate.id, candidate);
   }
 
-  const visited = new Set<string>();
-  let current: RetryChainRun | null = run;
-
-  while (current) {
-    if (visited.has(current.id)) break;
-    visited.add(current.id);
-
-    if (!current.retry_of_id) {
-      const rootFailedAt = current.failed_at ?? null;
-      for (const id of visited) {
-        cache.set(id, rootFailedAt);
+  let pendingIds = new Set<string>();
+  for (const candidate of candidates) {
+    let nextId: string | null | undefined = candidate.retry_of_id;
+    const visited = new Set<string>();
+    while (nextId) {
+      if (visited.has(nextId)) break;
+      visited.add(nextId);
+      const known = runsById.get(nextId);
+      if (known) {
+        nextId = known.retry_of_id;
+        continue;
       }
-      return rootFailedAt;
+      pendingIds.add(nextId);
+      break;
     }
+  }
 
-    const cachedParentFailedAt = cache.get(current.retry_of_id);
-    if (cachedParentFailedAt !== undefined) {
-      for (const id of visited) {
-        cache.set(id, cachedParentFailedAt);
-      }
-      return cachedParentFailedAt;
-    }
-
-    const parent: RetryChainRun | null = await prisma.checkServiceRun.findUnique({
-      where: { id: current.retry_of_id },
+  while (pendingIds.size > 0) {
+    const ids = [...pendingIds];
+    pendingIds.clear();
+    const rows: RetryChainRun[] = await prisma.checkServiceRun.findMany({
+      where: { id: { in: ids } },
       select: { id: true, retry_of_id: true, failed_at: true },
     });
-    if (!parent) {
-      const rootFailedAt = current.failed_at ?? null;
-      for (const id of visited) {
-        cache.set(id, rootFailedAt);
+    const found = new Set<string>();
+    for (const row of rows) {
+      runsById.set(row.id, row);
+      found.add(row.id);
+      if (row.retry_of_id && !runsById.has(row.retry_of_id)) {
+        pendingIds.add(row.retry_of_id);
       }
-      return rootFailedAt;
     }
-    current = parent;
+    for (const id of ids) {
+      if (!found.has(id)) {
+        runsById.set(id, { id, retry_of_id: null, failed_at: null });
+      }
+    }
   }
 
-  const fallback = run.failed_at ?? null;
-  cache.set(run.id, fallback);
-  return fallback;
+  const cache = new Map<string, string | null>();
+
+  function resolveRootFailedAt(runId: string, visiting = new Set<string>()): string | null {
+    if (cache.has(runId)) {
+      return cache.get(runId) ?? null;
+    }
+
+    const run = runsById.get(runId);
+    if (!run || visiting.has(runId)) {
+      cache.set(runId, null);
+      return null;
+    }
+    visiting.add(runId);
+
+    if (!run.retry_of_id) {
+      const rootFailedAt = run.failed_at ?? null;
+      cache.set(runId, rootFailedAt);
+      return rootFailedAt;
+    }
+
+    const parent = runsById.get(run.retry_of_id);
+    if (!parent) {
+      const rootFailedAt = run.failed_at ?? null;
+      cache.set(runId, rootFailedAt);
+      return rootFailedAt;
+    }
+
+    const rootFailedAt = resolveRootFailedAt(run.retry_of_id, visiting);
+    cache.set(runId, rootFailedAt);
+    return rootFailedAt;
+  }
+
+  for (const candidate of candidates) {
+    resolveRootFailedAt(candidate.id);
+  }
+
+  return cache;
 }
 
 async function loadTextIntegrityAutoRetryConfig() {
@@ -237,7 +273,7 @@ export async function runTextIntegrityRetrySweep(options?: {
   });
 
   const ctx = await buildRetrySweepContext();
-  const rootFailedAtCache = new Map<string, string | null>();
+  const rootFailedAtCache = await buildRootFailedAtCache(prisma, candidates);
   const result: TextIntegrityRetrySweepResult = {
     scanned: candidates.length,
     retried: 0,
@@ -249,7 +285,7 @@ export async function runTextIntegrityRetrySweep(options?: {
   };
 
   for (const sourceRun of candidates) {
-    const rootFailedAt = await resolveRootFailedAt(prisma, sourceRun, rootFailedAtCache);
+    const rootFailedAt = rootFailedAtCache.get(sourceRun.id) ?? null;
     if (!isTextIntegrityRunAutoRetryEligible(sourceRun, rootFailedAt, autoRetry, nowMs)) {
       result.skippedNotEligible += 1;
       continue;

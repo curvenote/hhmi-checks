@@ -1,26 +1,29 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { getConfig } from '@curvenote/scms-server';
 import { runTextIntegrityRetrySweep } from './retrySweep.server.js';
 import { EULA_ADMIN_RETRY_SKIP_MESSAGE } from './eula.server.js';
 import { DEFAULT_TEXT_INTEGRITY_AUTO_RETRY } from './autoRetryPolicy.server.js';
 
 const mockFindMany = vi.fn();
-const mockFindUnique = vi.fn();
 const mockClaim = vi.fn();
 const mockRelease = vi.fn();
 const mockRetry = vi.fn();
 const mockMarkNoAutoRetry = vi.fn();
+const mockGetConfig = vi.mocked(getConfig);
+
+const defaultConfig = {
+  api: { submissionsServiceAccount: { id: 'service-account' } },
+  app: {
+    extensions: { 'checks-text-integrity': { autoRetry: DEFAULT_TEXT_INTEGRITY_AUTO_RETRY } },
+  },
+};
 
 vi.mock('@curvenote/scms-server', () => ({
   getPrismaClient: vi.fn(async () => ({
-    checkServiceRun: { findMany: mockFindMany, findUnique: mockFindUnique },
+    checkServiceRun: { findMany: mockFindMany },
   })),
-  getConfig: vi.fn(async () => ({
-    api: { submissionsServiceAccount: { id: 'service-account' } },
-    app: {
-      extensions: { 'checks-text-integrity': { autoRetry: DEFAULT_TEXT_INTEGRITY_AUTO_RETRY } },
-    },
-  })),
+  getConfig: vi.fn(async () => defaultConfig),
   CronEndpointScopes: {},
   CronJobTargetAuth: { HANDSHAKE: 'HANDSHAKE' },
   CronJobTargetType: { HTTP: 'HTTP' },
@@ -57,15 +60,95 @@ const sourceRun = {
 describe('runTextIntegrityRetrySweep', () => {
   beforeEach(() => {
     mockFindMany.mockReset();
-    mockFindUnique.mockReset();
     mockClaim.mockReset();
     mockRelease.mockReset();
     mockRetry.mockReset();
     mockMarkNoAutoRetry.mockReset();
+    mockGetConfig.mockResolvedValue(defaultConfig as Awaited<ReturnType<typeof getConfig>>);
     mockFindMany.mockResolvedValue([sourceRun]);
     mockClaim.mockResolvedValue(true);
     mockMarkNoAutoRetry.mockResolvedValue(undefined);
     mockRelease.mockResolvedValue(undefined);
+  });
+
+  it('no-ops when autoRetry.enabled is false', async () => {
+    mockGetConfig.mockResolvedValueOnce({
+      ...defaultConfig,
+      app: {
+        extensions: {
+          'checks-text-integrity': {
+            autoRetry: { ...DEFAULT_TEXT_INTEGRITY_AUTO_RETRY, enabled: false },
+          },
+        },
+      },
+    } as Awaited<ReturnType<typeof getConfig>>);
+
+    const result = await runTextIntegrityRetrySweep();
+
+    expect(result).toEqual({
+      scanned: 0,
+      retried: 0,
+      skippedClaimed: 0,
+      skippedNotEligible: 0,
+      skippedEula: 0,
+      failed: 0,
+      errors: [],
+    });
+    expect(mockFindMany).not.toHaveBeenCalled();
+    expect(mockRetry).not.toHaveBeenCalled();
+  });
+
+  it('skips not-eligible runs when backoff has not elapsed', async () => {
+    mockFindMany.mockResolvedValueOnce([
+      {
+        ...sourceRun,
+        failed_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+      },
+    ]);
+
+    const result = await runTextIntegrityRetrySweep();
+
+    expect(result.scanned).toBe(1);
+    expect(result.skippedNotEligible).toBe(1);
+    expect(result.retried).toBe(0);
+    expect(mockClaim).not.toHaveBeenCalled();
+    expect(mockRetry).not.toHaveBeenCalled();
+  });
+
+  it('skips not-eligible runs when root retry window is exceeded via ancestor chain', async () => {
+    const rootFailedAt = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+    const chainedRun = {
+      id: 'run-3',
+      work_version_id: 'wv-1',
+      attempt: 3,
+      failed_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      retry_of_id: 'run-2',
+    };
+
+    mockFindMany
+      .mockResolvedValueOnce([chainedRun])
+      .mockResolvedValueOnce([{ id: 'run-2', retry_of_id: 'run-1', failed_at: rootFailedAt }])
+      .mockResolvedValueOnce([{ id: 'run-1', retry_of_id: null, failed_at: rootFailedAt }]);
+
+    const result = await runTextIntegrityRetrySweep();
+
+    expect(result.scanned).toBe(1);
+    expect(result.skippedNotEligible).toBe(1);
+    expect(result.retried).toBe(0);
+    expect(mockFindMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: { in: ['run-2'] } },
+      }),
+    );
+    expect(mockFindMany).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        where: { id: { in: ['run-1'] } },
+      }),
+    );
+    expect(mockClaim).not.toHaveBeenCalled();
+    expect(mockRetry).not.toHaveBeenCalled();
   });
 
   it('excludes runs with no_auto_retry from candidate query', async () => {
