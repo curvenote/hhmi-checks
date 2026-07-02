@@ -72,7 +72,7 @@ async function resolveRootFailedAt(
       return cachedParentFailedAt;
     }
 
-    const parent = await prisma.checkServiceRun.findUnique({
+    const parent: RetryChainRun | null = await prisma.checkServiceRun.findUnique({
       where: { id: current.retry_of_id },
       select: { id: true, retry_of_id: true, failed_at: true },
     });
