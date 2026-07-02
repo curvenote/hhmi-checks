@@ -16,15 +16,89 @@ import {
 } from './runSuperseded.server.js';
 import { markCheckServiceRunNoAutoRetry } from './checkRunColumns.server.js';
 import {
-  computeTextIntegrityRetryScheduledAt,
-  getTextIntegrityRetryPolicy,
-  textIntegrityRetryEligibilityCutoff,
-} from './retryPolicy.server.js';
+  getTextIntegrityAutoRetryConfig,
+  isTextIntegrityRunAutoRetryEligible,
+} from './autoRetryPolicy.server.js';
 import { retryTextIntegrityCheckRun } from './retryCheckRun.server.js';
 
 const TEXT_INTEGRITY_KIND = 'checks-text-integrity';
 export const TEXT_INTEGRITY_RETRY_SWEEP_CRON_ID = 'text-integrity-retry-sweep';
-const DEFAULT_SWEEP_LIMIT = 25;
+
+type RetryChainRun = {
+  id: string;
+  retry_of_id: string | null;
+  failed_at: string | null;
+};
+
+const emptySweepResult = (): TextIntegrityRetrySweepResult => ({
+  scanned: 0,
+  retried: 0,
+  skippedClaimed: 0,
+  skippedNotEligible: 0,
+  skippedEula: 0,
+  failed: 0,
+  errors: [],
+});
+
+async function resolveRootFailedAt(
+  prisma: Awaited<ReturnType<typeof getPrismaClient>>,
+  run: RetryChainRun,
+  cache: Map<string, string | null>,
+): Promise<string | null> {
+  if (cache.has(run.id)) {
+    return cache.get(run.id) ?? null;
+  }
+
+  const visited = new Set<string>();
+  let current: RetryChainRun | null = run;
+
+  while (current) {
+    if (visited.has(current.id)) break;
+    visited.add(current.id);
+
+    if (!current.retry_of_id) {
+      const rootFailedAt = current.failed_at ?? null;
+      for (const id of visited) {
+        cache.set(id, rootFailedAt);
+      }
+      return rootFailedAt;
+    }
+
+    const cachedParentFailedAt = cache.get(current.retry_of_id);
+    if (cachedParentFailedAt !== undefined) {
+      for (const id of visited) {
+        cache.set(id, cachedParentFailedAt);
+      }
+      return cachedParentFailedAt;
+    }
+
+    const parent = await prisma.checkServiceRun.findUnique({
+      where: { id: current.retry_of_id },
+      select: { id: true, retry_of_id: true, failed_at: true },
+    });
+    if (!parent) {
+      const rootFailedAt = current.failed_at ?? null;
+      for (const id of visited) {
+        cache.set(id, rootFailedAt);
+      }
+      return rootFailedAt;
+    }
+    current = parent;
+  }
+
+  const fallback = run.failed_at ?? null;
+  cache.set(run.id, fallback);
+  return fallback;
+}
+
+async function loadTextIntegrityAutoRetryConfig() {
+  const config = await getConfig();
+  const baseExt =
+    (config.app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};
+  const prisma = await getPrismaClient();
+  const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
+  return getTextIntegrityAutoRetryConfig(mergedConfig);
+}
 
 export type TextIntegrityRetrySweepCronJobSummary = {
   id: string;
@@ -70,16 +144,17 @@ export async function getTextIntegrityRetrySweepCronStatus(): Promise<TextIntegr
 
 async function buildRetrySweepCronSeedInput() {
   const config = await getConfig();
+  const autoRetry = await loadTextIntegrityAutoRetryConfig();
   const apiBase = config.api.tasksCallbackUrl ?? config.api.url ?? '';
   const targetUrl = hooksNotifyBaseUrl('text-integrity/retry-sweep', apiBase.replace(/\/$/, ''));
 
   return {
     name: 'Text Integrity retry sweep',
     description:
-      'Automatically retries eligible failed Text Integrity check runs with exponential backoff.',
+      'Automatically retries eligible failed Text Integrity check runs (schedule in System → Cron).',
     schedule: '*/5 * * * *',
     timezone: 'UTC',
-    enabled: true,
+    enabled: autoRetry.enabled,
     target_type: CronJobTargetType.HTTP,
     target_url: targetUrl,
     http_method: 'POST',
@@ -107,6 +182,7 @@ export type TextIntegrityRetrySweepResult = {
   scanned: number;
   retried: number;
   skippedClaimed: number;
+  skippedNotEligible: number;
   skippedEula: number;
   failed: number;
   errors: { runId: string; message: string }[];
@@ -130,14 +206,15 @@ async function buildRetrySweepContext(): Promise<
 export async function runTextIntegrityRetrySweep(options?: {
   limit?: number;
 }): Promise<TextIntegrityRetrySweepResult> {
-  const config = await getConfig();
-  const baseExt =
-    (config.app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};
+  const autoRetry = await loadTextIntegrityAutoRetryConfig();
+  if (!autoRetry.enabled) {
+    return emptySweepResult();
+  }
+
   const prisma = await getPrismaClient();
-  const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
-  const policy = getTextIntegrityRetryPolicy(mergedConfig);
-  const cutoff = textIntegrityRetryEligibilityCutoff(policy);
-  const limit = Math.max(1, options?.limit ?? DEFAULT_SWEEP_LIMIT);
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const queryLimit = Math.max(1, options?.limit ?? autoRetry.sweep.limit);
 
   const candidates = await prisma.checkServiceRun.findMany({
     where: {
@@ -145,37 +222,50 @@ export async function runTextIntegrityRetrySweep(options?: {
       status: 'error',
       retried: false,
       no_auto_retry: false,
-      attempt: { lt: policy.maxAttempts },
-      failed_at: { lte: cutoff },
+      attempt: { lt: autoRetry.limits.maxAttempts },
+      failed_at: { not: null, lte: nowIso },
     },
     orderBy: { failed_at: 'asc' },
-    take: limit,
+    take: queryLimit,
+    select: {
+      id: true,
+      work_version_id: true,
+      attempt: true,
+      failed_at: true,
+      retry_of_id: true,
+    },
   });
 
   const ctx = await buildRetrySweepContext();
+  const rootFailedAtCache = new Map<string, string | null>();
   const result: TextIntegrityRetrySweepResult = {
     scanned: candidates.length,
     retried: 0,
     skippedClaimed: 0,
+    skippedNotEligible: 0,
     skippedEula: 0,
     failed: 0,
     errors: [],
   };
 
   for (const sourceRun of candidates) {
+    const rootFailedAt = await resolveRootFailedAt(prisma, sourceRun, rootFailedAtCache);
+    if (!isTextIntegrityRunAutoRetryEligible(sourceRun, rootFailedAt, autoRetry, nowMs)) {
+      result.skippedNotEligible += 1;
+      continue;
+    }
+
     const claimed = await tryClaimTextIntegrityRunForRetrySweep(sourceRun.id);
     if (!claimed) {
       result.skippedClaimed += 1;
       continue;
     }
 
-    const scheduledAt = computeTextIntegrityRetryScheduledAt(sourceRun.attempt ?? 1, policy);
     const outcome = await retryTextIntegrityCheckRun(
       ctx,
       sourceRun.work_version_id,
       sourceRun.id,
       'admin',
-      { scheduledAt },
     );
 
     if ('success' in outcome && outcome.success) {

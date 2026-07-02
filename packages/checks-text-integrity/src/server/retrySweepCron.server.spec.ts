@@ -22,18 +22,22 @@ vi.mock('@curvenote/scms-server', () => ({
 }));
 
 vi.mock('./config.server.js', () => ({
-  getTextIntegrityConfigWithOverrides: vi.fn(async () => ({})),
+  getTextIntegrityConfigWithOverrides: vi.fn(async (base: Record<string, unknown>) => base),
 }));
 
-vi.mock('./retryPolicy.server.js', () => ({
-  getTextIntegrityRetryPolicy: vi.fn(() => ({
-    maxAttempts: 3,
-    minAgeMs: 0,
-    backoffBaseMs: 60_000,
-    backoffMaxMs: 86_400_000,
+vi.mock('./autoRetryPolicy.server.js', () => ({
+  DEFAULT_TEXT_INTEGRITY_AUTO_RETRY: {
+    enabled: true,
+    backoff: {},
+    limits: { maxAttempts: 20 },
+    sweep: { limit: 25 },
+  },
+  getTextIntegrityAutoRetryConfig: vi.fn(() => ({
+    enabled: true,
+    backoff: {},
+    limits: { maxAttempts: 20 },
+    sweep: { limit: 25 },
   })),
-  textIntegrityRetryEligibilityCutoff: vi.fn(() => new Date().toISOString()),
-  computeTextIntegrityRetryScheduledAt: vi.fn(() => new Date().toISOString()),
 }));
 
 vi.mock('./runSuperseded.server.js', () => ({

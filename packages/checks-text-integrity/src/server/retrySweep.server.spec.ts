@@ -2,9 +2,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { runTextIntegrityRetrySweep } from './retrySweep.server.js';
 import { EULA_ADMIN_RETRY_SKIP_MESSAGE } from './eula.server.js';
+import { DEFAULT_TEXT_INTEGRITY_AUTO_RETRY } from './autoRetryPolicy.server.js';
 
 const mockFindMany = vi.fn();
-const mockUpdateMany = vi.fn();
+const mockFindUnique = vi.fn();
 const mockClaim = vi.fn();
 const mockRelease = vi.fn();
 const mockRetry = vi.fn();
@@ -12,32 +13,24 @@ const mockMarkNoAutoRetry = vi.fn();
 
 vi.mock('@curvenote/scms-server', () => ({
   getPrismaClient: vi.fn(async () => ({
-    checkServiceRun: { findMany: mockFindMany },
+    checkServiceRun: { findMany: mockFindMany, findUnique: mockFindUnique },
   })),
   getConfig: vi.fn(async () => ({
     api: { submissionsServiceAccount: { id: 'service-account' } },
-    app: { extensions: { 'checks-text-integrity': {} } },
+    app: {
+      extensions: { 'checks-text-integrity': { autoRetry: DEFAULT_TEXT_INTEGRITY_AUTO_RETRY } },
+    },
   })),
   CronEndpointScopes: {},
   CronJobTargetAuth: { HANDSHAKE: 'HANDSHAKE' },
   CronJobTargetType: { HTTP: 'HTTP' },
+  dbGetCronJob: vi.fn(),
   dbSeedBuiltinCronJob: vi.fn(),
   hooksNotifyBaseUrl: vi.fn(),
 }));
 
 vi.mock('./config.server.js', () => ({
-  getTextIntegrityConfigWithOverrides: vi.fn(async () => ({})),
-}));
-
-vi.mock('./retryPolicy.server.js', () => ({
-  getTextIntegrityRetryPolicy: vi.fn(() => ({
-    maxAttempts: 3,
-    minAgeMs: 0,
-    backoffBaseMs: 60_000,
-    backoffMaxMs: 86_400_000,
-  })),
-  textIntegrityRetryEligibilityCutoff: vi.fn(() => new Date().toISOString()),
-  computeTextIntegrityRetryScheduledAt: vi.fn(() => new Date().toISOString()),
+  getTextIntegrityConfigWithOverrides: vi.fn(async (base: Record<string, unknown>) => base),
 }));
 
 vi.mock('./runSuperseded.server.js', () => ({
@@ -57,11 +50,14 @@ const sourceRun = {
   id: 'run-1',
   work_version_id: 'wv-1',
   attempt: 1,
+  failed_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  retry_of_id: null,
 };
 
 describe('runTextIntegrityRetrySweep', () => {
   beforeEach(() => {
     mockFindMany.mockReset();
+    mockFindUnique.mockReset();
     mockClaim.mockReset();
     mockRelease.mockReset();
     mockRetry.mockReset();
@@ -80,6 +76,12 @@ describe('runTextIntegrityRetrySweep', () => {
         where: expect.objectContaining({ no_auto_retry: false }),
       }),
     );
+  });
+
+  it('does not pass scheduledAt — sweep timing is eligibility-only', async () => {
+    mockRetry.mockResolvedValue({ success: true, checkRunId: 'run-2' });
+    await runTextIntegrityRetrySweep();
+    expect(mockRetry).toHaveBeenCalledWith(expect.anything(), 'wv-1', 'run-1', 'admin');
   });
 
   it('marks no_auto_retry when admin retry skips for stale EULA', async () => {
