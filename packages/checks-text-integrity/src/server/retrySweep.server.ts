@@ -262,6 +262,7 @@ export async function runTextIntegrityRetrySweep(options?: {
       attempt: true,
       failed_at: true,
       retry_of_id: true,
+      data: true,
     },
   });
 

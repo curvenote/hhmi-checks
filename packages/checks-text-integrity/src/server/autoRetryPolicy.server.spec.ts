@@ -80,4 +80,53 @@ describe('isTextIntegrityRunAutoRetryEligible', () => {
       ),
     ).toBe(false);
   });
+
+  it('uses mark-superseded backoff without extending maxRetryWindowMs', () => {
+    const failedAt = '2026-07-01T00:05:00.000Z';
+    const markBackoffAt = '2026-07-04T00:00:00.000Z';
+
+    expect(
+      isTextIntegrityRunAutoRetryEligible(
+        {
+          attempt: 1,
+          failed_at: failedAt,
+          data: { sweepMeta: { markSupersededBackoffAt: markBackoffAt } },
+        },
+        rootFailedAt,
+        config,
+        Date.parse('2026-07-04T00:16:00.000Z'),
+      ),
+    ).toBe(false);
+  });
+
+  it('delays retry using mark-superseded backoff anchor', () => {
+    const failedAt = '2026-07-01T00:05:00.000Z';
+    const markBackoffAt = '2026-07-01T00:14:00.000Z';
+
+    expect(
+      isTextIntegrityRunAutoRetryEligible(
+        {
+          attempt: 1,
+          failed_at: failedAt,
+          data: { sweepMeta: { markSupersededBackoffAt: markBackoffAt } },
+        },
+        failedAt,
+        config,
+        Date.parse('2026-07-01T00:20:00.000Z'),
+      ),
+    ).toBe(false);
+
+    expect(
+      isTextIntegrityRunAutoRetryEligible(
+        {
+          attempt: 1,
+          failed_at: failedAt,
+          data: { sweepMeta: { markSupersededBackoffAt: markBackoffAt } },
+        },
+        failedAt,
+        config,
+        Date.parse('2026-07-01T00:25:00.000Z'),
+      ),
+    ).toBe(true);
+  });
 });

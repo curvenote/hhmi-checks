@@ -1,3 +1,5 @@
+import { readTextIntegritySweepMarkSupersededBackoffAt } from './runSuperseded.server.js';
+
 /** Defaults for `app.extensions.checks-text-integrity.autoRetry` (also in app-config.development.yml). */
 export const DEFAULT_TEXT_INTEGRITY_AUTO_RETRY = {
   enabled: true,
@@ -111,6 +113,7 @@ export function delayBeforeRetryMs(
 export type TextIntegrityAutoRetryRunTiming = {
   attempt?: number | null;
   failed_at?: string | null;
+  data?: unknown;
 };
 
 /** Whether a failed run is eligible for auto-retry at `nowMs`. */
@@ -131,7 +134,16 @@ export function isTextIntegrityRunAutoRetryEligible(
   const failedMs = Date.parse(failedAt);
   if (Number.isNaN(failedMs)) return false;
 
-  const eligibleAfterMs = failedMs + delayBeforeRetryMs(attempt, config.backoff);
+  const markSupersededBackoffAt = readTextIntegritySweepMarkSupersededBackoffAt(run.data);
+  let backoffBaseMs = failedMs;
+  if (markSupersededBackoffAt) {
+    const markBackoffMs = Date.parse(markSupersededBackoffAt);
+    if (!Number.isNaN(markBackoffMs)) {
+      backoffBaseMs = Math.max(failedMs, markBackoffMs);
+    }
+  }
+
+  const eligibleAfterMs = backoffBaseMs + delayBeforeRetryMs(attempt, config.backoff);
   if (nowMs < eligibleAfterMs) return false;
 
   const rootAt = rootFailedAt?.trim();

@@ -43,10 +43,14 @@ vi.mock('./config.server.js', () => ({
   getTextIntegrityConfigWithOverrides: vi.fn(async (base: Record<string, unknown>) => base),
 }));
 
-vi.mock('./runSuperseded.server.js', () => ({
-  tryClaimTextIntegrityRunForRetrySweep: (...args: unknown[]) => mockClaim(...args),
-  releaseTextIntegrityRunRetrySweepClaim: (...args: unknown[]) => mockRelease(...args),
-}));
+vi.mock('./runSuperseded.server.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./runSuperseded.server.js')>();
+  return {
+    ...actual,
+    tryClaimTextIntegrityRunForRetrySweep: (...args: unknown[]) => mockClaim(...args),
+    releaseTextIntegrityRunRetrySweepClaim: (...args: unknown[]) => mockRelease(...args),
+  };
+});
 
 vi.mock('./retryCheckRun.server.js', () => ({
   retryTextIntegrityCheckRun: (...args: unknown[]) => mockRetry(...args),
@@ -245,7 +249,11 @@ describe('runTextIntegrityRetrySweep', () => {
     mockFindMany.mockResolvedValueOnce([
       {
         ...sourceRun,
-        failed_at: new Date().toISOString(),
+        data: {
+          sweepMeta: {
+            markSupersededBackoffAt: new Date().toISOString(),
+          },
+        },
       },
     ]);
     mockRetry.mockClear();

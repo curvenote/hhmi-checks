@@ -12,17 +12,27 @@ type RunRow = {
 
 type SweepMeta = {
   markSupersededFailures?: number;
+  markSupersededBackoffAt?: string;
 };
 
 function readSweepMeta(data: unknown): SweepMeta {
   if (data == null || typeof data !== 'object' || Array.isArray(data)) return {};
   const sweepMeta = (data as Record<string, unknown>).sweepMeta;
   if (sweepMeta == null || typeof sweepMeta !== 'object' || Array.isArray(sweepMeta)) return {};
-  const failures = (sweepMeta as SweepMeta).markSupersededFailures;
+  const meta = sweepMeta as SweepMeta;
+  const failures = meta.markSupersededFailures;
+  const backoffAt = meta.markSupersededBackoffAt;
   return {
     markSupersededFailures:
       typeof failures === 'number' && failures >= 0 ? Math.floor(failures) : undefined,
+    markSupersededBackoffAt:
+      typeof backoffAt === 'string' && backoffAt.trim() ? backoffAt.trim() : undefined,
   };
+}
+
+/** Sweep-only backoff anchor after a failed mark-superseded (does not move failed_at). */
+export function readTextIntegritySweepMarkSupersededBackoffAt(data: unknown): string | null {
+  return readSweepMeta(data).markSupersededBackoffAt ?? null;
 }
 
 /** True when a failed run was already retried and should leave the admin failed-runs list. */
@@ -88,7 +98,7 @@ export async function findExistingTextIntegrityRetrySuccessorId(
 }
 
 /**
- * Record a failed mark-superseded during sweep retry: bump failed_at for backoff and track failures.
+ * Record a failed mark-superseded during sweep retry: track failures and a sweep-only backoff anchor.
  * Returns the updated failure count.
  */
 export async function recordTextIntegritySweepMarkSupersededFailure(
@@ -109,11 +119,14 @@ export async function recordTextIntegritySweepMarkSupersededFailure(
   await prisma.checkServiceRun.update({
     where: { id: sourceRunId },
     data: {
-      failed_at: timestamp,
       date_modified: timestamp,
       data: {
         ...data,
-        sweepMeta: { ...meta, markSupersededFailures },
+        sweepMeta: {
+          ...meta,
+          markSupersededFailures,
+          markSupersededBackoffAt: timestamp,
+        },
       },
     },
   });
