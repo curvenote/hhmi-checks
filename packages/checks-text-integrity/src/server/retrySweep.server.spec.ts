@@ -5,8 +5,12 @@ import { runTextIntegrityRetrySweep } from './retrySweep.server.js';
 import { EULA_ADMIN_RETRY_SKIP_MESSAGE } from './eula.server.js';
 import { DEFAULT_TEXT_INTEGRITY_AUTO_RETRY } from './autoRetryPolicy.server.js';
 
-const scmsServerMocks = vi.hoisted(() => {
+const retrySweepMocks = vi.hoisted(() => {
   const mockFindMany = vi.fn();
+  const mockClaim = vi.fn();
+  const mockRelease = vi.fn();
+  const mockRetry = vi.fn();
+  const mockMarkNoAutoRetry = vi.fn();
   const defaultConfig = {
     api: { submissionsServiceAccount: { id: 'service-account' } },
     app: {
@@ -16,28 +20,37 @@ const scmsServerMocks = vi.hoisted(() => {
 
   return {
     mockFindMany,
+    mockClaim,
+    mockRelease,
+    mockRetry,
+    mockMarkNoAutoRetry,
     defaultConfig,
-    getPrismaClient: vi.fn(async () => ({
-      checkServiceRun: { findMany: mockFindMany },
-    })),
-    getConfig: vi.fn(async () => defaultConfig),
-    CronEndpointScopes: {},
-    CronJobTargetAuth: { HANDSHAKE: 'HANDSHAKE' },
-    CronJobTargetType: { HTTP: 'HTTP' },
-    dbGetCronJob: vi.fn(),
-    dbSeedBuiltinCronJob: vi.fn(),
-    hooksNotifyBaseUrl: vi.fn(),
+    scmsServer: {
+      getPrismaClient: vi.fn(async () => ({
+        checkServiceRun: { findMany: mockFindMany },
+      })),
+      getConfig: vi.fn(async () => defaultConfig),
+      CronEndpointScopes: {},
+      CronJobTargetAuth: { HANDSHAKE: 'HANDSHAKE' },
+      CronJobTargetType: { HTTP: 'HTTP' },
+      dbGetCronJob: vi.fn(),
+      dbSeedBuiltinCronJob: vi.fn(),
+      hooksNotifyBaseUrl: vi.fn(),
+    },
   };
 });
 
-const { mockFindMany, defaultConfig } = scmsServerMocks;
-const mockClaim = vi.fn();
-const mockRelease = vi.fn();
-const mockRetry = vi.fn();
-const mockMarkNoAutoRetry = vi.fn();
+const {
+  mockFindMany,
+  mockClaim,
+  mockRelease,
+  mockRetry,
+  mockMarkNoAutoRetry,
+  defaultConfig,
+} = retrySweepMocks;
 const mockGetConfig = vi.mocked(getConfig);
 
-vi.mock('@curvenote/scms-server', () => scmsServerMocks);
+vi.mock('@curvenote/scms-server', () => retrySweepMocks.scmsServer);
 
 vi.mock('./config.server.js', () => ({
   getTextIntegrityConfigWithOverrides: vi.fn(async (base: Record<string, unknown>) => base),
@@ -47,17 +60,20 @@ vi.mock('./runSuperseded.server.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./runSuperseded.server.js')>();
   return {
     ...actual,
-    tryClaimTextIntegrityRunForRetrySweep: (...args: unknown[]) => mockClaim(...args),
-    releaseTextIntegrityRunRetrySweepClaim: (...args: unknown[]) => mockRelease(...args),
+    tryClaimTextIntegrityRunForRetrySweep: (...args: unknown[]) =>
+      retrySweepMocks.mockClaim(...args),
+    releaseTextIntegrityRunRetrySweepClaim: (...args: unknown[]) =>
+      retrySweepMocks.mockRelease(...args),
   };
 });
 
 vi.mock('./retryCheckRun.server.js', () => ({
-  retryTextIntegrityCheckRun: (...args: unknown[]) => mockRetry(...args),
+  retryTextIntegrityCheckRun: (...args: unknown[]) => retrySweepMocks.mockRetry(...args),
 }));
 
 vi.mock('./checkRunColumns.server.js', () => ({
-  markCheckServiceRunNoAutoRetry: (...args: unknown[]) => mockMarkNoAutoRetry(...args),
+  markCheckServiceRunNoAutoRetry: (...args: unknown[]) =>
+    retrySweepMocks.mockMarkNoAutoRetry(...args),
 }));
 
 const sourceRun = {
