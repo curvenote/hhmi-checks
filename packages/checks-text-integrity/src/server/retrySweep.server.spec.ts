@@ -5,32 +5,39 @@ import { runTextIntegrityRetrySweep } from './retrySweep.server.js';
 import { EULA_ADMIN_RETRY_SKIP_MESSAGE } from './eula.server.js';
 import { DEFAULT_TEXT_INTEGRITY_AUTO_RETRY } from './autoRetryPolicy.server.js';
 
-const mockFindMany = vi.fn();
+const scmsServerMocks = vi.hoisted(() => {
+  const mockFindMany = vi.fn();
+  const defaultConfig = {
+    api: { submissionsServiceAccount: { id: 'service-account' } },
+    app: {
+      extensions: { 'checks-text-integrity': {} as Record<string, unknown> },
+    },
+  };
+
+  return {
+    mockFindMany,
+    defaultConfig,
+    getPrismaClient: vi.fn(async () => ({
+      checkServiceRun: { findMany: mockFindMany },
+    })),
+    getConfig: vi.fn(async () => defaultConfig),
+    CronEndpointScopes: {},
+    CronJobTargetAuth: { HANDSHAKE: 'HANDSHAKE' },
+    CronJobTargetType: { HTTP: 'HTTP' },
+    dbGetCronJob: vi.fn(),
+    dbSeedBuiltinCronJob: vi.fn(),
+    hooksNotifyBaseUrl: vi.fn(),
+  };
+});
+
+const { mockFindMany, defaultConfig } = scmsServerMocks;
 const mockClaim = vi.fn();
 const mockRelease = vi.fn();
 const mockRetry = vi.fn();
 const mockMarkNoAutoRetry = vi.fn();
 const mockGetConfig = vi.mocked(getConfig);
 
-const defaultConfig = {
-  api: { submissionsServiceAccount: { id: 'service-account' } },
-  app: {
-    extensions: { 'checks-text-integrity': { autoRetry: DEFAULT_TEXT_INTEGRITY_AUTO_RETRY } },
-  },
-};
-
-vi.mock('@curvenote/scms-server', () => ({
-  getPrismaClient: vi.fn(async () => ({
-    checkServiceRun: { findMany: mockFindMany },
-  })),
-  getConfig: vi.fn(async () => defaultConfig),
-  CronEndpointScopes: {},
-  CronJobTargetAuth: { HANDSHAKE: 'HANDSHAKE' },
-  CronJobTargetType: { HTTP: 'HTTP' },
-  dbGetCronJob: vi.fn(),
-  dbSeedBuiltinCronJob: vi.fn(),
-  hooksNotifyBaseUrl: vi.fn(),
-}));
+vi.mock('@curvenote/scms-server', () => scmsServerMocks);
 
 vi.mock('./config.server.js', () => ({
   getTextIntegrityConfigWithOverrides: vi.fn(async (base: Record<string, unknown>) => base),
@@ -59,6 +66,9 @@ const sourceRun = {
 
 describe('runTextIntegrityRetrySweep', () => {
   beforeEach(() => {
+    defaultConfig.app.extensions['checks-text-integrity'] = {
+      autoRetry: DEFAULT_TEXT_INTEGRITY_AUTO_RETRY,
+    };
     mockFindMany.mockReset();
     mockClaim.mockReset();
     mockRelease.mockReset();
