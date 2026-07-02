@@ -41,7 +41,10 @@ export function TextIntegrityRetryCronPanel() {
   const handledInstallRef = useRef<StatusResponse | null>(null);
 
   const busy = statusFetcher.state !== 'idle' || installFetcher.state !== 'idle';
-  const retryCron = statusFetcher.data?.retryCron ?? installFetcher.data?.retryCron;
+  const statusRetryCron = statusFetcher.data?.retryCron;
+  const installRetryCron = installFetcher.data?.retryCron;
+  const retryCron =
+    installRetryCron?.installed === true ? installRetryCron : (statusRetryCron ?? installRetryCron);
   const installed = retryCron?.installed === true;
   const cronJob = retryCron?.cronJob;
 
@@ -73,11 +76,12 @@ export function TextIntegrityRetryCronPanel() {
     if (installFetcher.data.success) {
       if (installFetcher.data.retryCron?.installed) {
         ui.toastSuccess('Auto-retry cron job installed');
+        loadStatus();
       } else {
         ui.toastError('Install did not register the cron job');
       }
     }
-  }, [installFetcher.state, installFetcher.data]);
+  }, [installFetcher.state, installFetcher.data, loadStatus]);
 
   return (
     <div className="p-4 space-y-4 rounded-md border border-border">
