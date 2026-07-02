@@ -2,7 +2,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { retryTextIntegrityCheckRun } from './retryCheckRun.server.js';
 import { EULA_ADMIN_RETRY_SKIP_MESSAGE } from './eula.server.js';
-import { markTextIntegritySourceRunSupersededByRetry } from './runSuperseded.server.js';
+import {
+  markTextIntegritySourceRunSupersededByRetry,
+  releaseTextIntegrityRunRetrySweepClaim,
+} from './runSuperseded.server.js';
 
 const mockFindFirst = vi.fn();
 const mockStart = vi.fn();
@@ -29,6 +32,7 @@ vi.mock('./runSuperseded.server.js', async (importOriginal) => {
     ...(actual as Record<string, unknown>),
     isTextIntegrityRunSupersededByRetry: vi.fn(() => false),
     markTextIntegritySourceRunSupersededByRetry: vi.fn(async () => {}),
+    releaseTextIntegrityRunRetrySweepClaim: vi.fn(async () => {}),
   };
 });
 
@@ -43,6 +47,7 @@ vi.mock('./eula.server.js', async (importOriginal) => {
 });
 
 const mockMarkSuperseded = vi.mocked(markTextIntegritySourceRunSupersededByRetry);
+const mockReleaseClaim = vi.mocked(releaseTextIntegrityRunRetrySweepClaim);
 
 const ctx = {
   user: { id: 'admin-user' },
@@ -72,6 +77,8 @@ describe('retryTextIntegrityCheckRun', () => {
     mockAssertOriginal.mockResolvedValue({ ok: true });
     mockMarkSuperseded.mockReset();
     mockMarkSuperseded.mockResolvedValue(undefined);
+    mockReleaseClaim.mockReset();
+    mockReleaseClaim.mockResolvedValue(undefined);
   });
 
   it('blocks user retry when EULA is not accepted', async () => {
@@ -113,6 +120,7 @@ describe('retryTextIntegrityCheckRun', () => {
     const result = await retryTextIntegrityCheckRun(ctx, 'wv-1', 'run-1', 'admin');
     expect(result).toMatchObject({ success: true, checkRunId: 'run-2' });
     expect(mockMarkSuperseded).toHaveBeenCalled();
+    expect(mockReleaseClaim).toHaveBeenCalledWith('run-1');
 
     errorSpy.mockRestore();
   });

@@ -12,6 +12,7 @@ import { isTextIntegrityRunFailed } from './isRunFailed.server.js';
 import {
   isTextIntegrityRunSupersededByRetry,
   markTextIntegritySourceRunSupersededByRetry,
+  releaseTextIntegrityRunRetrySweepClaim,
 } from './runSuperseded.server.js';
 import { startTextIntegrityCheckRun } from './startCheckRun.server.js';
 
@@ -118,6 +119,12 @@ export async function retryTextIntegrityCheckRun(
       `Text Integrity retry created run ${result.checkRunId} but failed to mark source ${sourceRun.id} as superseded`,
       err,
     );
+    await releaseTextIntegrityRunRetrySweepClaim(sourceRun.id).catch((releaseErr) => {
+      console.error(
+        `Text Integrity retry failed to release sweep claim on source ${sourceRun.id}`,
+        releaseErr,
+      );
+    });
   }
   return { success: true, checkRunId: result.checkRunId } as ExtensionCheckHandleActionResult & {
     checkRunId: string;
