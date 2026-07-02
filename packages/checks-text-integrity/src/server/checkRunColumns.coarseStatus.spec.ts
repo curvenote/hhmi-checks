@@ -43,7 +43,7 @@ describe('resolveTextIntegrityCoarseStatus', () => {
   });
 
   it('marks error when processing failed', () => {
-    const data = completedRun('pending');
+    const data = completedRun('completed');
     data.stages!.processing = { status: 'error', history: [], timestamp: TS, error: 'boom' };
     expect(resolveTextIntegrityCoarseStatus(data)).toBe('error');
   });

@@ -41,9 +41,9 @@ vi.mock('../config.server.js', () => ({
 }));
 
 vi.mock('../eula.server.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../eula.server.js')>();
+  const actual = await importOriginal();
   return {
-    ...actual,
+    ...(actual as Record<string, unknown>),
     assertOriginalSubmitterEulaCurrent: (...args: unknown[]) => mockAssertOriginal(...args),
     refreshEulaCacheIfStale: (...args: unknown[]) => mockRefreshEulaCacheIfStale(...args),
     resolveEulaSubmitFailureMessage: (...args: unknown[]) => mockResolveEulaMsg(...args),

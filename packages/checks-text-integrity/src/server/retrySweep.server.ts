@@ -49,7 +49,7 @@ async function buildRootFailedAtCache(
     runsById.set(candidate.id, candidate);
   }
 
-  let pendingIds = new Set<string>();
+  const pendingIds = new Set<string>();
   for (const candidate of candidates) {
     let nextId: string | null | undefined = candidate.retry_of_id;
     const visited = new Set<string>();

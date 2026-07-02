@@ -40,14 +40,8 @@ const retrySweepMocks = vi.hoisted(() => {
   };
 });
 
-const {
-  mockFindMany,
-  mockClaim,
-  mockRelease,
-  mockRetry,
-  mockMarkNoAutoRetry,
-  defaultConfig,
-} = retrySweepMocks;
+const { mockFindMany, mockClaim, mockRelease, mockRetry, mockMarkNoAutoRetry, defaultConfig } =
+  retrySweepMocks;
 const mockGetConfig = vi.mocked(getConfig);
 
 vi.mock('@curvenote/scms-server', () => retrySweepMocks.scmsServer);
@@ -57,9 +51,9 @@ vi.mock('./config.server.js', () => ({
 }));
 
 vi.mock('./runSuperseded.server.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./runSuperseded.server.js')>();
+  const actual = await importOriginal();
   return {
-    ...actual,
+    ...(actual as Record<string, unknown>),
     tryClaimTextIntegrityRunForRetrySweep: (...args: unknown[]) =>
       retrySweepMocks.mockClaim(...args),
     releaseTextIntegrityRunRetrySweepClaim: (...args: unknown[]) =>
