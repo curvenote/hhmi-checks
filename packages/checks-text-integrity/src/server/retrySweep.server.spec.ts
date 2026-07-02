@@ -179,4 +179,42 @@ describe('runTextIntegrityRetrySweep', () => {
     expect(mockMarkNoAutoRetry).toHaveBeenCalledWith('run-1');
     expect(mockRelease).toHaveBeenCalledWith('run-1');
   });
+
+  it('counts mark-superseded failure as sweep failed, not retried', async () => {
+    mockRetry.mockResolvedValue({
+      status: 500,
+      error: { message: 'Retry run exists but marking the source superseded failed.' },
+      markSupersededFailed: true,
+      checkRunId: 'run-2',
+    });
+
+    const result = await runTextIntegrityRetrySweep();
+    expect(result.failed).toBe(1);
+    expect(result.retried).toBe(0);
+    expect(mockRelease).not.toHaveBeenCalled();
+  });
+
+  it('waits for backoff after mark-superseded failure before reclaiming on next sweep', async () => {
+    mockRetry.mockResolvedValue({
+      status: 500,
+      error: { message: 'mark failed' },
+      markSupersededFailed: true,
+      checkRunId: 'run-2',
+    });
+
+    await runTextIntegrityRetrySweep();
+    expect(mockRetry).toHaveBeenCalledTimes(1);
+
+    mockFindMany.mockResolvedValueOnce([
+      {
+        ...sourceRun,
+        failed_at: new Date().toISOString(),
+      },
+    ]);
+    mockRetry.mockClear();
+
+    const second = await runTextIntegrityRetrySweep();
+    expect(second.skippedNotEligible).toBe(1);
+    expect(mockRetry).not.toHaveBeenCalled();
+  });
 });

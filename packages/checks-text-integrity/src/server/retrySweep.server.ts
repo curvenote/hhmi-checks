@@ -309,6 +309,15 @@ export async function runTextIntegrityRetrySweep(options?: {
       continue;
     }
 
+    if ((outcome as { markSupersededFailed?: boolean }).markSupersededFailed) {
+      result.failed += 1;
+      result.errors.push({
+        runId: sourceRun.id,
+        message: outcome.error?.message ?? 'Mark superseded failed',
+      });
+      continue;
+    }
+
     if ((outcome as { eulaSkip?: boolean }).eulaSkip) {
       await markCheckServiceRunNoAutoRetry(sourceRun.id);
       await releaseTextIntegrityRunRetrySweepClaim(sourceRun.id);

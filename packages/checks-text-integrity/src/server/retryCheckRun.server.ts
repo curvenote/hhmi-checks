@@ -13,7 +13,11 @@ import {
   isTextIntegrityRunSupersededByRetry,
   markTextIntegritySourceRunSupersededByRetry,
   releaseTextIntegrityRunRetrySweepClaim,
+  findExistingTextIntegrityRetrySuccessorId,
+  recordTextIntegritySweepMarkSupersededFailure,
+  TEXT_INTEGRITY_MAX_SWEEP_MARK_SUPERSEDED_FAILURES,
 } from './runSuperseded.server.js';
+import { markCheckServiceRunNoAutoRetry } from './checkRunColumns.server.js';
 import { startTextIntegrityCheckRun } from './startCheckRun.server.js';
 
 const TEXT_INTEGRITY_KIND = 'checks-text-integrity';
@@ -92,41 +96,60 @@ export async function retryTextIntegrityCheckRun(
   const createdById =
     mode === 'admin' ? (sourceRun.created_by_id ?? undefined) : (ctx.user?.id ?? undefined);
 
-  const result = await startTextIntegrityCheckRun(ctx, workVersionId, {
-    createdById,
-    invokedById: serviceAccountId,
-    scheduledAt: options.scheduledAt,
-    lineage: {
-      retryOfRunId: sourceRun.id,
-      sourceAttempt: (sourceRun.attempt ?? 1) + 1,
-    },
-  });
-
-  if (!result.ok) {
-    return {
-      error: { type: 'general', message: result.message },
-      status: result.status,
-    };
+  const existingSuccessorId = await findExistingTextIntegrityRetrySuccessorId(sourceRun.id);
+  let checkRunId: string;
+  if (existingSuccessorId) {
+    checkRunId = existingSuccessorId;
+  } else {
+    const result = await startTextIntegrityCheckRun(ctx, workVersionId, {
+      createdById,
+      invokedById: serviceAccountId,
+      scheduledAt: options.scheduledAt,
+      lineage: {
+        retryOfRunId: sourceRun.id,
+        sourceAttempt: (sourceRun.attempt ?? 1) + 1,
+      },
+    });
+    if (!result.ok) {
+      return {
+        error: { type: 'general', message: result.message },
+        status: result.status,
+      };
+    }
+    checkRunId = result.checkRunId;
   }
+
   try {
-    await markTextIntegritySourceRunSupersededByRetry(
-      sourceRun.id,
-      result.checkRunId,
-      ctx.user?.id,
-    );
+    await markTextIntegritySourceRunSupersededByRetry(sourceRun.id, checkRunId, ctx.user?.id);
   } catch (err) {
     console.error(
-      `Text Integrity retry created run ${result.checkRunId} but failed to mark source ${sourceRun.id} as superseded`,
+      `Text Integrity retry created run ${checkRunId} but failed to mark source ${sourceRun.id} as superseded`,
       err,
     );
+    const failures = await recordTextIntegritySweepMarkSupersededFailure(sourceRun.id);
     await releaseTextIntegrityRunRetrySweepClaim(sourceRun.id).catch((releaseErr) => {
       console.error(
         `Text Integrity retry failed to release sweep claim on source ${sourceRun.id}`,
         releaseErr,
       );
     });
+    if (failures >= TEXT_INTEGRITY_MAX_SWEEP_MARK_SUPERSEDED_FAILURES) {
+      await markCheckServiceRunNoAutoRetry(sourceRun.id);
+    }
+    return {
+      error: {
+        type: 'general',
+        message: 'Retry run exists but marking the source superseded failed.',
+      },
+      status: 500,
+      markSupersededFailed: true,
+      checkRunId,
+    } as ExtensionCheckHandleActionResult & {
+      markSupersededFailed: true;
+      checkRunId: string;
+    };
   }
-  return { success: true, checkRunId: result.checkRunId } as ExtensionCheckHandleActionResult & {
+  return { success: true, checkRunId } as ExtensionCheckHandleActionResult & {
     checkRunId: string;
   };
 }
