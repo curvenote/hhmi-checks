@@ -10,7 +10,9 @@ import {
   getTextIntegrityManifest,
   isAwaitingInitialTextIntegrityStages,
   shouldPollTextIntegrityChecks,
+  getRetrySupersessionInfo,
 } from '../schema.js';
+import { RetriedRunNotice } from './RetriedRunNotice.js';
 
 interface TextIntegrityChecksSectionProps {
   metadata: TextIntegrityDataSchema | undefined;
@@ -66,13 +68,16 @@ export function TextIntegrityChecksSection({
   }
 
   if (showResults && !metadata.summaryReport) {
+    const supersession = getRetrySupersessionInfo(metadata);
     return (
       <div className="flex flex-col gap-4">
         <ui.SimpleAlert
           type="error"
           message="Processing completed but no summary report was received. Please contact support."
         />
-        {workVersionId ? (
+        {supersession ? (
+          <RetriedRunNotice supersession={supersession} />
+        ) : workVersionId ? (
           <TextIntegrityCheckRunRetryButton
             actionPath={remoteStatusActionPath}
             workVersionId={workVersionId}

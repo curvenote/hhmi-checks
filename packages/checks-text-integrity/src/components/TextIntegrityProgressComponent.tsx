@@ -6,12 +6,14 @@ import {
   getFailedPipelineStep,
   getFailedStageDisplayTitle,
   getErrorPipelineSegmentTones,
+  getRetrySupersessionInfo,
 } from '../schema.js';
 import { ProcessingProgressArea } from './progress/ProcessingProgressArea.js';
 import { SimpleErrorArea } from './progress/SimpleErrorArea.js';
 import { SubmissionCompleteProgressArea } from './progress/SubmissionCompleteProgressArea.js';
 import { SubmittingProgressArea } from './progress/SubmittingProgressArea.js';
 import { TextIntegrityCheckRunRetryButton } from './TextIntegrityCheckRunRetryButton.js';
+import { RetriedRunNotice } from './RetriedRunNotice.js';
 
 type ProgressRefreshProps = {
   actionPath: string;
@@ -47,6 +49,7 @@ export function TextIntegrityProgressComponent({
 
   if (hasError(metadata)) {
     const failedStep = getFailedPipelineStep(metadata) ?? 1;
+    const supersession = getRetrySupersessionInfo(metadata);
     return (
       <div className="flex flex-col gap-4">
         <SimpleErrorArea
@@ -55,7 +58,9 @@ export function TextIntegrityProgressComponent({
           failedStageTitle={getFailedStageDisplayTitle(failedStep)}
           error={getErrorMessage(metadata)}
         />
-        {workVersionId ? (
+        {supersession ? (
+          <RetriedRunNotice supersession={supersession} />
+        ) : workVersionId ? (
           <TextIntegrityCheckRunRetryButton
             actionPath={actionPath}
             workVersionId={workVersionId}

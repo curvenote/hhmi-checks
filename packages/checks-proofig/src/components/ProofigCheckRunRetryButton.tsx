@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useFetcher } from 'react-router';
+import { useFetcher, useRevalidator } from 'react-router';
 import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
 
 type ProofigCheckRunRetryButtonProps = {
@@ -16,6 +16,7 @@ export function ProofigCheckRunRetryButton({
   checkRunId,
 }: ProofigCheckRunRetryButtonProps) {
   const fetcher = useFetcher();
+  const revalidator = useRevalidator();
   const { blocked, message } = useCheckMaintenanceBlocked('proofig');
   const canRetry = Boolean(actionPath && checkRunId?.trim());
   const busy = fetcher.state === 'submitting';
@@ -24,8 +25,11 @@ export function ProofigCheckRunRetryButton({
     if (fetcher.state !== 'idle' || !fetcher.data) return;
     const data = fetcher.data as { error?: { message?: string }; success?: boolean };
     if (data.error?.message) ui.toastError(data.error.message);
-    else if (data.success) ui.toastSuccess('Image integrity check retry started');
-  }, [fetcher.state, fetcher.data]);
+    else if (data.success) {
+      ui.toastSuccess('Image integrity check retry started');
+      revalidator.revalidate();
+    }
+  }, [fetcher.state, fetcher.data, revalidator]);
 
   if (!canRetry) return null;
 

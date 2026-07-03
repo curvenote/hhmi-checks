@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useFetcher } from 'react-router';
+import { useFetcher, useRevalidator } from 'react-router';
 import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
 import { TextIntegrityEulaDialog } from './TextIntegrityEulaDialog.js';
 import { useTextIntegrityEulaEnable } from './useTextIntegrityEulaEnable.js';
@@ -18,6 +18,7 @@ export function TextIntegrityCheckRunRetryButton({
   checkRunId,
 }: TextIntegrityCheckRunRetryButtonProps) {
   const fetcher = useFetcher();
+  const revalidator = useRevalidator();
   const { blocked, message } = useCheckMaintenanceBlocked('checks-text-integrity');
   const { dialogOpen, setDialogOpen, eulaPresentation, requestEnable, acceptEula, busy } =
     useTextIntegrityEulaEnable(workVersionId);
@@ -37,8 +38,11 @@ export function TextIntegrityCheckRunRetryButton({
     if (fetcher.state !== 'idle' || !fetcher.data) return;
     const data = fetcher.data as { error?: { message?: string }; success?: boolean };
     if (data.error?.message) ui.toastError(data.error.message);
-    else if (data.success) ui.toastSuccess('Text integrity check retry started');
-  }, [fetcher.state, fetcher.data]);
+    else if (data.success) {
+      ui.toastSuccess('Text integrity check retry started');
+      revalidator.revalidate();
+    }
+  }, [fetcher.state, fetcher.data, revalidator]);
 
   if (!canRetry) return null;
 

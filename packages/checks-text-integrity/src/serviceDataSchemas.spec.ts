@@ -10,6 +10,8 @@ import {
   isWaitingForPdfReport,
   shouldPollTextIntegrityChecks,
   textIntegrityDataSchema,
+  getRetrySupersessionInfo,
+  isRunSupersededByRetry,
 } from './serviceDataSchemas.js';
 
 const TS = '2025-01-01T00:00:00Z';
@@ -51,6 +53,42 @@ describe('hasPipelineError', () => {
         },
       }),
     ).toBe(false);
+  });
+});
+
+describe('getRetrySupersessionInfo', () => {
+  it('returns supersession info when both lineage fields are set', () => {
+    expect(
+      getRetrySupersessionInfo({
+        stages: { submission: stage('error') },
+        supersededByRunId: 'new-run',
+        supersededAt: TS,
+      }),
+    ).toEqual({ supersededByRunId: 'new-run', supersededAt: TS });
+  });
+
+  it('returns null when lineage fields are missing or blank', () => {
+    expect(getRetrySupersessionInfo(undefined)).toBeNull();
+    expect(getRetrySupersessionInfo({ stages: { submission: stage('error') } })).toBeNull();
+    expect(
+      getRetrySupersessionInfo({
+        stages: { submission: stage('error') },
+        supersededByRunId: '  ',
+        supersededAt: TS,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('isRunSupersededByRetry', () => {
+  it('is true when supersession info is present', () => {
+    expect(
+      isRunSupersededByRetry({
+        stages: { submission: stage('error') },
+        supersededByRunId: 'new-run',
+        supersededAt: TS,
+      }),
+    ).toBe(true);
   });
 });
 

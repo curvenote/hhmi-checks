@@ -168,6 +168,26 @@ export function linearStageIsDone(status: ProofigStageStatus | undefined): boole
   return status === 'completed' || status === 'notify-skipped';
 }
 
+export type RetrySupersessionInfo = {
+  supersededByRunId: string;
+  supersededAt: string;
+};
+
+/** True when a failed run was retried and should not offer retry again. */
+export function isRunSupersededByRetry(data: ProofigDataSchema | undefined): boolean {
+  return getRetrySupersessionInfo(data) != null;
+}
+
+/** Lineage stamped on a source run when a retry has been started. */
+export function getRetrySupersessionInfo(
+  data: ProofigDataSchema | undefined,
+): RetrySupersessionInfo | null {
+  const supersededByRunId = data?.supersededByRunId?.trim();
+  const supersededAt = data?.supersededAt?.trim();
+  if (!supersededByRunId || !supersededAt) return null;
+  return { supersededByRunId, supersededAt };
+}
+
 /** True if any Proofig stage has errored. */
 export function hasError(data: ProofigDataSchema | undefined): boolean {
   if (!data?.stages) return false;
