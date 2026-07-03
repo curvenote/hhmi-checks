@@ -173,11 +173,6 @@ export type RetrySupersessionInfo = {
   supersededAt: string;
 };
 
-/** True when a failed run was retried and should not offer retry again. */
-export function isRunSupersededByRetry(data: ProofigDataSchema | undefined): boolean {
-  return getRetrySupersessionInfo(data) != null;
-}
-
 /** Lineage stamped on a source run when a retry has been started. */
 export function getRetrySupersessionInfo(
   data: ProofigDataSchema | undefined,

@@ -1,6 +1,6 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { describe, expect, it } from 'vitest';
-import { hasError, type ProofigDataSchema, getRetrySupersessionInfo, isRunSupersededByRetry } from './schema.js';
+import { hasError, type ProofigDataSchema, getRetrySupersessionInfo } from './schema.js';
 
 const timestamp = '2026-01-01T00:00:00.000Z';
 
@@ -19,20 +19,6 @@ describe('getRetrySupersessionInfo', () => {
 
   it('returns null when lineage fields are missing', () => {
     expect(getRetrySupersessionInfo(undefined)).toBeNull();
-  });
-});
-
-describe('isRunSupersededByRetry', () => {
-  it('is true when supersession info is present', () => {
-    expect(
-      isRunSupersededByRetry({
-        stages: {
-          initialPost: { status: 'error', history: [], timestamp },
-        },
-        supersededByRunId: 'new-run',
-        supersededAt: timestamp,
-      } as unknown as ProofigDataSchema),
-    ).toBe(true);
   });
 });
 

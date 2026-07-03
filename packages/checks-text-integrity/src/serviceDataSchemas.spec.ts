@@ -11,7 +11,6 @@ import {
   shouldPollTextIntegrityChecks,
   textIntegrityDataSchema,
   getRetrySupersessionInfo,
-  isRunSupersededByRetry,
 } from './serviceDataSchemas.js';
 
 const TS = '2025-01-01T00:00:00Z';
@@ -77,18 +76,6 @@ describe('getRetrySupersessionInfo', () => {
         supersededAt: TS,
       }),
     ).toBeNull();
-  });
-});
-
-describe('isRunSupersededByRetry', () => {
-  it('is true when supersession info is present', () => {
-    expect(
-      isRunSupersededByRetry({
-        stages: { submission: stage('error') },
-        supersededByRunId: 'new-run',
-        supersededAt: TS,
-      }),
-    ).toBe(true);
   });
 });
 
