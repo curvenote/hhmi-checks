@@ -281,6 +281,22 @@ export function hasPipelineError(data: TextIntegrityDataSchema | undefined): boo
 }
 
 /** True if any stage has errored (includes report PDF generation for UI). */
+export type RetrySupersessionInfo = {
+  supersededByRunId: string;
+  supersededAt: string;
+};
+
+/** Lineage stamped on a source run when a retry has been started. */
+export function getRetrySupersessionInfo(
+  data: TextIntegrityDataSchema | undefined,
+): RetrySupersessionInfo | null {
+  const supersededByRunId = data?.supersededByRunId?.trim();
+  const supersededAt = data?.supersededAt?.trim();
+  if (!supersededByRunId || !supersededAt) return null;
+  return { supersededByRunId, supersededAt };
+}
+
+/** True if any stage has errored. */
 export function hasError(data: TextIntegrityDataSchema | undefined): boolean {
   if (!data?.stages) return false;
   return hasPipelineError(data) || data.stages.reportGeneration?.status === 'error';

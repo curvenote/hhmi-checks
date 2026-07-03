@@ -1,5 +1,5 @@
 import type { ProofigDataSchema, ProofigStages } from '../schema.js';
-import { ALL_PENDING_STAGES, getCurrentProofigStage } from '../schema.js';
+import { ALL_PENDING_STAGES, getCurrentProofigStage, getRetrySupersessionInfo } from '../schema.js';
 import { DefaultArea } from './progress/DefaultArea.js';
 import { DocumentPreparationProgressArea } from './progress/DocumentPreparationProgressArea.js';
 import { InitialPostProgressArea } from './progress/InitialPostProgressArea.js';
@@ -8,6 +8,7 @@ import { SubimageApprovalProgressArea } from './progress/SubimageApprovalProgres
 import { SubimageDetectionProgressArea } from './progress/SubimageDetectionProgressArea.js';
 import { ResultsSummaryArea } from './ResultsSummaryArea.js';
 import { ProofigCheckRunRetryButton } from './ProofigCheckRunRetryButton.js';
+import { RetriedRunNotice } from './RetriedRunNotice.js';
 
 export const STAGE_LABELS = {
   documentPreparation: 'Preparing document',
@@ -112,16 +113,21 @@ export function ProofigProgressComponent({
       />
     );
   }
+  const supersession = getRetrySupersessionInfo(proofigData);
   return (
     <>
       <div>{Component}</div>
       {stagesHaveError(stages) && workVersionId ? (
         <div className="mt-4">
-          <ProofigCheckRunRetryButton
-            actionPath={remoteStatusActionPath}
-            workVersionId={workVersionId}
-            checkRunId={checkRunId}
-          />
+          {supersession ? (
+            <RetriedRunNotice supersession={supersession} />
+          ) : (
+            <ProofigCheckRunRetryButton
+              actionPath={remoteStatusActionPath}
+              workVersionId={workVersionId}
+              checkRunId={checkRunId}
+            />
+          )}
         </div>
       ) : null}
     </>
