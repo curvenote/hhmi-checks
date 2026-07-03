@@ -1,10 +1,6 @@
 import { uuidv7 as uuid } from 'uuidv7';
-import {
-  enqueueAndDispatchJob,
-  getPrismaClient,
-  safeCheckServiceRunDataUpdate,
-} from '@curvenote/scms-server';
-import type { ExtensionCheckHandleActionArgs, CheckServiceRunData } from '@curvenote/scms-core';
+import { enqueueAndDispatchJob, getConfig, getPrismaClient } from '@curvenote/scms-server';
+import type { ExtensionCheckHandleActionArgs } from '@curvenote/scms-core';
 import { hasDocxInMetadata, hasPdfInMetadata, KnownJobTypes } from '@curvenote/scms-core';
 import type { Prisma } from '@curvenote/scms-db';
 import { MINIMAL_PROOFIG_SERVICE_DATA, type ProofigDataSchema } from '../schema.js';
@@ -15,11 +11,15 @@ import {
 } from './stateMachine.server.js';
 import { PROOFIG_SUBMIT_STREAM } from './jobs/proofig-submit-stream.server.js';
 import { PROOFIG_CONVERTER_FAILURE_CLEANUP } from './jobs/proofig-converter-failure-cleanup.server.js';
+import {
+  errorColumnPatch,
+  healthyColumnPatch,
+  patchProofigRunServiceData,
+} from './checkRunColumns.server.js';
 
 export type ProofigCheckRunLineage = {
   retryOfRunId?: string;
-  retriedAt?: string;
-  retriedByUserId?: string;
+  sourceAttempt?: number;
 };
 
 export type StartProofigCheckRunResult =
@@ -30,7 +30,12 @@ type StartProofigCheckRunOptions = {
   createdById?: string;
   invokedById?: string;
   lineage?: ProofigCheckRunLineage;
+  scheduledAt?: string;
 };
+
+function resolveServiceAccountUserId(config: Awaited<ReturnType<typeof getConfig>>): string {
+  return config.api.submissionsServiceAccount?.id ?? 'system-cron';
+}
 
 /**
  * Create a Proofig check run and enqueue submit (or DOCX converter + dependent submit).
@@ -70,8 +75,8 @@ export async function startProofigCheckRun(
         kind: 'proofig',
         work_version_id: workVersionId,
         created_by_id: options.createdById ?? ctx.user?.id ?? undefined,
+        ...errorColumnPatch(timestamp),
         data: {
-          status: 'error',
           serviceDataSchema: {},
           serviceData: serviceData as Prisma.JsonObject,
         },
@@ -88,16 +93,8 @@ export async function startProofigCheckRun(
   const timestamp = new Date().toISOString();
   const initialServiceData: ProofigDataSchema = {
     ...MINIMAL_PROOFIG_SERVICE_DATA,
-    ...(options.lineage?.retryOfRunId
-      ? {
-          retryOfRunId: options.lineage.retryOfRunId,
-          retriedAt: options.lineage.retriedAt ?? timestamp,
-          ...(options.lineage.retriedByUserId
-            ? { retriedByUserId: options.lineage.retriedByUserId }
-            : {}),
-        }
-      : {}),
   };
+  const nextAttempt = options.lineage?.sourceAttempt ?? 1;
 
   const run = await prisma.checkServiceRun.create({
     data: {
@@ -107,8 +104,10 @@ export async function startProofigCheckRun(
       kind: 'proofig',
       work_version_id: workVersionId,
       created_by_id: options.createdById ?? ctx.user?.id ?? undefined,
+      ...healthyColumnPatch(),
+      attempt: nextAttempt,
+      retry_of_id: options.lineage?.retryOfRunId ?? undefined,
       data: {
-        status: 'healthy',
         serviceDataSchema: {},
         serviceData: initialServiceData as Prisma.JsonObject,
       },
@@ -117,23 +116,14 @@ export async function startProofigCheckRun(
   const checkRunId = run.id;
   const jobType = PROOFIG_SUBMIT_STREAM;
   const dispatchTimestamp = new Date().toISOString();
-  const invokedById = options.invokedById ?? ctx.user?.id;
+  const appConfig = await getConfig();
+  const invokedById = options.invokedById ?? ctx.user?.id ?? resolveServiceAccountUserId(appConfig);
 
   try {
     if (hasPdf) {
-      await safeCheckServiceRunDataUpdate(checkRunId, (runData?: Prisma.JsonValue) => {
-        const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
-        const nextServiceData = beginProofigPipeline(
-          { sourceFormat: 'pdf' },
-          current.serviceData ?? initialServiceData,
-          dispatchTimestamp,
-        );
-        return {
-          ...current,
-          status: 'healthy',
-          serviceData: nextServiceData,
-        } satisfies CheckServiceRunData<ProofigDataSchema>;
-      });
+      await patchProofigRunServiceData(checkRunId, (serviceData) =>
+        beginProofigPipeline({ sourceFormat: 'pdf' }, serviceData, dispatchTimestamp),
+      );
 
       await enqueueAndDispatchJob({
         job_id: uuid(),
@@ -145,24 +135,19 @@ export async function startProofigCheckRun(
         invoked_by_id: invokedById,
         activity_type: 'CHECK_STARTED',
         activity_data: { check: { kind: 'proofig' } },
+        scheduled_at: options.scheduledAt,
       });
     } else {
       const exportJobId = uuid();
       const proofigJobId = uuid();
       const converterFailureCleanupJobId = uuid();
-      await safeCheckServiceRunDataUpdate(checkRunId, (runData?: Prisma.JsonValue) => {
-        const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
-        const nextServiceData = beginProofigPipeline(
+      await patchProofigRunServiceData(checkRunId, (serviceData) =>
+        beginProofigPipeline(
           { sourceFormat: 'docx', converterJobId: exportJobId },
-          current.serviceData ?? initialServiceData,
+          serviceData,
           dispatchTimestamp,
-        );
-        return {
-          ...current,
-          status: 'healthy',
-          serviceData: nextServiceData,
-        } satisfies CheckServiceRunData<ProofigDataSchema>;
-      });
+        ),
+      );
       await enqueueAndDispatchJob({
         job_id: exportJobId,
         job_type: KnownJobTypes.CONVERTER_TASK,
@@ -174,6 +159,7 @@ export async function startProofigCheckRun(
         invoked_by_id: invokedById,
         activity_type: 'CONVERTER_TASK_STARTED',
         activity_data: { converter: { target: 'pdf', type: 'docx-lowriter-pdf' } },
+        scheduled_at: options.scheduledAt,
         dependents: [
           {
             job_id: proofigJobId,
@@ -206,18 +192,11 @@ export async function startProofigCheckRun(
         : typeof err === 'object' && err != null && 'message' in err
           ? String((err as { message?: unknown }).message)
           : 'Proofig submit job failed';
-    await safeCheckServiceRunDataUpdate(checkRunId, (runData?: Prisma.JsonValue) => {
-      const current = (runData ?? {}) as CheckServiceRunData<ProofigDataSchema>;
-      const base = current.serviceData ?? initialServiceData;
-      const nextServiceData =
-        hasPdf || !hasDocx
-          ? markInitialPostError(base, errMsg, new Date().toISOString())
-          : markDocumentPreparationError(base, errMsg, new Date().toISOString());
-      return {
-        ...current,
-        status: 'error',
-        serviceData: nextServiceData,
-      } satisfies CheckServiceRunData<ProofigDataSchema>;
+    await patchProofigRunServiceData(checkRunId, (serviceData) => {
+      const base = serviceData ?? initialServiceData;
+      return hasPdf || !hasDocx
+        ? markInitialPostError(base, errMsg, new Date().toISOString())
+        : markDocumentPreparationError(base, errMsg, new Date().toISOString());
     });
     return { ok: false, message: errMsg, status: 500, checkRunId };
   }

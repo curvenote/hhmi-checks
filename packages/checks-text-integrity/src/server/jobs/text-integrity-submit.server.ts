@@ -1,7 +1,6 @@
-import type { CreateJob, CheckServiceRunData } from '@curvenote/scms-core';
+import type { CreateJob } from '@curvenote/scms-core';
 import type { Context } from '@curvenote/scms-server';
 import { JobStatus } from '@curvenote/scms-db';
-import type { Prisma } from '@curvenote/scms-db';
 import {
   httpError,
   coerceToObject,
@@ -14,10 +13,8 @@ import {
   getPrismaClient,
   hooksNotifyBaseUrl,
   jobs,
-  safeCheckServiceRunDataUpdate,
   signFilesInMetadata,
 } from '@curvenote/scms-server';
-import type { TextIntegrityDataSchema } from '../../schema.js';
 import {
   startSubmission,
   markSubmissionError as markSubmissionErrorSM,
@@ -28,6 +25,10 @@ import {
 } from '../config.server.js';
 import { buildRelayContextEnvelope } from '../relay-context.server.js';
 import { checksRelayUploadUrl, resolveRelayInstanceId } from '../relay-urls.server.js';
+import {
+  patchTextIntegrityRunServiceData,
+  markCheckServiceRunNoAutoRetry,
+} from '../checkRunColumns.server.js';
 import {
   assertOriginalSubmitterEulaCurrent,
   buildUploadEulaMetadata,
@@ -202,16 +203,8 @@ export async function textIntegritySubmitHandler(
   });
 
   const markRunError = async (message: string) => {
-    await safeCheckServiceRunDataUpdate(
-      payload.check_service_run_id,
-      (runData?: Prisma.JsonValue) => {
-        const current = (runData ?? {}) as CheckServiceRunData<TextIntegrityDataSchema>;
-        return {
-          ...current,
-          status: 'error',
-          serviceData: markSubmissionErrorSM(current.serviceData, message),
-        } as Prisma.JsonObject;
-      },
+    await patchTextIntegrityRunServiceData(payload.check_service_run_id, (serviceData) =>
+      markSubmissionErrorSM(serviceData, message),
     );
   };
 
@@ -246,6 +239,7 @@ export async function textIntegritySubmitHandler(
 
     const eulaCheck = await assertOriginalSubmitterEulaCurrent(ctx, submitterId);
     if (!eulaCheck.ok) {
+      await markCheckServiceRunNoAutoRetry(payload.check_service_run_id);
       throw httpError(400, eulaCheck.message);
     }
 
@@ -340,6 +334,7 @@ export async function textIntegritySubmitHandler(
           result: relayJson.result,
         })
       ) {
+        await markCheckServiceRunNoAutoRetry(payload.check_service_run_id);
         const userMessage = await resolveEulaSubmitFailureMessage(ctx, mergedConfig, detail);
         throw httpError(400, userMessage);
       }
@@ -357,23 +352,12 @@ export async function textIntegritySubmitHandler(
       );
     }
 
-    await safeCheckServiceRunDataUpdate(
-      payload.check_service_run_id,
-      (runData?: Prisma.JsonValue) => {
-        const current = (runData ?? {}) as CheckServiceRunData<TextIntegrityDataSchema>;
-        const nextServiceData: TextIntegrityDataSchema = {
-          ...startSubmission(current.serviceData),
-          externalId: externalIdRaw,
-          externalRef: externalIdRaw,
-          submissionId: externalIdRaw,
-        };
-        return {
-          ...current,
-          status: 'healthy',
-          serviceData: nextServiceData,
-        } as Prisma.JsonObject;
-      },
-    );
+    await patchTextIntegrityRunServiceData(payload.check_service_run_id, (serviceData) => ({
+      ...startSubmission(serviceData),
+      externalId: externalIdRaw,
+      externalRef: externalIdRaw,
+      submissionId: externalIdRaw,
+    }));
   } catch (err) {
     let message = 'Text integrity submit failed';
     if (err instanceof Response) {

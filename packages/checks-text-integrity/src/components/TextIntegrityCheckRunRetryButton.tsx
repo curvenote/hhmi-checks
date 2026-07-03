@@ -22,7 +22,8 @@ export function TextIntegrityCheckRunRetryButton({
   const { dialogOpen, setDialogOpen, eulaPresentation, requestEnable, acceptEula, busy } =
     useTextIntegrityEulaEnable(workVersionId);
   const canRetry = Boolean(actionPath && checkRunId?.trim());
-  const submitting = fetcher.state === 'submitting';
+  const submitting = fetcher.state !== 'idle';
+  const pending = busy || submitting;
 
   const runRetry = () => {
     if (!actionPath || !checkRunId?.trim()) return;
@@ -44,17 +45,18 @@ export function TextIntegrityCheckRunRetryButton({
 
   return (
     <>
-      <ui.MaintenanceTooltip enabled={blocked} message={message}>
-        <ui.StatefulButton
-          type="button"
-          variant="outline"
-          busy={busy || submitting}
-          disabled={blocked}
-          onClick={() => requestEnable(runRetry)}
-        >
-          Retry check
-        </ui.StatefulButton>
-      </ui.MaintenanceTooltip>
+      <div className="flex justify-end">
+        <ui.MaintenanceTooltip enabled={blocked} message={message}>
+          <ui.StatefulButton
+            type="button"
+            variant="outline"
+            disabled={blocked || pending}
+            onClick={() => requestEnable(runRetry)}
+          >
+            Retry check
+          </ui.StatefulButton>
+        </ui.MaintenanceTooltip>
+      </div>
       {eulaPresentation ? (
         <TextIntegrityEulaDialog
           open={dialogOpen}

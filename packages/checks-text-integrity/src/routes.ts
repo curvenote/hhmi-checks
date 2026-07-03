@@ -23,6 +23,13 @@ export async function registerRoutes(_appConfig: Config): Promise<RouteRegistrat
             ),
           ),
           route(
+            'text-integrity/retry-sweep',
+            resolveRoutePath(
+              import.meta.url,
+              'routes/v1.hooks.text-integrity.retry-sweep/route.tsx',
+            ),
+          ),
+          route(
             'text-integrity/eula-cache/refresh',
             resolveRoutePath(
               import.meta.url,

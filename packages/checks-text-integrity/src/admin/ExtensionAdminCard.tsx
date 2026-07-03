@@ -11,6 +11,7 @@ import { TextIntegrityRefreshEulaRow } from './TextIntegrityRefreshEulaRow.js';
 import { TextIntegrityUpdateConfigurationForm } from './TextIntegrityUpdateConfigurationForm.js';
 import { TextIntegritySettingsPanel } from './TextIntegritySettingsPanel.js';
 import { TextIntegrityFailedRunsAdminPanel } from './FailedRunsAdminPanel.js';
+import { TextIntegrityRetryCronPanel } from './TextIntegrityRetryCronPanel.js';
 
 export function getManifest(
   record: Record<string, unknown> | undefined,
@@ -59,6 +60,7 @@ export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) 
         maintenance={displayConfig.maintenance as CheckMaintenanceRecord | undefined}
         serviceLabel={title}
       />
+      <TextIntegrityRetryCronPanel />
       <TextIntegrityFailedRunsAdminPanel />
     </div>
   );

@@ -1,13 +1,7 @@
-import type { Prisma } from '@curvenote/scms-db';
 import type { ZodIssue } from 'zod';
-import { safeCheckServiceRunDataUpdate } from '@curvenote/scms-server';
-import {
-  MINIMAL_PROOFIG_SERVICE_DATA,
-  ProofigNotifyPayloadSchema,
-  proofigDataSchema,
-  type ProofigDataSchema,
-} from '../schema.js';
+import { MINIMAL_PROOFIG_SERVICE_DATA, ProofigNotifyPayloadSchema } from '../schema.js';
 import { updateStagesAndServiceDataFromValidatedNotifyPayload } from './stateMachine.server.js';
+import { patchProofigRunServiceData } from './checkRunColumns.server.js';
 
 export type ApplyNotifyResult =
   | { ok: true }
@@ -28,32 +22,18 @@ export async function applyNotifyPayloadToCheckRun(
   }
 
   try {
-    await safeCheckServiceRunDataUpdate(checkServiceRunId, (data?: Prisma.JsonValue) => {
-      const current = (data as Record<string, unknown>) ?? {};
-      const currentServiceData = current.serviceData as unknown;
-
-      const existingServiceDataResult = proofigDataSchema.safeParse(currentServiceData);
-      const existingServiceData: ProofigDataSchema | undefined = existingServiceDataResult.success
-        ? existingServiceDataResult.data
-        : undefined;
-
-      const nextServiceData = updateStagesAndServiceDataFromValidatedNotifyPayload(
-        existingServiceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
-        parsed.data,
-        receivedAt,
-      );
-
-      if (nextServiceData == null) {
-        return null;
-      }
-
-      return {
-        ...current,
-        status: (current.status as string) ?? 'healthy',
-        serviceDataSchema: (current.serviceDataSchema as Record<string, unknown>) ?? {},
-        serviceData: nextServiceData,
-      } as Prisma.JsonObject;
-    });
+    await patchProofigRunServiceData(
+      checkServiceRunId,
+      (existingServiceData) => {
+        const nextServiceData = updateStagesAndServiceDataFromValidatedNotifyPayload(
+          existingServiceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
+          parsed.data,
+          receivedAt,
+        );
+        return nextServiceData ?? null;
+      },
+      receivedAt,
+    );
   } catch (err) {
     return {
       ok: false,

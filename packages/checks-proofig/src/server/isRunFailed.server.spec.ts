@@ -8,7 +8,11 @@ describe('isProofigRunFailed', () => {
     expect(isProofigRunFailed({ kind: 'other', data: { status: 'error' } })).toBe(false);
   });
 
-  it('returns true when top-level status is error', () => {
+  it('returns true when status column is error', () => {
+    expect(isProofigRunFailed({ kind: 'proofig', status: 'error', data: {} })).toBe(true);
+  });
+
+  it('returns true when legacy top-level data.status is error', () => {
     expect(isProofigRunFailed({ kind: 'proofig', data: { status: 'error' } })).toBe(true);
   });
 

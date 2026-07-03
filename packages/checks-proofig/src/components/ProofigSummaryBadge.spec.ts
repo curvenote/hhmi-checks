@@ -57,7 +57,7 @@ describe('ProofigSummaryBadge', () => {
     expect(isValidElement(badge)).toBe(true);
 
     const props = (badge as ReactElement<{ children: string; variant: string }>).props;
-    expect(props.children).toBe('Ready for results review');
+    expect(props.children).toBe('Error');
     expect(props.variant).toBe('destructive');
   });
 });

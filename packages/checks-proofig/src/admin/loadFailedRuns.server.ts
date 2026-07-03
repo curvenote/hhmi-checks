@@ -1,12 +1,8 @@
 import { getPrismaClient } from '@curvenote/scms-server';
-import { isProofigRunFailed } from '../server/isRunFailed.server.js';
-import { isProofigRunSupersededByRetry } from '../server/runSuperseded.server.js';
 
 const PROOFIG_KIND = 'proofig';
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
-const BATCH_SIZE = 100;
-const MAX_SCAN_BATCHES = 30;
 
 export type ProofigFailedRunRow = {
   id: string;
@@ -24,7 +20,7 @@ export type ProofigFailedRunsPage = {
   page: number;
   pageSize: number;
   hasNextPage: boolean;
-  /** True when the scan window was exhausted before satisfying the page; older failures may be hidden. */
+  /** Legacy field; column-indexed queries do not scan. */
   scanLimitReached: boolean;
 };
 
@@ -77,44 +73,24 @@ export async function loadProofigFailedRunsPage(options?: {
     Math.max(1, Number(options?.pageSize) || DEFAULT_PAGE_SIZE),
   );
   const skip = (page - 1) * pageSize;
-  const need = skip + pageSize + 1;
 
   const prisma = await getPrismaClient();
-  const matched: ProofigFailedRunRow[] = [];
-  let dbOffset = 0;
-  let dbExhausted = false;
+  const rows = await prisma.checkServiceRun.findMany({
+    where: {
+      kind: PROOFIG_KIND,
+      status: 'error',
+      retried: false,
+    },
+    orderBy: { date_created: 'desc' },
+    skip,
+    take: pageSize + 1,
+    include: {
+      work_version: { select: { id: true, work_id: true } },
+      created_by: { select: { id: true, email: true, display_name: true } },
+    },
+  });
 
-  for (let batch = 0; batch < MAX_SCAN_BATCHES && matched.length < need; batch++) {
-    const rows = await prisma.checkServiceRun.findMany({
-      where: { kind: PROOFIG_KIND },
-      orderBy: { date_created: 'desc' },
-      skip: dbOffset,
-      take: BATCH_SIZE,
-      include: {
-        work_version: { select: { id: true, work_id: true } },
-        created_by: { select: { id: true, email: true, display_name: true } },
-      },
-    });
-    if (rows.length === 0) {
-      dbExhausted = true;
-      break;
-    }
-    dbOffset += rows.length;
-    for (const run of rows) {
-      if (isProofigRunFailed(run) && !isProofigRunSupersededByRetry(run)) {
-        matched.push(mapRow(run as RunWithRelations));
-      }
-    }
-    if (rows.length < BATCH_SIZE) {
-      dbExhausted = true;
-      break;
-    }
-  }
-
-  const runs = matched.slice(skip, skip + pageSize);
-  const hasNextPage = matched.length > skip + pageSize;
-  // We stopped at the batch cap with more rows still in the DB, so failures beyond
-  // the scan window are not represented in this result.
-  const scanLimitReached = !dbExhausted && matched.length < need;
-  return { runs, page, pageSize, hasNextPage, scanLimitReached };
+  const hasNextPage = rows.length > pageSize;
+  const runs = rows.slice(0, pageSize).map((run) => mapRow(run as RunWithRelations));
+  return { runs, page, pageSize, hasNextPage, scanLimitReached: false };
 }

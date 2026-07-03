@@ -104,7 +104,12 @@ export function InitialPostProgressArea({
       );
     case 'error':
       return (
-        <SimpleErrorArea step={step} numSteps={numSteps} message="Upload failed." data={data} />
+        <SimpleErrorArea
+          step={step}
+          numSteps={numSteps}
+          message="We couldn't upload your document to Proofig."
+          data={data}
+        />
       );
   }
   return <DefaultArea />;

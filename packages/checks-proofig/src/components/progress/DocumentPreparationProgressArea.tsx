@@ -38,7 +38,7 @@ export function DocumentPreparationProgressArea({
         <SimpleErrorArea
           step={step}
           numSteps={numSteps}
-          message="Document preparation failed."
+          message="We couldn't prepare your document for upload."
           data={data}
         />
       );

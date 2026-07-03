@@ -36,7 +36,7 @@ export function SubimageDetectionProgressArea({
       <SimpleErrorArea
         step={step}
         numSteps={numSteps}
-        message="Subimage detection failed."
+        message="Sub-image detection couldn't be completed."
         data={data}
       />
     );

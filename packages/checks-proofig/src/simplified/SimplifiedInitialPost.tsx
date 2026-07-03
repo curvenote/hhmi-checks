@@ -22,7 +22,7 @@ export function SimplifiedInitialPost({
   remoteStatusActionPath?: string;
 }) {
   if (data.status === 'error') {
-    return <SimplifiedError data={data} message="Upload failed" />;
+    return <SimplifiedError data={data} message="We couldn't upload your document to Proofig." />;
   }
   const showPrepNote = shouldShowDocxPreparationCompleteNote(preparation, allStages);
   const refresh = (

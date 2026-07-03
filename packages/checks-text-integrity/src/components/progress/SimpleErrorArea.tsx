@@ -15,7 +15,7 @@ export function SimpleErrorArea({
   error?: string;
 }) {
   const stagePhrase = failedStageTitle.toLowerCase();
-  const detail = error?.trim() ? error : 'Unknown error';
+  const systemError = error?.trim();
 
   return (
     <div className="flex flex-col gap-6">
@@ -23,12 +23,16 @@ export function SimpleErrorArea({
         type="error"
         message={
           <div>
-            <span className="font-bold">Text integrity check failed</span> during {stagePhrase}.{' '}
-            {detail}
+            <span className="font-bold">Text integrity check failed</span> during {stagePhrase}.
+            {systemError ? <> ({systemError})</> : null}
           </div>
         }
       />
-      <StageProgressArea numSteps={numSteps} segmentTones={segmentTones} message={detail} />
+      <StageProgressArea
+        numSteps={numSteps}
+        segmentTones={segmentTones}
+        message={systemError ?? 'Unknown error'}
+      />
     </div>
   );
 }

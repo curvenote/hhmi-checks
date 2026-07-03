@@ -5,7 +5,9 @@ import { StageProgressArea } from './StageProgressArea.js';
 
 export function PendingProgressArea({ data }: { data: ProofigStage }) {
   if (data.status === 'error')
-    return <SimpleErrorArea step={0} numSteps={4} message="Failed to start check." data={data} />;
+    return (
+      <SimpleErrorArea step={0} numSteps={4} message="The check couldn't be started." data={data} />
+    );
 
   return (
     <div className="flex flex-col gap-6">

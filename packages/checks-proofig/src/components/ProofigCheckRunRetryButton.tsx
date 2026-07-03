@@ -18,7 +18,7 @@ export function ProofigCheckRunRetryButton({
   const fetcher = useFetcher();
   const { blocked, message } = useCheckMaintenanceBlocked('proofig');
   const canRetry = Boolean(actionPath && checkRunId?.trim());
-  const busy = fetcher.state === 'submitting';
+  const pending = fetcher.state !== 'idle';
 
   useEffect(() => {
     if (fetcher.state !== 'idle' || !fetcher.data) return;
@@ -30,15 +30,17 @@ export function ProofigCheckRunRetryButton({
   if (!canRetry) return null;
 
   return (
-    <ui.MaintenanceTooltip enabled={blocked} message={message}>
-      <fetcher.Form method="post" action={actionPath}>
-        <input type="hidden" name="intent" value="retry" />
-        <input type="hidden" name="workVersionId" value={workVersionId} />
-        <input type="hidden" name="checkRunId" value={checkRunId} />
-        <ui.StatefulButton type="submit" variant="outline" busy={busy} disabled={blocked || busy}>
-          Retry check
-        </ui.StatefulButton>
-      </fetcher.Form>
-    </ui.MaintenanceTooltip>
+    <div className="flex justify-end">
+      <ui.MaintenanceTooltip enabled={blocked} message={message}>
+        <fetcher.Form method="post" action={actionPath}>
+          <input type="hidden" name="intent" value="retry" />
+          <input type="hidden" name="workVersionId" value={workVersionId} />
+          <input type="hidden" name="checkRunId" value={checkRunId} />
+          <ui.StatefulButton type="submit" variant="outline" disabled={blocked || pending}>
+            Retry check
+          </ui.StatefulButton>
+        </fetcher.Form>
+      </ui.MaintenanceTooltip>
+    </div>
   );
 }

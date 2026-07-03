@@ -13,20 +13,23 @@ export function SimpleErrorArea({
   message: string;
   data: ProofigStage;
 }) {
+  const systemError = data.error?.trim();
+
   return (
     <div className="flex flex-col gap-6">
       <ui.SimpleAlert
         type="error"
         message={
           <div>
-            <span className="font-bold">{message}</span> {data.error ?? 'Unknown error'}
+            <span className="font-bold">{message}</span>
+            {systemError ? <> ({systemError})</> : null}
           </div>
         }
       />
       <StageProgressArea
         step={step}
         numSteps={numSteps}
-        message={data.error ?? message ?? 'Failed at this stage.'}
+        message={systemError ?? message ?? 'Failed at this stage.'}
         state="error"
       />
     </div>

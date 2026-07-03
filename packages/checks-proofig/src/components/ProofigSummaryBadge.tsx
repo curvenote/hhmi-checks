@@ -20,10 +20,9 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
   const outcome = metadata?.stages?.resultsReview?.outcome;
 
   if (resultDisplayState.kind === 'error') {
-    const label = STAGE_LABELS[currentStage] ?? 'Error';
     return (
       <ui.Badge variant="destructive" size="xs" className="uppercase tracking-wide min-w-[80px]">
-        {label}
+        Error
       </ui.Badge>
     );
   }
@@ -38,16 +37,21 @@ export function ProofigSummaryBadge({ metadata }: ProofigSummaryBadgeProps) {
 
   // In progress: show current stage label with color by status (pending, processing, completed, error)
   if (!isAtResults || outcome === undefined) {
-    const label = STAGE_LABELS[currentStage] ?? 'In progress';
     const status = (currentStageData as { status?: string } | undefined)?.status;
+    if (status === 'error') {
+      return (
+        <ui.Badge variant="destructive" size="xs" className="uppercase tracking-wide min-w-[80px]">
+          Error
+        </ui.Badge>
+      );
+    }
+    const label = STAGE_LABELS[currentStage] ?? 'In progress';
     const variant =
-      status === 'error'
-        ? ('destructive' as const)
-        : status === 'completed' || status === 'notify-skipped'
-          ? ('success' as const)
-          : status === 'processing'
-            ? ('primary' as const)
-            : ('warning' as const); // pending or unknown
+      status === 'completed' || status === 'notify-skipped'
+        ? ('success' as const)
+        : status === 'processing'
+          ? ('primary' as const)
+          : ('warning' as const); // pending or unknown
     return (
       <ui.Badge variant={variant} size="xs" className="uppercase tracking-wide min-w-[80px]">
         {label}

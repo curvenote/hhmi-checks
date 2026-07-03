@@ -36,7 +36,7 @@ export function IntegrityDetectionProgressArea({
       <SimpleErrorArea
         step={step}
         numSteps={numSteps}
-        message="Integrity detection failed."
+        message="Integrity detection couldn't be completed."
         data={data}
       />
     );

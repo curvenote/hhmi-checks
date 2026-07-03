@@ -3,19 +3,20 @@ import { ui } from '@curvenote/scms-core';
 
 export function SimplifiedError({
   data,
-  message = 'Error',
+  message = 'Something went wrong.',
 }: {
   data: ProofigStage;
   message?: string;
 }) {
-  const text = data?.error ?? message;
+  const systemError = data?.error?.trim();
   return (
     <ui.SimpleAlert
       type="error"
       message={
-        <>
-          <span className="font-bold">Error:</span> {text}
-        </>
+        <div>
+          <span className="font-bold">{message}</span>
+          {systemError ? <> ({systemError})</> : null}
+        </div>
       }
     />
   );

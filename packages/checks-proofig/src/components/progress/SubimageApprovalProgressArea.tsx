@@ -34,7 +34,7 @@ export function SubimageApprovalProgressArea({
       <SimpleErrorArea
         step={step}
         numSteps={numSteps}
-        message="Subimage selection failed."
+        message="Sub-image review couldn't be completed."
         data={data}
       />
     );

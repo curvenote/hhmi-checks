@@ -35,7 +35,7 @@ export function getProofigWorkListSummaryState(
 
   if (resultDisplayState.kind === 'error' || hasError(metadata)) {
     return {
-      label: (STAGE_LABELS[currentStage] ?? 'Error').toUpperCase(),
+      label: 'ERROR',
       underlineClassName: 'bg-destructive',
     };
   }

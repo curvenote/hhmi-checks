@@ -1,9 +1,5 @@
 import { uuidv7 as uuid } from 'uuidv7';
-import {
-  enqueueAndDispatchJob,
-  getPrismaClient,
-  safeCheckServiceRunDataUpdate,
-} from '@curvenote/scms-server';
+import { enqueueAndDispatchJob, getConfig, getPrismaClient } from '@curvenote/scms-server';
 import {
   hasDocxInMetadata,
   hasPdfInMetadata,
@@ -18,28 +14,31 @@ import {
 import { markSubmissionError } from './stateMachine.server.js';
 import { TEXT_INTEGRITY_SUBMIT } from './jobs/text-integrity-submit.server.js';
 import { getTextIntegrityConfigWithOverrides } from './config.server.js';
+import {
+  errorColumnPatch,
+  healthyColumnPatch,
+  patchTextIntegrityRunServiceData,
+} from './checkRunColumns.server.js';
 
 export type TextIntegrityCheckRunLineage = {
   retryOfRunId?: string;
-  retriedAt?: string;
-  retriedByUserId?: string;
+  sourceAttempt?: number;
 };
 
 export type StartTextIntegrityCheckRunResult =
   | { ok: true; checkRunId: string }
   | { ok: false; message: string; status: number; checkRunId?: string };
 
-type CheckServiceRunData = {
-  status: string;
-  serviceData?: TextIntegrityDataSchema;
-  serviceDataSchema?: Record<string, unknown>;
-};
-
 type StartTextIntegrityCheckRunOptions = {
   createdById?: string;
   invokedById?: string;
   lineage?: TextIntegrityCheckRunLineage;
+  scheduledAt?: string;
 };
+
+function resolveServiceAccountUserId(config: Awaited<ReturnType<typeof getConfig>>): string {
+  return config.api.submissionsServiceAccount?.id ?? 'system-cron';
+}
 
 async function recordTextIntegrityStartFailure(
   workVersionId: string,
@@ -65,8 +64,8 @@ async function recordTextIntegrityStartFailure(
       kind: 'checks-text-integrity',
       work_version_id: workVersionId,
       created_by_id: createdById,
+      ...errorColumnPatch(timestamp),
       data: {
-        status: 'error',
         serviceDataSchema: {},
         serviceData: serviceData as Prisma.JsonObject,
       },
@@ -119,16 +118,9 @@ export async function startTextIntegrityCheckRun(
   const initialServiceData: TextIntegrityDataSchema = {
     ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
     ...(manifest ? { manifest } : {}),
-    ...(options.lineage?.retryOfRunId
-      ? {
-          retryOfRunId: options.lineage.retryOfRunId,
-          retriedAt: options.lineage.retriedAt ?? timestamp,
-          ...(options.lineage.retriedByUserId
-            ? { retriedByUserId: options.lineage.retriedByUserId }
-            : {}),
-        }
-      : {}),
   };
+
+  const nextAttempt = options.lineage?.sourceAttempt ?? 1;
 
   const run = await prisma.checkServiceRun.create({
     data: {
@@ -138,15 +130,18 @@ export async function startTextIntegrityCheckRun(
       kind: 'checks-text-integrity',
       work_version_id: workVersionId,
       created_by_id: createdById,
+      ...healthyColumnPatch(),
+      attempt: nextAttempt,
+      retry_of_id: options.lineage?.retryOfRunId ?? undefined,
       data: {
-        status: 'healthy',
         serviceDataSchema: {},
         serviceData: initialServiceData as Prisma.JsonObject,
       },
     },
   });
   const checkRunId = run.id;
-  const invokedById = options.invokedById ?? ctx.user?.id;
+  const appConfig = await getConfig();
+  const invokedById = options.invokedById ?? ctx.user?.id ?? resolveServiceAccountUserId(appConfig);
 
   try {
     await enqueueAndDispatchJob({
@@ -159,18 +154,16 @@ export async function startTextIntegrityCheckRun(
       invoked_by_id: invokedById,
       activity_type: 'CHECK_STARTED',
       activity_data: { check: { kind: 'checks-text-integrity' } },
+      scheduled_at: options.scheduledAt,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Text Integrity submit job failed';
     console.error('TEXT_INTEGRITY_SUBMIT job create failed', err);
-    await safeCheckServiceRunDataUpdate(checkRunId, (data?: Prisma.JsonValue) => {
-      const current = (data ?? {}) as CheckServiceRunData;
-      return {
-        ...current,
-        status: 'error',
-        serviceData: markSubmissionError(current.serviceData ?? initialServiceData, message),
-      } as Prisma.JsonObject;
-    });
+    await patchTextIntegrityRunServiceData(
+      checkRunId,
+      (serviceData) => markSubmissionError(serviceData ?? initialServiceData, message),
+      timestamp,
+    );
     return { ok: false, message, status: 500, checkRunId };
   }
 
