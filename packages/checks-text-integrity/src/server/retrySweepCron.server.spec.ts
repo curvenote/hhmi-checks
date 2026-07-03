@@ -11,7 +11,6 @@ const mockDbSeedBuiltinCronJob = vi.fn();
 const mockGetConfig = vi.fn();
 
 vi.mock('@curvenote/scms-server', () => ({
-  CronEndpointScopes: { TEXT_INTEGRITY_RETRY_SWEEP: 'POST:/v1/hooks/text-integrity/retry-sweep' },
   CronJobTargetAuth: { HANDSHAKE: 'HANDSHAKE' },
   CronJobTargetType: { HTTP: 'HTTP' },
   dbGetCronJob: (...args: unknown[]) => mockDbGetCronJob(...args),

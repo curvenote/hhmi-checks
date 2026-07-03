@@ -30,7 +30,6 @@ const retrySweepMocks = vi.hoisted(() => {
         checkServiceRun: { findMany: mockFindMany },
       })),
       getConfig: vi.fn(async () => defaultConfig),
-      CronEndpointScopes: {},
       CronJobTargetAuth: { HANDSHAKE: 'HANDSHAKE' },
       CronJobTargetType: { HTTP: 'HTTP' },
       dbGetCronJob: vi.fn(),

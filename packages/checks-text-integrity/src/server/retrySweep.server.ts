@@ -1,5 +1,4 @@
 import {
-  CronEndpointScopes,
   CronJobTargetAuth,
   CronJobTargetType,
   dbGetCronJob,
@@ -23,6 +22,7 @@ import { retryTextIntegrityCheckRun } from './retryCheckRun.server.js';
 
 const TEXT_INTEGRITY_KIND = 'checks-text-integrity';
 export const TEXT_INTEGRITY_RETRY_SWEEP_CRON_ID = 'text-integrity-retry-sweep';
+export const TEXT_INTEGRITY_RETRY_SWEEP_SCOPE = 'POST:/v1/hooks/text-integrity/retry-sweep';
 
 type RetryChainRun = {
   id: string;
@@ -188,7 +188,7 @@ async function buildRetrySweepCronSeedInput() {
     target_url: targetUrl,
     http_method: 'POST',
     target_auth: CronJobTargetAuth.HANDSHAKE,
-    target_scope: CronEndpointScopes.TEXT_INTEGRITY_RETRY_SWEEP,
+    target_scope: TEXT_INTEGRITY_RETRY_SWEEP_SCOPE,
     payload: {},
   } as const;
 }

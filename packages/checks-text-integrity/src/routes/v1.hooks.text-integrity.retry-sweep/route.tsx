@@ -1,11 +1,10 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { error405 } from '@curvenote/scms-core';
+import { getConfig, verifyEndpointScopedHandshake } from '@curvenote/scms-server';
 import {
-  CronEndpointScopes,
-  getConfig,
-  verifyEndpointScopedHandshake,
-} from '@curvenote/scms-server';
-import { runTextIntegrityRetrySweep } from '../../server/retrySweep.server.js';
+  runTextIntegrityRetrySweep,
+  TEXT_INTEGRITY_RETRY_SWEEP_SCOPE,
+} from '../../server/retrySweep.server.js';
 
 export const config = {
   maxDuration: 300,
@@ -19,7 +18,7 @@ function unauthorized() {
  * POST /v1/hooks/text-integrity/retry-sweep
  *
  * Cron callback: retries eligible failed Text Integrity runs using the domain retry flow.
- * Auth: endpoint-scoped handshake (`CronEndpointScopes.TEXT_INTEGRITY_RETRY_SWEEP`).
+ * Auth: endpoint-scoped handshake (`TEXT_INTEGRITY_RETRY_SWEEP_SCOPE`).
  */
 export async function loader(args: LoaderFunctionArgs) {
   if (args.request.method !== 'GET') {
@@ -38,7 +37,7 @@ export async function action(args: ActionFunctionArgs) {
     verifyEndpointScopedHandshake(
       args.request.headers.get('Authorization'),
       appConfig,
-      CronEndpointScopes.TEXT_INTEGRITY_RETRY_SWEEP,
+      TEXT_INTEGRITY_RETRY_SWEEP_SCOPE,
     );
   } catch {
     return unauthorized();
