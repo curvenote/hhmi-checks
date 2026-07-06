@@ -272,14 +272,18 @@ export const SAMPLE_IN_PROGRESS_SUBIMAGE_REVIEW: ProofigDataSchema = {
   reportUrl: SAMPLE_REPORT_URL,
   deleted: false,
   stages: {
-    ...IN_PROGRESS_LINEAR,
+    initialPost: {
+      status: 'completed' as const,
+      history: [{ status: 'processing' as const, timestamp: FIVE_MIN_AGO_ISO }],
+      timestamp: FIVE_MIN_AGO_ISO,
+    },
     subimageDetection: {
       status: 'completed' as const,
       history: [{ status: 'processing' as const, timestamp: FIVE_MIN_AGO_ISO }],
       timestamp: TWO_MIN_AGO_ISO,
     },
     subimageSelection: {
-      status: 'completed' as const,
+      status: 'pending' as const,
       history: [{ status: 'processing' as const, timestamp: TWO_MIN_AGO_ISO }],
       timestamp: THIRTY_SEC_AGO_ISO,
     },

@@ -6,10 +6,12 @@ import { SubmissionCompleteProgressArea } from '../components/progress/Submissio
 import { SubmittingProgressArea } from '../components/progress/SubmittingProgressArea.js';
 import { TextIntegrityResultsArea } from '../components/TextIntegrityResultsArea.js';
 import { DesignSection } from './designShared.js';
-import { SAMPLE_RESULTS_DATA } from './designSampleData.js';
 import { SummaryBadgeDesigns } from './SummaryBadgeDesigns.js';
+import { useTextIntegrityDesignSamples } from './useTextIntegrityDesignSamples.js';
 
 export function ExtensionDesigns() {
+  const samples = useTextIntegrityDesignSamples();
+
   return (
     <div className="space-y-10">
       <header className="space-y-1">
@@ -71,7 +73,7 @@ export function ExtensionDesigns() {
         name="TextIntegrityResultsArea"
         description="Final results with similarity scores, top matches and report actions."
       >
-        <TextIntegrityResultsArea metadata={SAMPLE_RESULTS_DATA} />
+        <TextIntegrityResultsArea metadata={samples.resultsData} />
       </DesignSection>
     </div>
   );

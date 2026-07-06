@@ -5,6 +5,7 @@ import {
   getProofigWorkListCompactSummaryState,
   getProofigWorkListSummaryState,
 } from './proofigWorkListSummaryState.js';
+import { SAMPLE_IN_PROGRESS_SUBIMAGE_REVIEW } from '../designs/designSampleData.js';
 
 const receivedAt = '2026-01-01T00:00:00.000Z';
 
@@ -30,8 +31,12 @@ describe('getProofigWorkListSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      label: '2/23 AWAITING REVIEW',
-      underlineClassName: 'bg-warning',
+      kind: 'progress',
+      countLabel: '2/23',
+      label: 'awaiting review',
+      icon: 'eye',
+      iconClassName: 'text-warning',
+      iconStrokeWidth: 2.5,
     });
   });
 
@@ -55,8 +60,12 @@ describe('getProofigWorkListSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      label: '2/23 AWAITING REVIEW',
-      underlineClassName: 'bg-warning',
+      kind: 'progress',
+      countLabel: '2/23',
+      label: 'awaiting review',
+      icon: 'eye',
+      iconClassName: 'text-warning',
+      iconStrokeWidth: 2.5,
     });
   });
 
@@ -81,8 +90,11 @@ describe('getProofigWorkListSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      label: 'ALL CLEAR',
-      underlineClassName: 'bg-success',
+      kind: 'result',
+      label: 'all clear',
+      filledSegments: 11,
+      segmentCount: 11,
+      segmentFillClassName: 'bg-success',
     });
   });
 
@@ -107,8 +119,11 @@ describe('getProofigWorkListSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      label: 'ALL CLEAR',
-      underlineClassName: 'bg-success',
+      kind: 'result',
+      label: 'all clear',
+      filledSegments: 11,
+      segmentCount: 11,
+      segmentFillClassName: 'bg-success',
     });
   });
 
@@ -133,8 +148,11 @@ describe('getProofigWorkListSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      label: 'ALL CLEAR',
-      underlineClassName: 'bg-success',
+      kind: 'result',
+      label: 'all clear',
+      filledSegments: 11,
+      segmentCount: 11,
+      segmentFillClassName: 'bg-success',
     });
   });
 
@@ -159,8 +177,13 @@ describe('getProofigWorkListSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      label: '3 PROBLEMS',
-      underlineClassName: 'bg-destructive',
+      kind: 'result',
+      countLabel: '3',
+      countClassName: 'text-red-600 dark:text-red-400',
+      label: 'problems',
+      filledSegments: 3,
+      segmentCount: 13,
+      segmentFillClassName: 'bg-red-600 dark:bg-red-400',
     });
   });
 
@@ -185,8 +208,13 @@ describe('getProofigWorkListSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      label: '1 PROBLEM',
-      underlineClassName: 'bg-destructive',
+      kind: 'result',
+      countLabel: '1',
+      countClassName: 'text-red-600 dark:text-red-400',
+      label: 'problem',
+      filledSegments: 1,
+      segmentCount: 13,
+      segmentFillClassName: 'bg-red-600 dark:bg-red-400',
     });
   });
 
@@ -202,8 +230,39 @@ describe('getProofigWorkListSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      label: 'UPLOADING TO PROOFIG',
-      underlineClassName: 'bg-primary',
+      kind: 'progress',
+      label: 'uploading to proofig',
+      icon: 'hourglass',
+      iconClassName: 'text-warning',
+      iconStrokeWidth: 2.5,
+    });
+  });
+
+  it('shows an eye icon for sub-image review', () => {
+    const state = getProofigWorkListSummaryState({
+      stages: {
+        initialPost: { status: 'completed', history: [], timestamp: receivedAt },
+        subimageDetection: { status: 'completed', history: [], timestamp: receivedAt },
+        subimageSelection: { status: 'pending', history: [], timestamp: receivedAt },
+      },
+    } as unknown as ProofigDataSchema);
+
+    expect(state).toEqual({
+      kind: 'progress',
+      label: 'ready for sub-image review',
+      icon: 'eye',
+      iconClassName: 'text-warning',
+      iconStrokeWidth: 2.5,
+    });
+  });
+
+  it('represents the design-page sub-image review sample as awaiting selection', () => {
+    const state = getProofigWorkListSummaryState(SAMPLE_IN_PROGRESS_SUBIMAGE_REVIEW);
+
+    expect(state).toMatchObject({
+      kind: 'progress',
+      label: 'ready for sub-image review',
+      icon: 'eye',
     });
   });
 });
@@ -219,10 +278,9 @@ describe('getProofigWorkListCompactSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      kind: 'icon',
+      kind: 'progress',
       icon: 'eye',
-      ariaLabel: 'READY FOR SUB-IMAGE REVIEW',
-      underlineClassName: 'bg-warning',
+      ariaLabel: 'ready for sub-image review',
     });
   });
 
@@ -234,14 +292,13 @@ describe('getProofigWorkListCompactSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      kind: 'icon',
+      kind: 'progress',
       icon: 'hourglass',
-      ariaLabel: 'UPLOADING TO PROOFIG',
-      underlineClassName: 'bg-primary',
+      ariaLabel: 'uploading to proofig',
     });
   });
 
-  it('uses a ratio for awaiting review when counts are available', () => {
+  it('uses an eye icon for awaiting review when counts are available', () => {
     const state = getProofigWorkListCompactSummaryState({
       summary: {
         state: KnownState.AwaitingReview,
@@ -262,13 +319,13 @@ describe('getProofigWorkListCompactSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      kind: 'text',
-      label: '2/23',
-      underlineClassName: 'bg-warning',
+      kind: 'progress',
+      icon: 'eye',
+      ariaLabel: '2/23 awaiting review',
     });
   });
 
-  it('uses an hourglass for awaiting review when counts are not available', () => {
+  it('uses an eye icon for awaiting review when counts are not available', () => {
     const state = getProofigWorkListCompactSummaryState({
       summary: {
         state: KnownState.AwaitingReview,
@@ -284,10 +341,9 @@ describe('getProofigWorkListCompactSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      kind: 'icon',
-      icon: 'hourglass',
-      ariaLabel: 'AWAITING REVIEW',
-      underlineClassName: 'bg-warning',
+      kind: 'progress',
+      icon: 'eye',
+      ariaLabel: 'awaiting review',
     });
   });
 
@@ -312,9 +368,13 @@ describe('getProofigWorkListCompactSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      kind: 'text',
-      label: '3',
-      underlineClassName: 'bg-destructive',
+      kind: 'result',
+      countLabel: '3',
+      countClassName: 'text-red-600 dark:text-red-400',
+      label: 'problems',
+      filledSegments: 3,
+      segmentCount: 13,
+      segmentFillClassName: 'bg-red-600 dark:bg-red-400',
     });
   });
 
@@ -339,9 +399,11 @@ describe('getProofigWorkListCompactSummaryState', () => {
     } as unknown as ProofigDataSchema);
 
     expect(state).toEqual({
-      kind: 'text',
-      label: 'ALL CLEAR',
-      underlineClassName: 'bg-success',
+      kind: 'result',
+      label: 'all clear',
+      filledSegments: 11,
+      segmentCount: 11,
+      segmentFillClassName: 'bg-success',
     });
   });
 });

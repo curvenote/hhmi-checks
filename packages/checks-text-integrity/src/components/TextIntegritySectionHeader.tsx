@@ -1,6 +1,7 @@
 import type React from 'react';
 import { ServiceLogo } from '@curvenote/scms-core';
 import { getTextIntegrityManifest } from '../schema.js';
+import { textIntegrityServiceLogoClassName } from '../textIntegrityLogoStyles.js';
 
 export function TextIntegritySectionHeader({
   tag,
@@ -20,7 +21,7 @@ export function TextIntegritySectionHeader({
         logoUrl={manifest?.logo}
         alt={title}
         fallback={title ?? 'Text Integrity'}
-        className="h-4"
+        className={textIntegrityServiceLogoClassName('h-4')}
       />
       <div>{tag}</div>
       <div className="grow" />

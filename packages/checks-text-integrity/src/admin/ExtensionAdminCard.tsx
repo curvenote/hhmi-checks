@@ -12,6 +12,7 @@ import { TextIntegrityUpdateConfigurationForm } from './TextIntegrityUpdateConfi
 import { TextIntegritySettingsPanel } from './TextIntegritySettingsPanel.js';
 import { TextIntegrityFailedRunsAdminPanel } from './FailedRunsAdminPanel.js';
 import { TextIntegrityRetryCronPanel } from './TextIntegrityRetryCronPanel.js';
+import { textIntegrityServiceLogoClassName } from '../textIntegrityLogoStyles.js';
 
 export function getManifest(
   record: Record<string, unknown> | undefined,
@@ -38,7 +39,12 @@ export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) 
     <div className="grid grid-cols-1 gap-6 max-w-3xl">
       <div className="flex gap-3 justify-between items-center min-w-0">
         <h2 className="text-xl font-semibold">Checks: {title}</h2>
-        <ServiceLogo logoUrl={manifestLogo} alt={title} fallback={title} className="h-4 shrink-0" />
+        <ServiceLogo
+          logoUrl={manifestLogo}
+          alt={title}
+          fallback={title}
+          className={textIntegrityServiceLogoClassName('h-4 shrink-0')}
+        />
       </div>
       <TextIntegrityCredentialsForm
         displayConfig={displayConfig}

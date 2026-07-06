@@ -5,6 +5,7 @@ import { ServiceLogo, UploadCheckCardContent } from '@curvenote/scms-core';
 import { TextIntegrityEulaDialog } from './TextIntegrityEulaDialog.js';
 import { useTextIntegrityEulaEnable } from './useTextIntegrityEulaEnable.js';
 import { Logos } from '../client.js';
+import { textIntegrityServiceLogoClassName } from '../textIntegrityLogoStyles.js';
 
 export function TextIntegrityUploadCheckOption({
   workVersionId,
@@ -26,7 +27,7 @@ export function TextIntegrityUploadCheckOption({
             logoUrl={logoUrl}
             alt="Text Integrity"
             fallback={<Logos.TextIntegrityLogo className="h-[22px] w-auto max-w-[79px]" />}
-            className="h-[22px] w-auto max-w-[79px] object-contain"
+            className={textIntegrityServiceLogoClassName('h-[22px] w-auto max-w-[79px]')}
           />
         }
         title="Check Text Integrity"

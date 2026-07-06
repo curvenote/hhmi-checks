@@ -81,7 +81,10 @@ export function getTextIntegrityAutoRetryConfig(
         defaults.backoff.stepBaseDelaySec,
       ),
       multiplier: readPositiveInt(backoffRaw.multiplier, defaults.backoff.multiplier),
-      maxStepDelaySec: readPositiveInt(backoffRaw.maxStepDelaySec, defaults.backoff.maxStepDelaySec),
+      maxStepDelaySec: readPositiveInt(
+        backoffRaw.maxStepDelaySec,
+        defaults.backoff.maxStepDelaySec,
+      ),
     },
     limits: {
       maxRetryWindowSec: readPositiveInt(

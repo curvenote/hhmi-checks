@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { cn } from '@curvenote/scms-core';
 
 export function DesignSection({
   name,
@@ -40,13 +41,12 @@ export function WorkListSummaryChip({
   compact?: boolean;
 }) {
   return (
-    <span className="inline-flex h-7 max-w-full items-center gap-2 rounded-sm border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+    <span className="inline-flex h-7 max-w-full items-center overflow-hidden rounded-sm border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
       <span
-        className={
-          compact
-            ? 'inline-flex h-4 min-w-0 items-center gap-1.5'
-            : 'inline-flex h-5 min-w-0 items-center gap-1.5'
-        }
+        className={cn(
+          'inline-flex min-w-0 items-center',
+          compact ? 'h-4 gap-1' : 'h-5 gap-1.5',
+        )}
       >
         {children}
       </span>

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { ServiceLogo, ui } from '@curvenote/scms-core';
 import { Logos } from '../client.js';
+import { textIntegrityServiceLogoClassName } from '../textIntegrityLogoStyles.js';
 
 export type TextIntegrityEulaDialogProps = {
   open: boolean;
@@ -63,7 +64,7 @@ export function TextIntegrityEulaDialog({
             logoUrl={logoUrl}
             alt="Text Integrity"
             fallback={<Logos.TextIntegrityLogo className={DIALOG_LOGO_CLASS} />}
-            className={DIALOG_LOGO_CLASS}
+            className={textIntegrityServiceLogoClassName(DIALOG_LOGO_CLASS)}
           />
           <span>End User License Agreement</span>
         </span>

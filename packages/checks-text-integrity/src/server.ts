@@ -22,6 +22,10 @@ import { isTextIntegrityUploadEligible } from './uploadEligibility.js';
 import { registerRoutes } from './routes.js';
 import { TextIntegritySectionHeader } from './components/TextIntegritySectionHeader.js';
 import { getExtensionAdminActionHandlers } from './admin/actionHandlers.server.js';
+import {
+  resolveTextIntegrityDesignManifest,
+  resolveTextIntegrityUploadLogoUrl,
+} from './server/manifest.server.js';
 
 export { TEXT_INTEGRITY_SUBMIT, TEXT_INTEGRITY_PERSIST_PDF };
 export { getTextIntegrityConfigWithOverrides } from './server/config.server.js';
@@ -69,9 +73,13 @@ export const extension: ServerExtension = {
         handleStatus: textIntegrityStatus,
         uploadCheckOptionComponent: TextIntegrityUploadCheckOption,
         isUploadEligible: isTextIntegrityUploadEligible,
+        resolveUploadLogoUrl: resolveTextIntegrityUploadLogoUrl,
       },
     ];
   },
+  getDesignLoaderData: async (ctx) => ({
+    designManifest: await resolveTextIntegrityDesignManifest(ctx),
+  }),
   getJobs: (): JobRegistration[] => TEXT_INTEGRITY_JOB_REGISTRATIONS,
   registerRoutes,
 };

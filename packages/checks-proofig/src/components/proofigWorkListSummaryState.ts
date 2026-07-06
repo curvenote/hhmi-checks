@@ -2,27 +2,102 @@ import { KnownState, type ProofigDataSchema } from '../schema.js';
 import { ALL_PENDING_STAGES, getCurrentProofigStage, hasError } from '../schema.js';
 import { getProofigResultDisplayState, getProofigSummaryCounts } from '../utils/proofigSummary.js';
 import { STAGE_LABELS } from './ProofigProgressComponent.js';
+import {
+  PROOFIG_RESULT_ALL_CLEAR_SEGMENT_COUNT,
+  PROOFIG_RESULT_PROBLEMS_SEGMENT_COUNT,
+  proofigResultFilledSegmentCount,
+} from './ProofigResultSegmentBar.js';
 
-export type ProofigWorkListSummaryState = {
+/** Brighter than `destructive` in dark mode (theme token is ~31% lightness). */
+export const PROOFIG_WORK_LIST_PROBLEM_COUNT_CLASS = 'text-red-600 dark:text-red-400';
+export const PROOFIG_WORK_LIST_PROBLEM_SEGMENT_FILL_CLASS = 'bg-red-600 dark:bg-red-400';
+export const PROOFIG_WORK_LIST_ERROR_ICON_CLASS = 'text-red-600 dark:text-red-400';
+
+function workListStageLabel(stage: keyof typeof STAGE_LABELS): string {
+  return (STAGE_LABELS[stage] ?? 'in progress').toLowerCase();
+}
+
+export type ProofigWorkListProgressIcon = 'hourglass' | 'eye' | 'circle-x';
+
+export type ProofigWorkListProgressState = {
+  kind: 'progress';
   label: string;
-  underlineClassName: string;
+  /** Ratio shown in review color before the label (e.g. `3/24 awaiting review`). */
+  countLabel?: string;
+  icon: ProofigWorkListProgressIcon;
+  iconClassName: string;
+  iconStrokeWidth?: number;
 };
+
+export type ProofigWorkListResultState = {
+  kind: 'result';
+  label: string;
+  countLabel?: string;
+  countClassName?: string;
+  filledSegments: number;
+  segmentCount: number;
+  segmentFillClassName: string;
+};
+
+export type ProofigWorkListSummaryState = ProofigWorkListProgressState | ProofigWorkListResultState;
 
 export type ProofigWorkListCompactSummaryState =
   | {
-      kind: 'icon';
-      icon: 'eye' | 'hourglass';
+      kind: 'progress';
+      icon: ProofigWorkListProgressIcon;
       ariaLabel: string;
-      underlineClassName: string;
     }
-  | {
-      kind: 'text';
-      label: string;
-      underlineClassName: string;
-    };
+  | ProofigWorkListResultState;
 
-function problemLabel(count: number) {
-  return `${count} ${count === 1 ? 'PROBLEM' : 'PROBLEMS'}`;
+function awaitingReviewState(
+  matchesReview: number,
+  total: number,
+): ProofigWorkListProgressState {
+  if (total > 0) {
+    return {
+      kind: 'progress',
+      countLabel: `${matchesReview}/${total}`,
+      label: 'awaiting review',
+      icon: 'eye',
+      iconClassName: 'text-warning',
+      iconStrokeWidth: 2.5,
+    };
+  }
+  return progressState('awaiting review', 'eye', 'text-warning', 2.5);
+}
+
+function progressState(
+  label: string,
+  icon: ProofigWorkListProgressIcon,
+  iconClassName: string,
+  iconStrokeWidth?: number,
+): ProofigWorkListProgressState {
+  return { kind: 'progress', label, icon, iconClassName, iconStrokeWidth };
+}
+
+function problemsResultState(problemCount: number): ProofigWorkListResultState {
+  return {
+    kind: 'result',
+    countLabel: String(problemCount),
+    countClassName: PROOFIG_WORK_LIST_PROBLEM_COUNT_CLASS,
+    label: problemCount === 1 ? 'problem' : 'problems',
+    filledSegments: proofigResultFilledSegmentCount(
+      problemCount,
+      PROOFIG_RESULT_PROBLEMS_SEGMENT_COUNT,
+    ),
+    segmentCount: PROOFIG_RESULT_PROBLEMS_SEGMENT_COUNT,
+    segmentFillClassName: PROOFIG_WORK_LIST_PROBLEM_SEGMENT_FILL_CLASS,
+  };
+}
+
+function allClearResultState(): ProofigWorkListResultState {
+  return {
+    kind: 'result',
+    label: 'all clear',
+    filledSegments: PROOFIG_RESULT_ALL_CLEAR_SEGMENT_COUNT,
+    segmentCount: PROOFIG_RESULT_ALL_CLEAR_SEGMENT_COUNT,
+    segmentFillClassName: 'bg-success',
+  };
 }
 
 export function getProofigWorkListSummaryState(
@@ -34,10 +109,7 @@ export function getProofigWorkListSummaryState(
   const { total, matchesReview } = resultDisplayState.counts;
 
   if (resultDisplayState.kind === 'error' || hasError(metadata)) {
-    return {
-      label: 'ERROR',
-      underlineClassName: 'bg-destructive',
-    };
+    return progressState('error', 'circle-x', PROOFIG_WORK_LIST_ERROR_ICON_CLASS);
   }
 
   const reportOutcome = metadata?.stages?.resultsReview?.outcome;
@@ -49,10 +121,7 @@ export function getProofigWorkListSummaryState(
     summaryState === KnownState.ReportFlagged;
 
   if (resultDisplayState.kind === 'awaiting-review') {
-    return {
-      label: total > 0 ? `${matchesReview}/${total} AWAITING REVIEW` : 'AWAITING REVIEW',
-      underlineClassName: 'bg-warning',
-    };
+    return awaitingReviewState(matchesReview, total);
   }
 
   if (hasFinalReport) {
@@ -60,94 +129,57 @@ export function getProofigWorkListSummaryState(
       resultDisplayState.kind === 'all-clear' ||
       resultDisplayState.kind === 'confirmed-all-clear'
     ) {
-      return { label: 'ALL CLEAR', underlineClassName: 'bg-success' };
+      return allClearResultState();
     }
     if (resultDisplayState.kind === 'manual-problems' || resultDisplayState.kind === 'problems') {
-      return {
-        label: problemLabel(resultDisplayState.problemCount),
-        underlineClassName: 'bg-destructive',
-      };
+      return problemsResultState(resultDisplayState.problemCount);
     }
   }
 
-  const status = (currentStageData as { status?: string } | undefined)?.status;
-  const underlineClassName =
-    status === 'error'
-      ? 'bg-destructive'
-      : status === 'completed' || status === 'notify-skipped'
-        ? 'bg-success'
-        : status === 'processing'
-          ? 'bg-primary'
-          : 'bg-warning';
+  if (currentStage === 'subimageSelection') {
+    return progressState(workListStageLabel('subimageSelection'), 'eye', 'text-warning', 2.5);
+  }
 
-  return {
-    label: (STAGE_LABELS[currentStage] ?? 'In progress').toUpperCase(),
-    underlineClassName,
-  };
+  const status = (currentStageData as { status?: string } | undefined)?.status;
+  if (status === 'error') {
+    return progressState('error', 'circle-x', PROOFIG_WORK_LIST_ERROR_ICON_CLASS);
+  }
+
+  const stageLabel = workListStageLabel(currentStage);
+  return progressState(stageLabel, 'hourglass', 'text-warning', 2.5);
 }
 
 export function getProofigWorkListCompactSummaryState(
   metadata: ProofigDataSchema | undefined,
 ): ProofigWorkListCompactSummaryState {
   const summaryState = getProofigWorkListSummaryState(metadata);
-  const stages = { ...ALL_PENDING_STAGES, ...metadata?.stages };
-  const { currentStage } = getCurrentProofigStage(stages);
-  const { total, matchesReview, bad } = getProofigSummaryCounts(metadata);
-  const resultDisplayState = getProofigResultDisplayState(metadata);
-  const awaitingHumanReview =
-    resultDisplayState.kind !== 'error' && resultDisplayState.kind === 'awaiting-review';
-  const isProblemState = summaryState.underlineClassName === 'bg-destructive' && bad > 0;
-  const isInProgressState =
-    !awaitingHumanReview &&
-    !isProblemState &&
-    currentStage !== 'subimageSelection' &&
-    summaryState.underlineClassName !== 'bg-success';
 
-  if (awaitingHumanReview) {
-    if (total > 0) {
-      return {
-        kind: 'text',
-        label: `${matchesReview}/${total}`,
-        underlineClassName: summaryState.underlineClassName,
-      };
-    }
+  if (summaryState.kind === 'progress') {
+    const ariaLabel = summaryState.countLabel
+      ? `${summaryState.countLabel} ${summaryState.label}`
+      : summaryState.label;
     return {
-      kind: 'icon',
-      icon: 'hourglass',
-      ariaLabel: summaryState.label,
-      underlineClassName: summaryState.underlineClassName,
+      kind: 'progress',
+      icon: summaryState.icon,
+      ariaLabel,
     };
   }
 
-  if (currentStage === 'subimageSelection') {
-    return {
-      kind: 'icon',
-      icon: 'eye',
-      ariaLabel: summaryState.label,
-      underlineClassName: summaryState.underlineClassName,
-    };
-  }
+  const { bad } = getProofigSummaryCounts(metadata);
+  const isProblemState =
+    summaryState.segmentFillClassName === PROOFIG_WORK_LIST_PROBLEM_SEGMENT_FILL_CLASS && bad > 0;
 
   if (isProblemState) {
     return {
-      kind: 'text',
-      label: String(bad),
-      underlineClassName: summaryState.underlineClassName,
+      ...summaryState,
+      countLabel: String(bad),
+      label: bad === 1 ? 'problem' : 'problems',
+      filledSegments: proofigResultFilledSegmentCount(
+        bad,
+        PROOFIG_RESULT_PROBLEMS_SEGMENT_COUNT,
+      ),
     };
   }
 
-  if (isInProgressState) {
-    return {
-      kind: 'icon',
-      icon: 'hourglass',
-      ariaLabel: summaryState.label,
-      underlineClassName: summaryState.underlineClassName,
-    };
-  }
-
-  return {
-    kind: 'text',
-    label: summaryState.label,
-    underlineClassName: summaryState.underlineClassName,
-  };
+  return summaryState;
 }

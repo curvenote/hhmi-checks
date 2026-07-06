@@ -13,6 +13,7 @@ import {
   getRetrySupersessionInfo,
 } from '../schema.js';
 import { RetriedRunNotice } from './RetriedRunNotice.js';
+import { textIntegrityServiceLogoClassName } from '../textIntegrityLogoStyles.js';
 
 interface TextIntegrityChecksSectionProps {
   metadata: TextIntegrityDataSchema | undefined;
@@ -50,7 +51,7 @@ export function TextIntegrityChecksSection({
             logoUrl={manifestLogo}
             alt={manifestTitle}
             fallback={manifestTitle}
-            className="mb-4 h-8"
+            className={textIntegrityServiceLogoClassName('mb-4 h-8')}
           />
         }
         title="No text integrity checks run yet"

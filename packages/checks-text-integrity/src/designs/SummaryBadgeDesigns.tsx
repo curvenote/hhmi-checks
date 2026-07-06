@@ -2,65 +2,13 @@ import type { TextIntegrityDataSchema } from '../schema.js';
 import { TextIntegritySummaryBadge } from '../components/TextIntegritySummaryBadge.js';
 import { TextIntegrityWorkListSummary } from '../components/TextIntegrityWorkListSummary.js';
 import { DesignSection, WorkListSummaryChip } from './designShared.js';
-import {
-  SAMPLE_IN_PROGRESS,
-  SAMPLE_NO_STAGES,
-  SAMPLE_RESULTS_0_PERCENT,
-  SAMPLE_RESULTS_5_PERCENT,
-  SAMPLE_RESULTS_32_PERCENT,
-  SAMPLE_RESULTS_55_PERCENT,
-  SAMPLE_RESULTS_80_PERCENT,
-  SAMPLE_STAGE_ERROR,
-} from './designSampleData.js';
+import { useTextIntegrityDesignSamples } from './useTextIntegrityDesignSamples.js';
 
 type SummaryBadgeSample = {
   name: string;
   description?: string;
   metadata: TextIntegrityDataSchema | undefined;
 };
-
-const SUMMARY_BADGE_SAMPLES: SummaryBadgeSample[] = [
-  {
-    name: 'No stages',
-    description: 'Check run not started — em dash badge and PENDING work list label.',
-    metadata: SAMPLE_NO_STAGES,
-  },
-  {
-    name: 'In progress',
-    description: 'Submission complete, processing underway.',
-    metadata: SAMPLE_IN_PROGRESS,
-  },
-  {
-    name: 'Error',
-    description: 'Failed processing stage.',
-    metadata: SAMPLE_STAGE_ERROR,
-  },
-  {
-    name: '0% similar',
-    description: 'Complete report — lowest similarity tier.',
-    metadata: SAMPLE_RESULTS_0_PERCENT,
-  },
-  {
-    name: '5% similar',
-    description: 'Complete report — low similarity.',
-    metadata: SAMPLE_RESULTS_5_PERCENT,
-  },
-  {
-    name: '32% similar',
-    description: 'Complete report — moderate similarity.',
-    metadata: SAMPLE_RESULTS_32_PERCENT,
-  },
-  {
-    name: '55% similar',
-    description: 'Complete report — elevated similarity.',
-    metadata: SAMPLE_RESULTS_55_PERCENT,
-  },
-  {
-    name: '80% similar',
-    description: 'Complete report — high similarity.',
-    metadata: SAMPLE_RESULTS_80_PERCENT,
-  },
-];
 
 function SummaryBadgeStateRow({ sample }: { sample: SummaryBadgeSample }) {
   return (
@@ -98,6 +46,51 @@ function SummaryBadgeStateRow({ sample }: { sample: SummaryBadgeSample }) {
 }
 
 export function SummaryBadgeDesigns() {
+  const samples = useTextIntegrityDesignSamples();
+
+  const summaryBadgeSamples: SummaryBadgeSample[] = [
+    {
+      name: 'No stages',
+      description: 'Check run not started — em dash timeline badge and pending work list label.',
+      metadata: samples.noStages,
+    },
+    {
+      name: 'In progress',
+      description: 'Submission complete, processing underway.',
+      metadata: samples.inProgress,
+    },
+    {
+      name: 'Error',
+      description: 'Failed processing stage.',
+      metadata: samples.stageError,
+    },
+    {
+      name: '0% similar',
+      description: 'Complete report — lowest similarity tier.',
+      metadata: samples.results0Percent,
+    },
+    {
+      name: '5% similar',
+      description: 'Complete report — low similarity.',
+      metadata: samples.results5Percent,
+    },
+    {
+      name: '32% similar',
+      description: 'Complete report — moderate similarity.',
+      metadata: samples.results32Percent,
+    },
+    {
+      name: '55% similar',
+      description: 'Complete report — elevated similarity.',
+      metadata: samples.results55Percent,
+    },
+    {
+      name: '80% similar',
+      description: 'Complete report — high similarity.',
+      metadata: samples.results80Percent,
+    },
+  ];
+
   return (
     <DesignSection
       name="Summary badges"
@@ -105,7 +98,7 @@ export function SummaryBadgeDesigns() {
       wide
     >
       <div className="space-y-0">
-        {SUMMARY_BADGE_SAMPLES.map((sample) => (
+        {summaryBadgeSamples.map((sample) => (
           <SummaryBadgeStateRow key={sample.name} sample={sample} />
         ))}
       </div>
