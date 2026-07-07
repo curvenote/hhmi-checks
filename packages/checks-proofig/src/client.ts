@@ -11,7 +11,7 @@ import type {
 import { Icon, LogoMono, Logo, LogoThemed } from './icons.js';
 import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSection.js';
 import { ProofigUploadCheckOption } from './components/ProofigUploadCheckOption.js';
-import { isProofigUploadEligible } from './uploadEligibility.js';
+import { isProofigUploadEligible, resolveProofigUploadEligibility } from './uploadEligibility.js';
 import { ImageIntegritySectionHeader } from './components/ImageIntegritySectionHeader.js';
 import { ProofigCheckRunTimelineMount } from './components/ProofigCheckRunTimelineMount.js';
 import { ProofigSummaryBadge } from './components/ProofigSummaryBadge.js';
@@ -72,6 +72,7 @@ export function getChecks(): ClientExtensionCheckService[] {
         !hasError(metadata as ProofigDataSchema | undefined),
       checkRunTimelineMountComponent: ProofigCheckRunTimelineMount,
       uploadCheckOptionComponent: ProofigUploadCheckOption,
+      resolveUploadEligibility: resolveProofigUploadEligibility,
       isUploadEligible: isProofigUploadEligible,
     },
   ];

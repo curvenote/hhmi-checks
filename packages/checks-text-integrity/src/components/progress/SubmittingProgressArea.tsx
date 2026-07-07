@@ -11,7 +11,7 @@ export type SubmittingProgressAreaProps = {
   actionPath?: string;
   workVersionId?: string;
   checkRunId?: string;
-  /** ISO `CheckServiceRun.date_modified` — stale when older than 45s. */
+  /** ISO `CheckServiceRun.date_modified` — stale when older than the configured stale threshold. */
   checkRunDateModified?: string;
 };
 

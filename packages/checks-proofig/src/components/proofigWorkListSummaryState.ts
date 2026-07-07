@@ -49,10 +49,7 @@ export type ProofigWorkListCompactSummaryState =
     }
   | ProofigWorkListResultState;
 
-function awaitingReviewState(
-  matchesReview: number,
-  total: number,
-): ProofigWorkListProgressState {
+function awaitingReviewState(matchesReview: number, total: number): ProofigWorkListProgressState {
   if (total > 0) {
     return {
       kind: 'progress',
@@ -174,10 +171,7 @@ export function getProofigWorkListCompactSummaryState(
       ...summaryState,
       countLabel: String(bad),
       label: bad === 1 ? 'problem' : 'problems',
-      filledSegments: proofigResultFilledSegmentCount(
-        bad,
-        PROOFIG_RESULT_PROBLEMS_SEGMENT_COUNT,
-      ),
+      filledSegments: proofigResultFilledSegmentCount(bad, PROOFIG_RESULT_PROBLEMS_SEGMENT_COUNT),
     };
   }
 

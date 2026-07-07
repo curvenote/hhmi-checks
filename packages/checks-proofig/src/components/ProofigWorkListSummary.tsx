@@ -26,13 +26,7 @@ const PROGRESS_ICONS: Record<ProofigWorkListProgressIcon, LucideIcon> = {
 export const WORK_LIST_SUMMARY_ROW_HEIGHT_CLASS = 'h-5';
 export const WORK_LIST_SUMMARY_COMPACT_ROW_HEIGHT_CLASS = 'h-4';
 
-function WorkListSummaryRow({
-  compact,
-  children,
-}: {
-  compact: boolean;
-  children: ReactNode;
-}) {
+function WorkListSummaryRow({ compact, children }: { compact: boolean; children: ReactNode }) {
   return (
     <span
       className={cn(
@@ -98,9 +92,7 @@ function ProofigWorkListStatusSegment({
       </span>
       {showLabel ? (
         <span className="inline-flex h-3.5 items-center gap-1 small-caps text-sm font-medium leading-none whitespace-nowrap">
-          {countLabel ? (
-            <span className="tabular-nums text-warning">{countLabel}</span>
-          ) : null}
+          {countLabel ? <span className="tabular-nums text-warning">{countLabel}</span> : null}
           <span className="text-muted-foreground">{label}</span>
         </span>
       ) : null}
@@ -132,9 +124,7 @@ function ProofigWorkListResultSegment({
             ok
           </span>
         )}
-        <span
-          className={cn('h-0.5 w-full min-w-3 rounded-full', state.segmentFillClassName)}
-        />
+        <span className={cn('h-0.5 w-full min-w-3 rounded-full', state.segmentFillClassName)} />
       </span>
     );
   }
