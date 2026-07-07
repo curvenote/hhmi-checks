@@ -189,6 +189,7 @@ lease owner and does not make a second `report/start-generation` call.
 
 ## Operational Notes
 
+- Turnitin EULA terms are cached in SCMS and refreshed on a schedule; see [EULA cache refresh cron](./eula-cron.md).
 - The check run id is used as `client_id` for relay upload/status calls and as
   the notify route id.
 - The notify route and status polling both apply relay notify envelopes through

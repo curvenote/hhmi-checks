@@ -1,6 +1,6 @@
 # Text integrity: relay submit API (reference)
 
-This page documents how the **checks-text-integrity** extension calls **checks-relay** to submit a manuscript for analysis. It complements [webhook and notify flow](./webhook.md).
+This page documents how the **checks-text-integrity** extension calls **checks-relay** to submit a manuscript for analysis. It complements [webhook and notify flow](./webhook.md) and [EULA cache refresh cron](./eula-cron.md).
 
 ---
 
