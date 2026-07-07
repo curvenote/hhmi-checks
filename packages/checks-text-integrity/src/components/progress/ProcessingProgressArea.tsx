@@ -3,7 +3,7 @@ import { TextIntegrityRefreshRemoteStatusButton } from '../TextIntegrityRefreshR
 import { StageProgressArea } from './StageProgressArea.js';
 import { useCheckRunStale } from './useCheckRunStale.js';
 
-const PROCESSING_STALE_AFTER_MS = 90_000;
+const PROCESSING_STALE_AFTER_MS = 45_000;
 
 export type ProcessingProgressAreaProps = {
   actionPath?: string;
@@ -42,7 +42,7 @@ export function ProcessingProgressArea({
               being analysed and large files may take longer to process.
             </p>
             {showStaleUi ? (
-              <p className="mb-0 mt-2 text-muted-foreground">
+              <p className="mt-2 mb-0 text-muted-foreground">
                 This run has not been updated recently. You can leave and return later; use{' '}
                 <span className="font-medium text-foreground">Refresh status</span> next to the
                 progress line if updates look stuck.

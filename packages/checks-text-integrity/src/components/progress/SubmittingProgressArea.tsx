@@ -4,7 +4,6 @@ import { StageProgressArea } from './StageProgressArea.js';
 import { useCheckRunStale } from './useCheckRunStale.js';
 
 const DEFAULT_SERVICE_NAME = 'Text Integrity';
-const SUBMITTING_STALE_AFTER_MS = 45_000;
 
 export type SubmittingProgressAreaProps = {
   /** When set, shown instead of “Text Integrity” in the upload headline (e.g. branded provider name). */
@@ -24,9 +23,7 @@ export function SubmittingProgressArea({
   checkRunDateModified,
 }: SubmittingProgressAreaProps) {
   const serviceName = name?.trim() || DEFAULT_SERVICE_NAME;
-  const showStaleUi = useCheckRunStale(checkRunDateModified, {
-    staleAfterMs: SUBMITTING_STALE_AFTER_MS,
-  });
+  const showStaleUi = useCheckRunStale(checkRunDateModified);
 
   const refreshSlot =
     showStaleUi && actionPath && workVersionId ? (
@@ -46,7 +43,7 @@ export function SubmittingProgressArea({
             <span className="font-bold">Uploading to {serviceName}…</span> submitting your work for
             processing. Large files may take longer to submit.
             {showStaleUi ? (
-              <p className="mt-2 mb-0 text-muted-foreground font-normal">
+              <p className="mt-2 mb-0 font-normal text-muted-foreground">
                 This run has not been updated recently. Use{' '}
                 <span className="font-medium text-foreground">Refresh status</span> next to the
                 progress line if an update was missed, or leave this page and come back later.

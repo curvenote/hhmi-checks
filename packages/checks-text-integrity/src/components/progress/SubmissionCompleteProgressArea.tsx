@@ -36,7 +36,7 @@ export function SubmissionCompleteProgressArea({
             <span className="font-bold">Submission complete.</span> Waiting for confirmation that
             processing has started.
             {showStaleUi ? (
-              <p className="mt-2 mb-0 text-muted-foreground font-normal">
+              <p className="mt-2 mb-0 font-normal text-muted-foreground">
                 This run has not been updated recently. Use{' '}
                 <span className="font-medium text-foreground">Refresh status</span> next to the
                 progress line if a notification was delayed.
