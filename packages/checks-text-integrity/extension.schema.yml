@@ -29,7 +29,7 @@ properties:
     type: string
     secret: true
     description: >-
-      Bearer token for cron POST/GET /v1/hooks/text-integrity/eula-cache/refresh (refreshes cached Turnitin EULA via checks-relay getTerms). May also be set as app.checks.eulaCronSecret.
+      Bearer token for cron POST/GET /v1/hooks/text-integrity/eula-cache/refresh (refreshes cached Turnitin EULA via checks-relay getTerms).
   autoRetry:
     type: object
     description: >-

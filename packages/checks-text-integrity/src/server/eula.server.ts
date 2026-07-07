@@ -96,11 +96,6 @@ export function getEulaCronSecret(ctx: TextIntegrityEulaContext): string | undef
   if (typeof fromExt === 'string' && fromExt.trim() !== '') {
     return fromExt.trim();
   }
-  const fromChecks = (ctx.$config?.app as { checks?: { eulaCronSecret?: string } } | undefined)
-    ?.checks?.eulaCronSecret;
-  if (typeof fromChecks === 'string' && fromChecks.trim() !== '') {
-    return fromChecks.trim();
-  }
   return undefined;
 }
 

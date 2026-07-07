@@ -9,7 +9,10 @@ async function handleEulaCacheRefresh(args: LoaderFunctionArgs | ActionFunctionA
 
   const secret = getEulaCronSecret(ctx);
   if (!secret) {
-    throw httpError(503, 'EULA cron refresh is not configured (set eulaCronSecret)');
+    throw httpError(
+      503,
+      'EULA cron refresh is not configured (set app.extensions.checks-text-integrity.eulaCronSecret)',
+    );
   }
 
   if (!verifyEulaCronBearer(args.request.headers.get('Authorization'), secret)) {
@@ -24,8 +27,8 @@ async function handleEulaCacheRefresh(args: LoaderFunctionArgs | ActionFunctionA
  * POST or GET /v1/hooks/text-integrity/eula-cache/refresh
  *
  * Cron-friendly endpoint to refresh cached Turnitin EULA (relay getTerms + page mode).
- * Auth: `Authorization: Bearer <eulaCronSecret>` from app config
- * (`app.extensions.checks-text-integrity.eulaCronSecret` or `app.checks.eulaCronSecret`).
+ * Auth: `Authorization: Bearer <eulaCronSecret>` from
+ * `app.extensions.checks-text-integrity.eulaCronSecret`.
  */
 export async function loader(args: LoaderFunctionArgs) {
   if (args.request.method !== 'GET') {
