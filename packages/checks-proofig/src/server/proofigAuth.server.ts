@@ -37,30 +37,46 @@ export function proofigTokenObjectId(apiBaseUrl: string, clientId: string): stri
 }
 
 /**
- * JWT `exp` is normally seconds since epoch. Values large enough to be ms are treated as ms.
+ * JWT epoch claims (`iat`, `exp`) are normally seconds since epoch. Values large enough to be ms are treated as ms.
  */
-export function jwtExpToUnixMs(exp: number): number {
-  if (exp > 10_000_000_000) return exp;
-  return exp * 1000;
+export function jwtClaimToUnixMs(claim: number): number {
+  if (claim > 10_000_000_000) return claim;
+  return claim * 1000;
 }
+
+/** @deprecated Use {@link jwtClaimToUnixMs}. */
+export function jwtExpToUnixMs(exp: number): number {
+  return jwtClaimToUnixMs(exp);
+}
+
+/** Fraction of JWT lifetime (`exp` − `iat`) after which the cached token is discarded. */
+export const PROOFIG_TOKEN_CACHE_LIFETIME_FRACTION = 0.5;
 
 /**
- * Soft expiry: JWT exp minus 10% of the remaining lifetime (from `now`), as ISO timestamp.
+ * Cache expiry at `iat` + 50% of token lifetime (`exp` − `iat`). If that instant is already past, returns `now`.
  */
-export function computeCacheExpiresAtIso(expClaim: number, nowMs: number = Date.now()): string {
-  const expMs = jwtExpToUnixMs(expClaim);
-  const remaining = expMs - nowMs;
-  if (remaining <= 0) {
+export function computeCacheExpiresAtIso(
+  iatClaim: number,
+  expClaim: number,
+  nowMs: number = Date.now(),
+): string {
+  const iatMs = jwtClaimToUnixMs(iatClaim);
+  const expMs = jwtClaimToUnixMs(expClaim);
+  const lifetimeMs = expMs - iatMs;
+  if (lifetimeMs <= 0) {
     return new Date(nowMs).toISOString();
   }
-  const softMs = expMs - 0.1 * remaining;
-  return new Date(softMs).toISOString();
+  const cacheUntilMs = iatMs + PROOFIG_TOKEN_CACHE_LIFETIME_FRACTION * lifetimeMs;
+  if (cacheUntilMs <= nowMs) {
+    return new Date(nowMs).toISOString();
+  }
+  return new Date(cacheUntilMs).toISOString();
 }
 
-export function parseJwtExp(accessToken: string): number {
+function parseJwtPayload(accessToken: string): Record<string, unknown> {
   const parts = accessToken.split('.');
   if (parts.length < 2) {
-    throw new Error('Proofig access_token is not a JWT (cannot read exp)');
+    throw new Error('Proofig access_token is not a JWT (cannot read claims)');
   }
   let json: unknown;
   try {
@@ -69,14 +85,34 @@ export function parseJwtExp(accessToken: string): number {
   } catch {
     throw new Error('Proofig access_token JWT payload is not valid JSON');
   }
-  if (!json || typeof json !== 'object' || !('exp' in json)) {
-    throw new Error('Proofig access_token JWT missing exp claim');
+  if (!json || typeof json !== 'object' || Array.isArray(json)) {
+    throw new Error('Proofig access_token JWT payload is not an object');
   }
-  const exp = (json as { exp: unknown }).exp;
-  if (typeof exp !== 'number' || !Number.isFinite(exp)) {
-    throw new Error('Proofig access_token JWT exp claim is not a finite number');
+  return json as Record<string, unknown>;
+}
+
+function parseJwtNumericClaim(
+  accessToken: string,
+  claim: 'exp' | 'iat',
+  label: string,
+): number {
+  const payload = parseJwtPayload(accessToken);
+  if (!(claim in payload)) {
+    throw new Error(`Proofig access_token JWT missing ${claim} claim`);
   }
-  return exp;
+  const value = payload[claim];
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`Proofig access_token JWT ${label} claim is not a finite number`);
+  }
+  return value;
+}
+
+export function parseJwtExp(accessToken: string): number {
+  return parseJwtNumericClaim(accessToken, 'exp', 'exp');
+}
+
+export function parseJwtIat(accessToken: string): number {
+  return parseJwtNumericClaim(accessToken, 'iat', 'iat');
 }
 
 function readCachedToken(
@@ -141,8 +177,9 @@ async function authenticateAndCache(
   }
 
   const nowMs = Date.now();
+  const iatClaim = parseJwtIat(json.access_token);
   const expClaim = parseJwtExp(json.access_token);
-  const expiresAt = computeCacheExpiresAtIso(expClaim, nowMs);
+  const expiresAt = computeCacheExpiresAtIso(iatClaim, expClaim, nowMs);
 
   const cacheData: ProofigTokenCacheData = {
     access_token: json.access_token,
@@ -175,8 +212,8 @@ async function authenticateAndCache(
 
 /**
  * Returns a Proofig Bearer token, using a row in `Object` when still valid.
- * On miss or expiry, calls `POST …/auth/authenticate`, caches `access_token` plus JWT-derived
- * `expiresAt` (10% before JWT exp), then returns the token.
+ * On miss or expiry, calls `POST …/auth/authenticate`, caches `access_token` until
+ * {@link PROOFIG_TOKEN_CACHE_LIFETIME_FRACTION} of the JWT lifetime (`exp` − `iat`) has elapsed.
  */
 export async function getProofingToken(
   apiBaseUrl: string,

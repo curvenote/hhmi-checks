@@ -11,7 +11,7 @@ export type ProofigOpenReportFetcherData = {
 /**
  * Resolves a current Proofig access token on the server, rewrites the `token` query param for
  * this open only, then opens the report in a new tab. Stored `report_url` is unchanged (still
- * updated by notify / remote status). Falls back to a plain link when routing context is incomplete.
+ * updated by notify / remote status). Requires actionPath, workVersionId, and checkRunId.
  */
 export function ProofigOpenReportButton({
   reportUrl,
@@ -35,20 +35,6 @@ export function ProofigOpenReportButton({
 }) {
   const { blocked, message } = useCheckMaintenanceBlocked('proofig');
   const canServerOpen = Boolean(actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim());
-  const isDisabled = disabled || blocked;
-
-  if (!canServerOpen) {
-    return (
-      <ui.MaintenanceTooltip enabled={blocked} message={message}>
-        <ui.Button variant={variant} asChild disabled={isDisabled || !reportUrl.trim()}>
-          <a href={reportUrl} target="_blank" rel="noopener noreferrer">
-            {children}
-          </a>
-        </ui.Button>
-      </ui.MaintenanceTooltip>
-    );
-  }
-
   const fetcher = useFetcher<ProofigOpenReportFetcherData>();
   const lastHandledFetcherDataRef = useRef<unknown>(undefined);
 
@@ -68,14 +54,16 @@ export function ProofigOpenReportButton({
   }, [fetcher.state, fetcher.data, onOpenedProofig]);
 
   const busy = fetcher.state !== 'idle';
+  const isDisabled = disabled || blocked || !canServerOpen || !reportUrl.trim() || busy;
 
   return (
     <ui.MaintenanceTooltip enabled={blocked} message={message}>
       <ui.Button
         type="button"
         variant={variant}
-        disabled={isDisabled || !reportUrl.trim() || busy}
+        disabled={isDisabled}
         onClick={() => {
+          if (!canServerOpen) return;
           const fd = new FormData();
           fd.set('intent', 'refresh-report-url');
           fd.set('workVersionId', workVersionId!.trim());
