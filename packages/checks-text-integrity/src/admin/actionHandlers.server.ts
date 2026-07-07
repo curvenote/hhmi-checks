@@ -41,6 +41,10 @@ import {
   getTextIntegrityRetrySweepCronStatus,
   installTextIntegrityRetrySweepCronJob,
 } from '../server/retrySweep.server.js';
+import {
+  getTextIntegrityEulaCacheRefreshCronStatus,
+  installTextIntegrityEulaCacheRefreshCronJob,
+} from '../server/eulaCacheCron.server.js';
 
 type AppChecksConfig = {
   relayBaseUrl?: string;
@@ -865,6 +869,32 @@ export function getExtensionAdminActionHandlers(): ExtensionAdminActionHandler[]
           return { success: true, retryCron };
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Failed to install retry cron job';
+          return { error: { type: 'general', message } };
+        }
+      },
+    },
+    {
+      name: 'text-integrity-eula-cron-status',
+      handler: async () => {
+        try {
+          const eulaCron = await getTextIntegrityEulaCacheRefreshCronStatus();
+          return { success: true, eulaCron };
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : 'Failed to load EULA refresh cron status';
+          return { error: { type: 'general', message } };
+        }
+      },
+    },
+    {
+      name: 'text-integrity-install-eula-cron',
+      handler: async () => {
+        try {
+          const eulaCron = await installTextIntegrityEulaCacheRefreshCronJob();
+          return { success: true, eulaCron };
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : 'Failed to install EULA refresh cron job';
           return { error: { type: 'general', message } };
         }
       },

@@ -91,14 +91,6 @@ async function relayPost(
   return { ok: res.ok, status: res.status, json, text };
 }
 
-export function getEulaCronSecret(ctx: TextIntegrityEulaContext): string | undefined {
-  const fromExt = getTextIntegrityExtensionConfig(ctx).eulaCronSecret;
-  if (typeof fromExt === 'string' && fromExt.trim() !== '') {
-    return fromExt.trim();
-  }
-  return undefined;
-}
-
 /**
  * Fetches latest EULA version + HTML from checks-relay and persists to the iThenticate Object row.
  * When `force` is false, returns the existing cache if younger than 24 hours.

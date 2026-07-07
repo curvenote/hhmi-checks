@@ -1,45 +1,43 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
-import { error405, httpError } from '@curvenote/scms-core';
-import { withContext } from '@curvenote/scms-server';
-import { verifyEulaCronBearer } from '../../server/eula-cron-auth.server.js';
-import { getEulaCronSecret, runEulaCacheCronRefresh } from '../../server/eula.server.js';
+import { error405 } from '@curvenote/scms-core';
+import { getConfig, verifyEndpointScopedHandshake, withContext } from '@curvenote/scms-server';
+import { TEXT_INTEGRITY_EULA_CACHE_REFRESH_SCOPE } from '../../server/eulaCacheCron.server.js';
+import { runEulaCacheCronRefresh } from '../../server/eula.server.js';
 
-async function handleEulaCacheRefresh(args: LoaderFunctionArgs | ActionFunctionArgs) {
-  const ctx = await withContext(args, { noTokens: true });
-
-  const secret = getEulaCronSecret(ctx);
-  if (!secret) {
-    throw httpError(
-      503,
-      'EULA cron refresh is not configured (set app.extensions.checks-text-integrity.eulaCronSecret)',
-    );
-  }
-
-  if (!verifyEulaCronBearer(args.request.headers.get('Authorization'), secret)) {
-    throw httpError(401, 'Unauthorized');
-  }
-
-  const result = await runEulaCacheCronRefresh(ctx);
-  return Response.json({ ok: true, ...result }, { status: 200 });
+function unauthorized() {
+  return Response.json({ error: 'Unauthorized' }, { status: 401 });
 }
 
 /**
- * POST or GET /v1/hooks/text-integrity/eula-cache/refresh
+ * POST /v1/hooks/text-integrity/eula-cache/refresh
  *
- * Cron-friendly endpoint to refresh cached Turnitin EULA (relay getTerms + page mode).
- * Auth: `Authorization: Bearer <eulaCronSecret>` from
- * `app.extensions.checks-text-integrity.eulaCronSecret`.
+ * Cron callback: refresh cached Turnitin EULA (relay getTerms + page mode).
+ * Auth: endpoint-scoped handshake (`TEXT_INTEGRITY_EULA_CACHE_REFRESH_SCOPE`).
  */
 export async function loader(args: LoaderFunctionArgs) {
   if (args.request.method !== 'GET') {
     throw error405();
   }
-  return handleEulaCacheRefresh(args);
+  return unauthorized();
 }
 
 export async function action(args: ActionFunctionArgs) {
   if (args.request.method !== 'POST') {
     throw error405();
   }
-  return handleEulaCacheRefresh(args);
+
+  const appConfig = await getConfig();
+  try {
+    verifyEndpointScopedHandshake(
+      args.request.headers.get('Authorization'),
+      appConfig,
+      TEXT_INTEGRITY_EULA_CACHE_REFRESH_SCOPE,
+    );
+  } catch {
+    return unauthorized();
+  }
+
+  const ctx = await withContext(args, { noTokens: true });
+  const result = await runEulaCacheCronRefresh(ctx);
+  return Response.json({ ok: true, ...result }, { status: 200 });
 }

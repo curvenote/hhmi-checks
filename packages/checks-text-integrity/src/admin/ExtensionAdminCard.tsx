@@ -52,7 +52,7 @@ export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) 
       />
       <div
         id="text-integrity-service-actions"
-        className="flex gap-3 items-center min-w-0 scroll-mt-4"
+        className="flex flex-wrap gap-3 items-start min-w-0 scroll-mt-4"
       >
         <TextIntegrityTestConnectionRow credentials={credentials} />
         <TextIntegrityRefreshEulaRow />

@@ -25,11 +25,6 @@ properties:
     type: string
     description: >-
       Required absolute base for Text Integrity webhook notify URLs (no trailing slash), e.g. https://host/v1/hooks/text-integrity/notify. Provider API keys belong in object store only, not here.
-  eulaCronSecret:
-    type: string
-    secret: true
-    description: >-
-      Bearer token for cron POST/GET /v1/hooks/text-integrity/eula-cache/refresh (refreshes cached Turnitin EULA via checks-relay getTerms).
   autoRetry:
     type: object
     description: >-
