@@ -1,10 +1,7 @@
-import {
-  asTextIntegrityPdfDownloadUrl,
-  asWorkIntegrityUrl,
-  withBaseUrl,
-} from '@curvenote/scms-core';
+import { withBaseUrl } from '@curvenote/scms-core';
 import { $sendSlackNotification, getConfig, type SlackMessage } from '@curvenote/scms-server';
 import type { CheckRunContext } from './types.js';
+import { asTextIntegrityPdfDownloadUrl, asWorkIntegrityUrl } from './urls.js';
 
 type SlackConfig = { webhookUrl?: string; disabled?: boolean };
 
