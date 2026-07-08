@@ -105,8 +105,7 @@ export function TextIntegrityRefreshEulaRow() {
         <p className="text-xs text-muted-foreground">Checking scheduled refresh…</p>
       ) : cronInstalled && eulaCron?.cronJob ? (
         <p className="text-xs text-muted-foreground">
-          Scheduled refresh:{' '}
-          <code className="text-[11px]">{eulaCron.cronJob.schedule}</code>
+          Scheduled refresh: <code className="text-[11px]">{eulaCron.cronJob.schedule}</code>
           {eulaCron.cronJob.enabled ? '' : ' (disabled)'} · next{' '}
           {formatTimestamp(eulaCron.cronJob.nextRunAt)}
         </p>

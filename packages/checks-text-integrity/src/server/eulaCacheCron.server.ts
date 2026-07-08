@@ -53,10 +53,7 @@ function mapEulaCacheRefreshCronJob(
 
 async function buildEulaCacheRefreshCronSeedInput() {
   const config = await getConfig();
-  const targetUrl = resolveScopedCronTargetUrl(
-    TEXT_INTEGRITY_EULA_CACHE_REFRESH_SCOPE,
-    config.api,
-  );
+  const targetUrl = resolveScopedCronTargetUrl(TEXT_INTEGRITY_EULA_CACHE_REFRESH_SCOPE, config.api);
 
   return {
     name: 'Text Integrity EULA cache refresh',

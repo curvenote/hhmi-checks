@@ -103,8 +103,8 @@ function TextIntegrityWorkListSimilarityResult({
     );
   }
 
-    return (
-      <span className="inline-flex w-fit shrink-0 flex-col items-stretch justify-center gap-0.5 leading-none">
+  return (
+    <span className="inline-flex w-fit shrink-0 flex-col items-stretch justify-center gap-0.5 leading-none">
       <span className="inline-flex h-3.5 items-center gap-1 whitespace-nowrap leading-none">
         <span
           className={cn(
@@ -147,13 +147,7 @@ function TextIntegrityWorkListSummaryLogo({
   );
 }
 
-function WorkListSummaryRow({
-  compact,
-  children,
-}: {
-  compact: boolean;
-  children: ReactNode;
-}) {
+function WorkListSummaryRow({ compact, children }: { compact: boolean; children: ReactNode }) {
   return (
     <span
       className={cn(

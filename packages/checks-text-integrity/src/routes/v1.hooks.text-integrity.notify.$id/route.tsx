@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from 'react-router';
 import { error405, httpError } from '@curvenote/scms-core';
 import { getPrismaClient } from '@curvenote/scms-server';
+import { isTextIntegritySlackWebhookEvent } from '@hhmi/checks-notify';
 import type { TextIntegrityDataSchema } from '../../schema.js';
 import {
   MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
@@ -11,6 +12,10 @@ import { shouldEnqueuePersistPdfNotify } from '../../server/notify-persist-enque
 import { applyWebhookEvent } from '../../server/stateMachine.server.js';
 import { enqueueTextIntegrityPersistPdfJob } from '../../server/enqueue-persist-pdf.server.js';
 import { patchTextIntegrityRunServiceData } from '../../server/checkRunColumns.server.js';
+import {
+  notifyTextIntegrityWebhookHandlerError,
+  notifyTextIntegrityWebhookMilestone,
+} from '../../server/slackNotify.server.js';
 
 export function loader() {
   throw error405();
@@ -38,6 +43,9 @@ export async function action(args: ActionFunctionArgs) {
 
   const parsed = parseNotifyWebhookJson(json);
   if (parsed.ok === false) {
+    void notifyTextIntegrityWebhookHandlerError(id, 'invalid_payload', {
+      issues: parsed.issues.map((i) => i.message).join('; '),
+    });
     return Response.json(
       { ok: false, error: 'Unknown webhook event or payload', issues: parsed.issues },
       { status: 400 },
@@ -52,6 +60,7 @@ export async function action(args: ActionFunctionArgs) {
   const receivedAt = new Date().toISOString();
 
   let serviceDataAfterWebhook: TextIntegrityDataSchema | undefined;
+  let priorEvent: string | undefined;
 
   try {
     await patchTextIntegrityRunServiceData(
@@ -59,6 +68,7 @@ export async function action(args: ActionFunctionArgs) {
       (currentServiceData) => {
         const sd = textIntegrityDataSchema.safeParse(currentServiceData);
         const base = sd.success ? sd.data : MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+        priorEvent = base.latest?.event;
         const nextServiceData = applyWebhookEvent(base, webhook, receivedAt);
         serviceDataAfterWebhook = nextServiceData ?? base;
         if (!nextServiceData) {
@@ -70,9 +80,26 @@ export async function action(args: ActionFunctionArgs) {
     );
   } catch (err) {
     console.error('[text-integrity notify]', err);
+    void notifyTextIntegrityWebhookHandlerError(id, 'persist_failed', {
+      error: err instanceof Error ? err.message : 'Failed to update run',
+    });
     return Response.json(
       { ok: false, error: err instanceof Error ? err.message : 'Failed to update run' },
       { status: 500 },
+    );
+  }
+
+  if (
+    serviceDataAfterWebhook &&
+    isTextIntegritySlackWebhookEvent(webhook.event, webhook.metadata)
+  ) {
+    void notifyTextIntegrityWebhookMilestone(
+      id,
+      webhook.event,
+      webhook.metadata,
+      priorEvent,
+      serviceDataAfterWebhook,
+      { request: args.request },
     );
   }
 

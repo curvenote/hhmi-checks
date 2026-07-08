@@ -4,6 +4,7 @@ import { createMessageRecord, updateMessageStatus } from '@curvenote/scms-server
 import { ProofigNotifyPayloadSchema } from '../../schema.js';
 import { applyNotifyPayloadToCheckRun } from '../../server/applyNotifyPayloadToCheckRun.server.js';
 import { proofigCheckRunAlreadyMarkedDeleted } from '../../server/proofigNotifyWebhookGuards.server.js';
+import { notifyProofigWebhookHandlerError } from '../../server/slackNotify.server.js';
 import {
   PROOFIG_NOTIFY_PAYLOAD_JSON_SCHEMA,
   PROOFIG_NOTIFY_RESULTS_JSON_SCHEMA,
@@ -124,6 +125,10 @@ export async function action(args: ActionFunctionArgs) {
       processedAt: new Date().toISOString(),
       issues: parsed.error.issues,
     } as any);
+    void notifyProofigWebhookHandlerError(id, 'invalid_payload', {
+      messageId,
+      issues: parsed.error.issues.map((i) => i.message).join('; '),
+    });
     logNotify(requestId, 'handler_return', {
       outcome: 'invalid_payload',
       status: 400,
@@ -147,6 +152,10 @@ export async function action(args: ActionFunctionArgs) {
       processedAt: new Date().toISOString(),
       error: errMessage,
     } as any);
+    void notifyProofigWebhookHandlerError(id, 'persist_failed', {
+      messageId,
+      error: errMessage,
+    });
     logNotify(requestId, 'handler_return', {
       outcome: 'persist_failed',
       status: 400,

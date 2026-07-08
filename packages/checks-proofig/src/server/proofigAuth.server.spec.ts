@@ -88,7 +88,9 @@ describe('computeCacheExpiresAtIso', () => {
     const iatMs = jwtClaimToUnixMs(iatSec);
     const lifetimeMs = jwtClaimToUnixMs(expSec) - iatMs;
     const expectedMs = iatMs + PROOFIG_TOKEN_CACHE_LIFETIME_FRACTION * lifetimeMs;
-    expect(computeCacheExpiresAtIso(iatSec, expSec, iatMs)).toBe(new Date(expectedMs).toISOString());
+    expect(computeCacheExpiresAtIso(iatSec, expSec, iatMs)).toBe(
+      new Date(expectedMs).toISOString(),
+    );
   });
 
   it('returns now when cache midpoint is already past', () => {

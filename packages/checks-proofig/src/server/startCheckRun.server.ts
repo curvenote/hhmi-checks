@@ -16,6 +16,7 @@ import {
   healthyColumnPatch,
   patchProofigRunServiceData,
 } from './checkRunColumns.server.js';
+import { notifyProofigStarted } from './slackNotify.server.js';
 
 export type ProofigCheckRunLineage = {
   retryOfRunId?: string;
@@ -31,6 +32,8 @@ type StartProofigCheckRunOptions = {
   invokedById?: string;
   lineage?: ProofigCheckRunLineage;
   scheduledAt?: string;
+  /** When true, skip Slack lifecycle notifications (e.g. cron retry sweep batch). */
+  suppressSlack?: boolean;
 };
 
 function resolveServiceAccountUserId(config: Awaited<ReturnType<typeof getConfig>>): string {
@@ -82,6 +85,9 @@ export async function startProofigCheckRun(
         },
       },
     });
+    if (!options.suppressSlack) {
+      void notifyProofigStarted(ctx, failedRun.id, workVersionId, { failedInline: true });
+    }
     return {
       ok: false,
       message: noFilesMessage,
@@ -199,6 +205,12 @@ export async function startProofigCheckRun(
         : markDocumentPreparationError(base, errMsg, new Date().toISOString());
     });
     return { ok: false, message: errMsg, status: 500, checkRunId };
+  }
+
+  if (!options.suppressSlack) {
+    void notifyProofigStarted(ctx, checkRunId, workVersionId, {
+      sourceFormat: hasPdf ? 'pdf' : 'docx',
+    });
   }
 
   return { ok: true, checkRunId };

@@ -4,6 +4,7 @@ import { getPrismaClient } from '@curvenote/scms-server';
 import { canShowResults, hasPipelineError } from '../serviceDataSchemas.js';
 import type { TextIntegrityDataSchema } from '../schema.js';
 import { textIntegrityDataSchema } from '../schema.js';
+import { notifyTextIntegrityErrorTransition } from './slackNotify.server.js';
 
 export type CheckRunCoarseStatus = 'healthy' | 'error' | 'unknown';
 
@@ -175,7 +176,8 @@ export async function patchTextIntegrityRunServiceData(
 
     try {
       const timestamp = new Date().toISOString();
-      return await prisma.checkServiceRun.update({
+      const beforeStatus = checkRunCoarseStatus(current.status);
+      const updated = await prisma.checkServiceRun.update({
         where: { id: checkServiceRunId, occ: current.occ },
         data: {
           data: newData,
@@ -184,6 +186,8 @@ export async function patchTextIntegrityRunServiceData(
           occ: { increment: 1 },
         },
       });
+      void notifyTextIntegrityErrorTransition(checkServiceRunId, beforeStatus, nextServiceData);
+      return updated;
     } catch {
       retries += 1;
       if (retries >= maxRetries) {

@@ -5,6 +5,7 @@ import {
   runTextIntegrityRetrySweep,
   TEXT_INTEGRITY_RETRY_SWEEP_SCOPE,
 } from '../../server/retrySweep.server.js';
+import { notifyTextIntegritySweepHandlerError } from '../../server/slackNotify.server.js';
 
 export const config = {
   maxDuration: 300,
@@ -57,6 +58,8 @@ export async function action(args: ActionFunctionArgs) {
     return Response.json({ status: 'ok', ...result }, { status: 200 });
   } catch (error) {
     console.error('[text-integrity retry-sweep] failed', error);
+    const message = error instanceof Error ? error.message : 'Retry sweep failed';
+    void notifyTextIntegritySweepHandlerError(message);
     return Response.json({ status: 'error', message: 'Retry sweep failed' }, { status: 500 });
   }
 }

@@ -55,6 +55,7 @@
     "@curvenote/scms-core": "*",
     "@curvenote/scms-db": "*",
     "@curvenote/scms-server": "*",
+    "@hhmi/checks-notify": "*",
     "@react-router/dev": "7.9.5",
     "lucide-react": "^0.552.0",
     "react": "^18.3.1",

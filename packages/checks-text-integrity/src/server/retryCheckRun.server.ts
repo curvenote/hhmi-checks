@@ -19,6 +19,7 @@ import {
 } from './runSuperseded.server.js';
 import { markCheckServiceRunNoAutoRetry } from './checkRunColumns.server.js';
 import { startTextIntegrityCheckRun } from './startCheckRun.server.js';
+import { notifyTextIntegrityRetry } from './slackNotify.server.js';
 
 const TEXT_INTEGRITY_KIND = 'checks-text-integrity';
 
@@ -26,6 +27,8 @@ export type TextIntegrityRetryMode = 'user' | 'admin';
 
 export type TextIntegrityRetryOptions = {
   scheduledAt?: string;
+  /** When true, skip per-run Slack (cron sweep emits one summary instead). */
+  suppressSlack?: boolean;
 };
 
 /**
@@ -105,6 +108,7 @@ export async function retryTextIntegrityCheckRun(
       createdById,
       invokedById: serviceAccountId,
       scheduledAt: options.scheduledAt,
+      suppressSlack: options.suppressSlack,
       lineage: {
         retryOfRunId: sourceRun.id,
         sourceAttempt: (sourceRun.attempt ?? 1) + 1,
@@ -148,6 +152,14 @@ export async function retryTextIntegrityCheckRun(
       markSupersededFailed: true;
       checkRunId: string;
     };
+  }
+  if (!options.suppressSlack) {
+    void notifyTextIntegrityRetry(
+      ctx,
+      checkRunId,
+      sourceRun.id,
+      mode === 'admin' ? 'admin' : 'user',
+    );
   }
   return { success: true, checkRunId } as ExtensionCheckHandleActionResult & {
     checkRunId: string;

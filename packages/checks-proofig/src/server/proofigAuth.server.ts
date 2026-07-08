@@ -91,11 +91,7 @@ function parseJwtPayload(accessToken: string): Record<string, unknown> {
   return json as Record<string, unknown>;
 }
 
-function parseJwtNumericClaim(
-  accessToken: string,
-  claim: 'exp' | 'iat',
-  label: string,
-): number {
+function parseJwtNumericClaim(accessToken: string, claim: 'exp' | 'iat', label: string): number {
   const payload = parseJwtPayload(accessToken);
   if (!(claim in payload)) {
     throw new Error(`Proofig access_token JWT missing ${claim} claim`);

@@ -9,6 +9,7 @@ import {
   markProofigSourceRunSupersededByRetry,
 } from './runSuperseded.server.js';
 import { startProofigCheckRun } from './startCheckRun.server.js';
+import { notifyProofigRetry } from './slackNotify.server.js';
 
 const PROOFIG_KIND = 'proofig';
 
@@ -80,6 +81,7 @@ export async function retryProofigCheckRun(
       err,
     );
   }
+  void notifyProofigRetry(ctx, result.checkRunId, sourceRun.id);
   return { success: true, checkRunId: result.checkRunId } as ExtensionCheckHandleActionResult & {
     checkRunId: string;
   };

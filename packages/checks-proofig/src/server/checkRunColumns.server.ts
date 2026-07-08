@@ -2,6 +2,7 @@ import type { Prisma } from '@curvenote/scms-db';
 import { httpError } from '@curvenote/scms-core';
 import { getPrismaClient } from '@curvenote/scms-server';
 import { hasError, proofigDataSchema, type ProofigDataSchema } from '../schema.js';
+import { notifyProofigErrorTransition } from './slackNotify.server.js';
 
 export type CheckRunCoarseStatus = 'healthy' | 'error' | 'unknown';
 
@@ -154,7 +155,8 @@ export async function patchProofigRunServiceData(
 
     try {
       const timestamp = new Date().toISOString();
-      return await prisma.checkServiceRun.update({
+      const beforeStatus = checkRunCoarseStatus(current.status);
+      const updated = await prisma.checkServiceRun.update({
         where: { id: checkServiceRunId, occ: current.occ },
         data: {
           data: newData,
@@ -163,6 +165,8 @@ export async function patchProofigRunServiceData(
           occ: { increment: 1 },
         },
       });
+      void notifyProofigErrorTransition(checkServiceRunId, beforeStatus, nextServiceData);
+      return updated;
     } catch {
       retries += 1;
       if (retries >= maxRetries) {

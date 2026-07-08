@@ -19,6 +19,7 @@ import {
   healthyColumnPatch,
   patchTextIntegrityRunServiceData,
 } from './checkRunColumns.server.js';
+import { notifyTextIntegrityStarted } from './slackNotify.server.js';
 
 export type TextIntegrityCheckRunLineage = {
   retryOfRunId?: string;
@@ -34,6 +35,8 @@ type StartTextIntegrityCheckRunOptions = {
   invokedById?: string;
   lineage?: TextIntegrityCheckRunLineage;
   scheduledAt?: string;
+  /** When true, skip Slack lifecycle notifications (e.g. cron retry sweep batch). */
+  suppressSlack?: boolean;
 };
 
 function resolveServiceAccountUserId(config: Awaited<ReturnType<typeof getConfig>>): string {
@@ -110,6 +113,9 @@ export async function startTextIntegrityCheckRun(
       noFilesMessage,
       mergedConfig,
     );
+    if (!options.suppressSlack) {
+      void notifyTextIntegrityStarted(ctx, checkRunId, workVersionId, { failedInline: true });
+    }
     return { ok: false, message: noFilesMessage, status: 400, checkRunId };
   }
 
@@ -165,6 +171,10 @@ export async function startTextIntegrityCheckRun(
       timestamp,
     );
     return { ok: false, message, status: 500, checkRunId };
+  }
+
+  if (!options.suppressSlack) {
+    void notifyTextIntegrityStarted(ctx, checkRunId, workVersionId);
   }
 
   return { ok: true, checkRunId };

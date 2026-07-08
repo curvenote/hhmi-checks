@@ -1,7 +1,10 @@
 import type { ZodIssue } from 'zod';
+import { isProofigSlackMilestoneState } from '@hhmi/checks-notify';
+import { getPrismaClient } from '@curvenote/scms-server';
 import { MINIMAL_PROOFIG_SERVICE_DATA, ProofigNotifyPayloadSchema } from '../schema.js';
 import { updateStagesAndServiceDataFromValidatedNotifyPayload } from './stateMachine.server.js';
 import { patchProofigRunServiceData } from './checkRunColumns.server.js';
+import { notifyProofigWebhookMilestone, readProofigLatestState } from './slackNotify.server.js';
 
 export type ApplyNotifyResult =
   | { ok: true }
@@ -22,6 +25,13 @@ export async function applyNotifyPayloadToCheckRun(
   }
 
   try {
+    const prisma = await getPrismaClient();
+    const existingRun = await prisma.checkServiceRun.findUnique({
+      where: { id: checkServiceRunId },
+      select: { data: true },
+    });
+    const priorState = readProofigLatestState(existingRun?.data);
+
     await patchProofigRunServiceData(
       checkServiceRunId,
       (existingServiceData) => {
@@ -34,6 +44,15 @@ export async function applyNotifyPayloadToCheckRun(
       },
       receivedAt,
     );
+
+    if (isProofigSlackMilestoneState(parsed.data.state)) {
+      void notifyProofigWebhookMilestone(
+        checkServiceRunId,
+        parsed.data.state,
+        parsed.data,
+        priorState,
+      );
+    }
   } catch (err) {
     return {
       ok: false,

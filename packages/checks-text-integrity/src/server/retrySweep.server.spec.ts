@@ -70,6 +70,10 @@ vi.mock('./checkRunColumns.server.js', () => ({
     retrySweepMocks.mockMarkNoAutoRetry(...args),
 }));
 
+vi.mock('./slackNotify.server.js', () => ({
+  notifyTextIntegritySweepSummary: vi.fn(),
+}));
+
 const sourceRun = {
   id: 'run-1',
   work_version_id: 'wv-1',
@@ -215,7 +219,9 @@ describe('runTextIntegrityRetrySweep', () => {
   it('does not pass scheduledAt — sweep timing is eligibility-only', async () => {
     mockRetry.mockResolvedValue({ success: true, checkRunId: 'run-2' });
     await runTextIntegrityRetrySweep();
-    expect(mockRetry).toHaveBeenCalledWith(expect.anything(), 'wv-1', 'run-1', 'admin');
+    expect(mockRetry).toHaveBeenCalledWith(expect.anything(), 'wv-1', 'run-1', 'admin', {
+      suppressSlack: true,
+    });
   });
 
   it('marks no_auto_retry when admin retry skips for stale EULA', async () => {

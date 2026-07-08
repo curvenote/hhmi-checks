@@ -56,6 +56,10 @@ import {
   patchTextIntegrityRunServiceData,
   safeCheckServiceRunPatch,
 } from './checkRunColumns.server.js';
+import {
+  notifyTextIntegrityActionError,
+  notifyTextIntegrityEulaAccepted,
+} from './slackNotify.server.js';
 
 type AppChecksConfig = {
   relayBaseUrl?: string;
@@ -411,6 +415,18 @@ export async function handleTextIntegrityAction(
         acceptedAt,
         shownAt: acceptedAt,
       });
+      const prisma = await getPrismaClient();
+      const userRow = ctx.user?.id
+        ? await prisma.user.findUnique({
+            where: { id: ctx.user.id },
+            select: { email: true },
+          })
+        : null;
+      void notifyTextIntegrityEulaAccepted(
+        ctx,
+        { id: ctx.user?.id, email: userRow?.email ?? null },
+        { version, language, acceptedAt },
+      );
       return { success: true, accepted: true, version, acceptedAt };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to accept EULA';
@@ -669,10 +685,12 @@ export async function handleTextIntegrityAction(
         body: JSON.stringify({ client_id: checkRunId }),
       });
     } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to contact checks-relay';
+      void notifyTextIntegrityActionError(ctx, checkRunId, 'relay-status', message);
       return {
         error: {
           type: 'general',
-          message: e instanceof Error ? e.message : 'Failed to contact checks-relay',
+          message,
         },
         status: 502,
       };
@@ -690,10 +708,12 @@ export async function handleTextIntegrityAction(
     }
 
     if (!relayResponse.ok) {
+      const message = `Checks relay returned ${relayResponse.status}: ${rawText}`.trim();
+      void notifyTextIntegrityActionError(ctx, checkRunId, 'relay-status', message);
       return {
         error: {
           type: 'general',
-          message: `Checks relay returned ${relayResponse.status}: ${rawText}`.trim(),
+          message,
         },
         status:
           relayResponse.status >= 400 && relayResponse.status < 600 ? relayResponse.status : 502,
@@ -711,6 +731,7 @@ export async function handleTextIntegrityAction(
 
     const applied = await applyRelayCheckStatusEnvelopes(checkRunId, envelopes);
     if (!applied.ok) {
+      void notifyTextIntegrityActionError(ctx, checkRunId, 'relay-status', applied.message);
       return { error: { type: 'general', message: applied.message }, status: 400 };
     }
 
@@ -725,6 +746,12 @@ export async function handleTextIntegrityAction(
           recoveryAction.leaseOwner,
         );
         if (!recoveryStarted.ok) {
+          void notifyTextIntegrityActionError(
+            ctx,
+            checkRunId,
+            'relay-status-recovery',
+            recoveryStarted.message,
+          );
           return { error: { type: 'general', message: recoveryStarted.message }, status: 400 };
         }
       } else if (recoveryAction.action === 'startRelay') {
