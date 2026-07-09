@@ -82,6 +82,22 @@ type RelayStatusResponseBody = {
 
 const RELAY_RECOVERY_LEASE_MS = 60_000;
 const TEXT_INTEGRITY_KIND = 'checks-text-integrity';
+const RELAY_LOG_LABEL = '[checks-text-integrity:relay]';
+
+function relayErrorDetails(error: unknown) {
+  const cause =
+    error instanceof Error && 'cause' in error ? (error as { cause?: unknown }).cause : undefined;
+  return {
+    message: error instanceof Error ? error.message : String(error),
+    name: error instanceof Error ? error.name : undefined,
+    stack: error instanceof Error ? error.stack : undefined,
+    cause,
+  };
+}
+
+function logRelayError(message: string, details: Record<string, unknown>) {
+  console.error(RELAY_LOG_LABEL, message, details);
+}
 
 /** Persist a failed dispatch so checks/details pages can show the error. */
 async function recordTextIntegrityExecuteFailure(
@@ -588,6 +604,16 @@ export async function handleTextIntegrityAction(
         }),
       });
     } catch (e) {
+      logRelayError('viewer URL request threw', {
+        intent,
+        checkRunId,
+        workVersionId,
+        url: viewerUrlEndpoint,
+        serviceName,
+        relayInstanceId,
+        externalCheckId,
+        error: relayErrorDetails(e),
+      });
       return {
         error: {
           type: 'general',
@@ -599,6 +625,19 @@ export async function handleTextIntegrityAction(
 
     if (!relayResponse.ok) {
       const text = await relayResponse.text().catch(() => '');
+      logRelayError('viewer URL request returned non-OK response', {
+        intent,
+        checkRunId,
+        workVersionId,
+        url: viewerUrlEndpoint,
+        serviceName,
+        relayInstanceId,
+        externalCheckId,
+        status: relayResponse.status,
+        statusText: relayResponse.statusText,
+        contentType: relayResponse.headers.get('content-type'),
+        bodyText: text,
+      });
       return {
         error: {
           type: 'general',
@@ -700,6 +739,16 @@ export async function handleTextIntegrityAction(
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to contact checks-relay';
+      logRelayError('relay status request threw', {
+        intent,
+        checkRunId,
+        workVersionId,
+        url: statusUrl,
+        serviceName,
+        relayInstanceId,
+        externalCheckId,
+        error: relayErrorDetails(e),
+      });
       void notifyTextIntegrityActionError(ctx, checkRunId, 'relay-status', message);
       return {
         error: {
@@ -723,6 +772,19 @@ export async function handleTextIntegrityAction(
 
     if (!relayResponse.ok) {
       const message = `Checks relay returned ${relayResponse.status}: ${rawText}`.trim();
+      logRelayError('relay status request returned non-OK response', {
+        intent,
+        checkRunId,
+        workVersionId,
+        url: statusUrl,
+        serviceName,
+        relayInstanceId,
+        externalCheckId,
+        status: relayResponse.status,
+        statusText: relayResponse.statusText,
+        contentType: relayResponse.headers.get('content-type'),
+        bodyText: rawText,
+      });
       void notifyTextIntegrityActionError(ctx, checkRunId, 'relay-status', message);
       return {
         error: {
@@ -923,6 +985,15 @@ export async function handleTextIntegrityAction(
       );
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to contact checks-relay';
+      logRelayError('similarity PDF start request threw', {
+        intent,
+        checkRunId,
+        workVersionId,
+        serviceName,
+        relayInstanceId,
+        externalCheckId,
+        error: relayErrorDetails(e),
+      });
       await markSimilarityPdfStartError(checkRunId, `Failed to start PDF regeneration: ${message}`);
       return {
         error: {
@@ -937,6 +1008,18 @@ export async function handleTextIntegrityAction(
       const text = await startRes.text().catch(() => '');
       const message =
         `Checks relay could not restart similarity PDF (${startRes.status}): ${text}`.trim();
+      logRelayError('similarity PDF start request returned non-OK response', {
+        intent,
+        checkRunId,
+        workVersionId,
+        serviceName,
+        relayInstanceId,
+        externalCheckId,
+        status: startRes.status,
+        statusText: startRes.statusText,
+        contentType: startRes.headers.get('content-type'),
+        bodyText: text,
+      });
       await markSimilarityPdfStartError(checkRunId, `Failed to start PDF regeneration: ${message}`);
       return {
         error: {

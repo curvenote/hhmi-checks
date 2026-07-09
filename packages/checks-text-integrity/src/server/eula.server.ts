@@ -21,6 +21,7 @@ import {
 
 const EULA_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_EULA_LANG = 'en-US';
+const EULA_RELAY_LOG_LABEL = '[checks-text-integrity:eula-relay]';
 
 type AppChecksConfig = {
   relayBaseUrl?: string;
@@ -30,6 +31,21 @@ type AppChecksConfig = {
 function getAppChecks(ctx: TextIntegrityEulaContext): AppChecksConfig | undefined {
   const app = ctx.$config?.app as { checks?: AppChecksConfig } | undefined;
   return app?.checks;
+}
+
+function relayErrorDetails(error: unknown) {
+  const cause =
+    error instanceof Error && 'cause' in error ? (error as { cause?: unknown }).cause : undefined;
+  return {
+    message: error instanceof Error ? error.message : String(error),
+    name: error instanceof Error ? error.name : undefined,
+    stack: error instanceof Error ? error.stack : undefined,
+    cause,
+  };
+}
+
+function logEulaRelayError(message: string, details: Record<string, unknown>) {
+  console.error(EULA_RELAY_LOG_LABEL, message, details);
 }
 
 function getTextIntegrityExtensionConfig(ctx: TextIntegrityEulaContext): Record<string, unknown> {
@@ -66,20 +82,42 @@ function isEulaCacheStale(cached: CachedEula | undefined): boolean {
 }
 
 async function relayPost(
+  operation: string,
   url: string,
   relayApiKey: string,
   body: Record<string, unknown>,
 ): Promise<{ ok: boolean; status: number; json: unknown; text: string }> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${relayApiKey}`,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000),
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${relayApiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (error) {
+    logEulaRelayError('relay request threw', {
+      operation,
+      url,
+      bodyKeys: Object.keys(body),
+      error: relayErrorDetails(error),
+    });
+    throw error;
+  }
+
+  const text = await res.text().catch((error: unknown) => {
+    logEulaRelayError('failed to read relay response body', {
+      operation,
+      url,
+      status: res.status,
+      statusText: res.statusText,
+      error: relayErrorDetails(error),
+    });
+    return '';
   });
-  const text = await res.text();
   let json: unknown = null;
   if (text) {
     try {
@@ -87,6 +125,17 @@ async function relayPost(
     } catch {
       json = text;
     }
+  }
+  if (!res.ok) {
+    logEulaRelayError('relay returned non-OK response', {
+      operation,
+      url,
+      status: res.status,
+      statusText: res.statusText,
+      contentType: res.headers.get('content-type'),
+      bodyText: text,
+      bodyJson: json,
+    });
   }
   return { ok: res.ok, status: res.status, json, text };
 }
@@ -121,7 +170,9 @@ export async function refreshEulaCache(
   const relayInstanceId = resolveRelayInstanceId(mergedConfig);
   const termsUrl = checksRelayTermsUrl(relayBaseUrl, serviceName, relayInstanceId);
 
-  const versionRes = await relayPost(termsUrl, relayApiKey, { lang: DEFAULT_EULA_LANG });
+  const versionRes = await relayPost('getTerms:metadata', termsUrl, relayApiKey, {
+    lang: DEFAULT_EULA_LANG,
+  });
   if (!versionRes.ok) {
     return {
       cached,
@@ -148,7 +199,7 @@ export async function refreshEulaCache(
     };
   }
 
-  const pageRes = await relayPost(termsUrl, relayApiKey, {
+  const pageRes = await relayPost('getTerms:page', termsUrl, relayApiKey, {
     mode: 'page',
     version: versionMeta.version,
     lang: DEFAULT_EULA_LANG,
@@ -289,7 +340,7 @@ export async function acceptEulaAtProvider(
   const relayInstanceId = resolveRelayInstanceId(mergedConfig);
   const acceptUrl = checksRelayTermsAcceptUrl(relayBaseUrl, serviceName, relayInstanceId);
 
-  const res = await relayPost(acceptUrl, relayApiKey, {
+  const res = await relayPost('acceptTerms', acceptUrl, relayApiKey, {
     userId,
     version,
     language,
