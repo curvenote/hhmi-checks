@@ -87,6 +87,7 @@ describe('createWorkCheckScopeGuard', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.workId).toBe('work-1');
+      expect(result.ctx).toBe(ctx);
     }
   });
 });

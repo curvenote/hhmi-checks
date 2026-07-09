@@ -139,7 +139,7 @@ export function createWorkCheckScopeGuard(dispatchIntents: ReadonlySet<string>) 
 
     return {
       ok: true,
-      ctx: { ...ctx, user: readGate.user },
+      ctx,
       workId: readGate.workId,
     };
   };

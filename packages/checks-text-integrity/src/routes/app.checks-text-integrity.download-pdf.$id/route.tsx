@@ -58,11 +58,6 @@ export async function loader(args: LoaderFunctionArgs) {
   if (!readGate.ok) {
     throw httpError(readGate.result.status ?? 403, readGate.result.error?.message ?? 'Forbidden');
   }
-  // Enrich the existing Context instance (class) with work-scoped roles for downstream
-  // storage access — object spread would drop Context prototype methods.
-  const ctx = Object.assign(baseCtx, {
-    user: readGate.user as (typeof baseCtx)['user'],
-  });
 
   const runData = run.data as CheckServiceRunData | null;
   const serviceData = runData?.serviceData ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
@@ -74,7 +69,7 @@ export async function loader(args: LoaderFunctionArgs) {
       select: { cdn: true, cdn_key: true },
     });
     if (workVersion?.cdn?.trim() && workVersion.cdn_key?.trim()) {
-      const backend = new StorageBackend(ctx, [KnownBuckets.prv, KnownBuckets.pub]);
+      const backend = new StorageBackend(baseCtx, [KnownBuckets.prv, KnownBuckets.pub]);
       const bucket = backend.knownBucketFromCDN(workVersion.cdn);
       if (bucket) {
         const file = new File(backend, downloadSource.path, bucket);
