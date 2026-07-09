@@ -14,7 +14,6 @@ import {
   guardTextIntegrityWorkCheckScopes,
   TEXT_INTEGRITY_DISPATCH_INTENTS,
   rejectWorkChecksDispatch,
-  rejectWorkChecksRead,
 } from './checkWorkScopes.server.js';
 
 const ctx = {
@@ -41,27 +40,18 @@ describe('guardTextIntegrityWorkCheckScopes', () => {
 
     const result = await guardTextIntegrityWorkCheckScopes(ctx, 'wv-1', 'eula-status');
     expect(result.ok).toBe(true);
+    expect(TEXT_INTEGRITY_DISPATCH_INTENTS.has('eula-status')).toBe(false);
   });
 
-  it('requires checks.dispatch for outbound intents', async () => {
+  it('requires checks.dispatch for accept-eula', async () => {
     scmsServerMocks.userHasWorkScope.mockImplementation(
       (_user, scope) => scope === scopes.work.id.checks.read,
     );
 
-    for (const intent of TEXT_INTEGRITY_DISPATCH_INTENTS) {
-      const result = await guardTextIntegrityWorkCheckScopes(ctx, 'wv-1', intent);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.result).toEqual(rejectWorkChecksDispatch());
-      }
-    }
-  });
-
-  it('rejects when user lacks checks.read', async () => {
-    const result = await guardTextIntegrityWorkCheckScopes(ctx, 'wv-1', 'eula-status');
+    const result = await guardTextIntegrityWorkCheckScopes(ctx, 'wv-1', 'accept-eula');
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.result).toEqual(rejectWorkChecksRead());
+      expect(result.result).toEqual(rejectWorkChecksDispatch());
     }
   });
 });

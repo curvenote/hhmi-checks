@@ -35,6 +35,9 @@ export async function action() {
 
 export async function loader(args: LoaderFunctionArgs) {
   const ctx = await withAppContext(args);
+  if (!ctx.user) {
+    throw httpError(401, 'Authentication required');
+  }
   const eulaBlock = await assertSubmitterEulaAccepted(ctx);
   if (eulaBlock) {
     throw httpError(403, eulaBlock);
