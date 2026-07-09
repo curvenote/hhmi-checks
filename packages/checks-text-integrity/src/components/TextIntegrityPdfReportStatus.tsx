@@ -20,6 +20,16 @@ type RetryFetcherData = {
   error?: { message?: string };
 };
 
+const PDF_DOWNLOAD_DEBUG_LABEL = '[checks-text-integrity:pdf-download]';
+
+function logPdfDownloadDebug(message: string, details?: Record<string, unknown>) {
+  console.info(PDF_DOWNLOAD_DEBUG_LABEL, message, details ?? {});
+}
+
+function logPdfDownloadError(message: string, details?: Record<string, unknown>) {
+  console.error(PDF_DOWNLOAD_DEBUG_LABEL, message, details ?? {});
+}
+
 export function TextIntegrityPdfReportStatus({
   reportGenerationComplete,
   reportGenerationFailed,
@@ -107,10 +117,49 @@ export function TextIntegrityPdfReportStatus({
   const runDownload = useCallback(async () => {
     if (!downloadUrl) return;
     setDownloading(true);
+    logPdfDownloadDebug('starting download request', {
+      checkRunId,
+      workVersionId,
+      downloadUrl,
+      currentUrl: window.location.href,
+      online: navigator.onLine,
+    });
     try {
       const res = await fetch(downloadUrl, { credentials: 'same-origin' });
+      const responseDetails = {
+        checkRunId,
+        workVersionId,
+        downloadUrl,
+        ok: res.ok,
+        status: res.status,
+        statusText: res.statusText,
+        contentType: res.headers.get('content-type'),
+        contentDisposition: res.headers.get('content-disposition'),
+      };
+      logPdfDownloadDebug('received download response', responseDetails);
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        const text = await res.text().catch((error: unknown) => {
+          logPdfDownloadError('failed to read error response body', {
+            ...responseDetails,
+            error,
+          });
+          return '';
+        });
+        let body: { message?: string } | null = null;
+        try {
+          body = text ? (JSON.parse(text) as { message?: string }) : null;
+        } catch (error) {
+          logPdfDownloadError('failed to parse error response JSON', {
+            ...responseDetails,
+            error,
+            bodyText: text,
+          });
+        }
+        logPdfDownloadError('download response was not ok', {
+          ...responseDetails,
+          body,
+          bodyText: text,
+        });
         ui.toastError(body?.message ?? `Download failed (${res.status})`);
         return;
       }
@@ -121,6 +170,14 @@ export function TextIntegrityPdfReportStatus({
         const m = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(cd);
         if (m?.[1]) filename = m[1].trim();
       }
+      logPdfDownloadDebug('download blob ready', {
+        checkRunId,
+        workVersionId,
+        downloadUrl,
+        blobSize: blob.size,
+        blobType: blob.type,
+        filename,
+      });
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = objectUrl;
@@ -130,11 +187,20 @@ export function TextIntegrityPdfReportStatus({
       a.remove();
       URL.revokeObjectURL(objectUrl);
     } catch (e) {
+      logPdfDownloadError('download request threw', {
+        checkRunId,
+        workVersionId,
+        downloadUrl,
+        error: e,
+        message: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack : undefined,
+        online: navigator.onLine,
+      });
       ui.toastError(e instanceof Error ? e.message : 'Download failed');
     } finally {
       setDownloading(false);
     }
-  }, [downloadUrl]);
+  }, [checkRunId, downloadUrl, workVersionId]);
 
   const handleDownload = useCallback(() => {
     requestEnable(() => {
