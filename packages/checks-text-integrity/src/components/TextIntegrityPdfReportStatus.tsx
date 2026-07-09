@@ -203,10 +203,20 @@ export function TextIntegrityPdfReportStatus({
   }, [checkRunId, downloadUrl, workVersionId]);
 
   const handleDownload = useCallback(() => {
+    logPdfDownloadDebug('download button clicked; requesting EULA gate', {
+      checkRunId,
+      workVersionId,
+      downloadUrl,
+    });
     requestEnable(() => {
+      logPdfDownloadDebug('EULA gate passed; running download callback', {
+        checkRunId,
+        workVersionId,
+        downloadUrl,
+      });
       void runDownload();
     });
-  }, [requestEnable, runDownload]);
+  }, [checkRunId, downloadUrl, requestEnable, runDownload, workVersionId]);
 
   return (
     <div>
