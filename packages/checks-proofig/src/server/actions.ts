@@ -177,7 +177,10 @@ export async function handleProofigAction(
   const { intent, workVersionId } = args;
   const scopeGate = await guardProofigWorkCheckScopes(args.ctx, workVersionId, intent);
   if (!scopeGate.ok) return scopeGate.result;
-  const ctx = scopeGate.ctx;
+  const ctx = args.ctx;
+  if (!ctx) {
+    return { error: { type: 'general', message: 'Authentication required' }, status: 401 };
+  }
 
   if (OUTBOUND_INTENTS.has(intent)) {
     const prisma = await getPrismaClient();

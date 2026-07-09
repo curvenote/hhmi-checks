@@ -90,6 +90,16 @@ describe('createWorkCheckScopeGuard', () => {
       expect(result.ctx).toBe(ctx);
     }
   });
+
+  it('does not mutate ctx.user after authorization', async () => {
+    const sessionUser = { id: 'user-1', work_roles: [{ work_id: 'other-work', role: 'OWNER' }] };
+    const sessionCtx = { user: sessionUser, $config: { app: {} } } as Context;
+    scmsServerMocks.userHasWorkScope.mockReturnValue(true);
+
+    await guardWorkCheckScopes(sessionCtx, 'wv-1', 'eula-status');
+
+    expect(sessionCtx.user).toBe(sessionUser);
+  });
 });
 
 describe('assertWorkChecksRead', () => {

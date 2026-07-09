@@ -6,6 +6,14 @@ import {
 } from '@curvenote/scms-server';
 import { scopes, type Context, type ExtensionCheckHandleActionResult } from '@curvenote/scms-core';
 
+/**
+ * Work-scoped authorization for check extension routes.
+ *
+ * These helpers verify permissions against the authenticated session user in `ctx.user`.
+ * They never mutate `ctx` or replace `ctx.user` — authorization uses a separate in-memory
+ * user snapshot (with work roles loaded for the target work) only inside scope checks.
+ */
+
 export function rejectAuthenticationRequired(): ExtensionCheckHandleActionResult {
   return {
     error: { type: 'general', message: 'Authentication required' },
@@ -42,7 +50,8 @@ export async function resolveWorkIdForWorkVersion(workVersionId: string): Promis
   return row?.work_id ?? null;
 }
 
-export async function loadUserWithWorkRoles(
+/** Local user snapshot for scope checks — not written back to Context. */
+async function loadWorkScopedUserForAuthorization(
   ctx: Context,
   workId: string,
 ): Promise<UserWithWorkRolesDBO | undefined> {
@@ -51,13 +60,14 @@ export async function loadUserWithWorkRoles(
   return { ...ctx.user, work_roles: workRoles };
 }
 
-export async function assertWorkChecksRead(
+type WorkChecksReadAuthorization =
+  | { ok: true; workId: string; authorizedUser: UserWithWorkRolesDBO }
+  | { ok: false; result: ExtensionCheckHandleActionResult };
+
+async function authorizeWorkChecksRead(
   ctx: Context,
   workVersionId: string,
-): Promise<
-  | { ok: true; workId: string; user: UserWithWorkRolesDBO }
-  | { ok: false; result: ExtensionCheckHandleActionResult }
-> {
+): Promise<WorkChecksReadAuthorization> {
   if (!ctx.user?.id) {
     return { ok: false, result: rejectAuthenticationRequired() };
   }
@@ -71,18 +81,31 @@ export async function assertWorkChecksRead(
       },
     };
   }
-  const user = await loadUserWithWorkRoles(ctx, workId);
-  if (!user || !userHasWorkScope(user, scopes.work.id.checks.read, workId)) {
+  const authorizedUser = await loadWorkScopedUserForAuthorization(ctx, workId);
+  if (!authorizedUser || !userHasWorkScope(authorizedUser, scopes.work.id.checks.read, workId)) {
     return { ok: false, result: rejectWorkChecksRead() };
   }
-  return { ok: true, workId, user };
+  return { ok: true, workId, authorizedUser };
+}
+
+export async function assertWorkChecksRead(
+  ctx: Context,
+  workVersionId: string,
+): Promise<{ ok: true; workId: string } | { ok: false; result: ExtensionCheckHandleActionResult }> {
+  const authorization = await authorizeWorkChecksRead(ctx, workVersionId);
+  if (!authorization.ok) return authorization;
+  return { ok: true, workId: authorization.workId };
 }
 
 export async function assertWorkChecksDispatch(
-  user: UserWithWorkRolesDBO,
+  ctx: Context,
   workId: string,
 ): Promise<{ ok: true } | { ok: false; result: ExtensionCheckHandleActionResult }> {
-  if (!userHasWorkScope(user, scopes.work.id.checks.dispatch, workId)) {
+  const authorizedUser = await loadWorkScopedUserForAuthorization(ctx, workId);
+  if (
+    !authorizedUser ||
+    !userHasWorkScope(authorizedUser, scopes.work.id.checks.dispatch, workId)
+  ) {
     return { ok: false, result: rejectWorkChecksDispatch() };
   }
   return { ok: true };
@@ -91,10 +114,7 @@ export async function assertWorkChecksDispatch(
 export async function assertWorkChecksReadForRun(
   ctx: Context,
   workVersionId: string | null | undefined,
-): Promise<
-  | { ok: true; workId: string; user: UserWithWorkRolesDBO }
-  | { ok: false; result: ExtensionCheckHandleActionResult }
-> {
+): Promise<{ ok: true; workId: string } | { ok: false; result: ExtensionCheckHandleActionResult }> {
   if (!workVersionId?.trim()) {
     return {
       ok: false,
@@ -129,18 +149,25 @@ export function createWorkCheckScopeGuard(dispatchIntents: ReadonlySet<string>) 
       };
     }
 
-    const readGate = await assertWorkChecksRead(ctx, workVersionId);
-    if (!readGate.ok) return readGate;
+    const readAuthorization = await authorizeWorkChecksRead(ctx, workVersionId);
+    if (!readAuthorization.ok) return readAuthorization;
 
     if (dispatchIntents.has(intent)) {
-      const dispatchGate = await assertWorkChecksDispatch(readGate.user, readGate.workId);
-      if (!dispatchGate.ok) return dispatchGate;
+      if (
+        !userHasWorkScope(
+          readAuthorization.authorizedUser,
+          scopes.work.id.checks.dispatch,
+          readAuthorization.workId,
+        )
+      ) {
+        return { ok: false, result: rejectWorkChecksDispatch() };
+      }
     }
 
     return {
       ok: true,
       ctx,
-      workId: readGate.workId,
+      workId: readAuthorization.workId,
     };
   };
 }

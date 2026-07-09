@@ -34,11 +34,11 @@ export async function action() {
 }
 
 export async function loader(args: LoaderFunctionArgs) {
-  const baseCtx = await withAppContext(args);
-  if (!baseCtx.user) {
+  const ctx = await withAppContext(args);
+  if (!ctx.user) {
     throw httpError(401, 'Authentication required');
   }
-  const eulaBlock = await assertSubmitterEulaAccepted(baseCtx);
+  const eulaBlock = await assertSubmitterEulaAccepted(ctx);
   if (eulaBlock) {
     throw httpError(403, eulaBlock);
   }
@@ -54,7 +54,7 @@ export async function loader(args: LoaderFunctionArgs) {
     throw httpError(404, 'Check run not found');
   }
 
-  const readGate = await assertWorkChecksReadForRun(baseCtx, run.work_version_id);
+  const readGate = await assertWorkChecksReadForRun(ctx, run.work_version_id);
   if (!readGate.ok) {
     throw httpError(readGate.result.status ?? 403, readGate.result.error?.message ?? 'Forbidden');
   }
@@ -69,7 +69,7 @@ export async function loader(args: LoaderFunctionArgs) {
       select: { cdn: true, cdn_key: true },
     });
     if (workVersion?.cdn?.trim() && workVersion.cdn_key?.trim()) {
-      const backend = new StorageBackend(baseCtx, [KnownBuckets.prv, KnownBuckets.pub]);
+      const backend = new StorageBackend(ctx, [KnownBuckets.prv, KnownBuckets.pub]);
       const bucket = backend.knownBucketFromCDN(workVersion.cdn);
       if (bucket) {
         const file = new File(backend, downloadSource.path, bucket);

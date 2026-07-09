@@ -391,7 +391,10 @@ export async function handleTextIntegrityAction(
 
   const scopeGate = await guardTextIntegrityWorkCheckScopes(args.ctx, workVersionId, intent);
   if (!scopeGate.ok) return scopeGate.result;
-  const ctx = scopeGate.ctx;
+  const ctx = args.ctx;
+  if (!ctx) {
+    return { error: { type: 'general', message: 'Authentication required' }, status: 401 };
+  }
 
   if (intent === 'eula-status') {
     try {
