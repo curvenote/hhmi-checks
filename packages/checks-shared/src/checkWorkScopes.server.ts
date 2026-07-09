@@ -97,20 +97,6 @@ export async function assertWorkChecksRead(
   return { ok: true, workId: authorization.workId };
 }
 
-export async function assertWorkChecksDispatch(
-  ctx: Context,
-  workId: string,
-): Promise<{ ok: true } | { ok: false; result: ExtensionCheckHandleActionResult }> {
-  const authorizedUser = await loadWorkScopedUserForAuthorization(ctx, workId);
-  if (
-    !authorizedUser ||
-    !userHasWorkScope(authorizedUser, scopes.work.id.checks.dispatch, workId)
-  ) {
-    return { ok: false, result: rejectWorkChecksDispatch() };
-  }
-  return { ok: true };
-}
-
 export async function assertWorkChecksReadForRun(
   ctx: Context,
   workVersionId: string | null | undefined,
