@@ -34,11 +34,11 @@ export async function action() {
 }
 
 export async function loader(args: LoaderFunctionArgs) {
-  const ctx = await withAppContext(args);
-  if (!ctx.user) {
+  const baseCtx = await withAppContext(args);
+  if (!baseCtx.user) {
     throw httpError(401, 'Authentication required');
   }
-  const eulaBlock = await assertSubmitterEulaAccepted(ctx);
+  const eulaBlock = await assertSubmitterEulaAccepted(baseCtx);
   if (eulaBlock) {
     throw httpError(403, eulaBlock);
   }
@@ -54,10 +54,15 @@ export async function loader(args: LoaderFunctionArgs) {
     throw httpError(404, 'Check run not found');
   }
 
-  const readGate = await assertWorkChecksReadForRun(ctx, run.work_version_id);
+  const readGate = await assertWorkChecksReadForRun(baseCtx, run.work_version_id);
   if (!readGate.ok) {
     throw httpError(readGate.result.status ?? 403, readGate.result.error?.message ?? 'Forbidden');
   }
+  // Enrich the existing Context instance (class) with work-scoped roles for downstream
+  // storage access — object spread would drop Context prototype methods.
+  const ctx = Object.assign(baseCtx, {
+    user: readGate.user as (typeof baseCtx)['user'],
+  });
 
   const runData = run.data as CheckServiceRunData | null;
   const serviceData = runData?.serviceData ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
