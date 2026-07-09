@@ -55,7 +55,6 @@ export async function loader(args: LoaderFunctionArgs) {
   if (!readGate.ok) {
     throw httpError(readGate.result.status ?? 403, readGate.result.error?.message ?? 'Forbidden');
   }
-  ctx.user = readGate.user;
 
   const runData = run.data as CheckServiceRunData | null;
   const serviceData = runData?.serviceData ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
