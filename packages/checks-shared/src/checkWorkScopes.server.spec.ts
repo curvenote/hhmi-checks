@@ -112,6 +112,22 @@ describe('assertWorkChecksRead', () => {
     }
   });
 
+  it('returns 401 for anonymous callers even when workVersionId does not exist', async () => {
+    const findUnique = vi.fn(async () => null);
+    scmsServerMocks.getPrismaClient.mockResolvedValue({
+      workVersion: { findUnique },
+    });
+    const signedOutCtx = { ...ctx, user: undefined } as Context;
+
+    const result = await assertWorkChecksRead(signedOutCtx, 'missing-wv');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.result).toEqual(rejectAuthenticationRequired());
+    }
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
   it('returns 403 when user lacks checks.read', async () => {
     const result = await assertWorkChecksRead(ctx, 'wv-1');
     expect(result.ok).toBe(false);

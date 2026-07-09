@@ -58,6 +58,9 @@ export async function assertWorkChecksRead(
   | { ok: true; workId: string; user: UserWithWorkRolesDBO }
   | { ok: false; result: ExtensionCheckHandleActionResult }
 > {
+  if (!ctx.user?.id) {
+    return { ok: false, result: rejectAuthenticationRequired() };
+  }
   const workId = await resolveWorkIdForWorkVersion(workVersionId);
   if (!workId) {
     return {
@@ -67,9 +70,6 @@ export async function assertWorkChecksRead(
         status: 404,
       },
     };
-  }
-  if (!ctx.user?.id) {
-    return { ok: false, result: rejectAuthenticationRequired() };
   }
   const user = await loadUserWithWorkRoles(ctx, workId);
   if (!user || !userHasWorkScope(user, scopes.work.id.checks.read, workId)) {
