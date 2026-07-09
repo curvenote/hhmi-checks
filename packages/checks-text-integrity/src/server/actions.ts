@@ -81,6 +81,7 @@ type RelayStatusResponseBody = {
 };
 
 const RELAY_RECOVERY_LEASE_MS = 60_000;
+const TEXT_INTEGRITY_KIND = 'checks-text-integrity';
 
 /** Persist a failed dispatch so checks/details pages can show the error. */
 async function recordTextIntegrityExecuteFailure(
@@ -106,7 +107,7 @@ async function recordTextIntegrityExecuteFailure(
       id: uuid(),
       date_created: timestamp,
       date_modified: timestamp,
-      kind: 'checks-text-integrity',
+      kind: TEXT_INTEGRITY_KIND,
       work_version_id: workVersionId,
       created_by_id: ctx.user?.id ?? undefined,
       ...errorColumnPatch(timestamp),
@@ -517,7 +518,13 @@ export async function handleTextIntegrityAction(
     const eulaPayload = await buildViewerEulaPayload(ctx);
 
     const prisma = await getPrismaClient();
-    const run = await prisma.checkServiceRun.findUnique({ where: { id: checkRunId } });
+    const run = await prisma.checkServiceRun.findFirst({
+      where: {
+        id: checkRunId,
+        work_version_id: workVersionId,
+        kind: TEXT_INTEGRITY_KIND,
+      },
+    });
     if (!run) {
       return {
         error: { type: 'general', message: 'Check run not found' },
@@ -634,7 +641,13 @@ export async function handleTextIntegrityAction(
     }
 
     const prisma = await getPrismaClient();
-    const run = await prisma.checkServiceRun.findUnique({ where: { id: checkRunId } });
+    const run = await prisma.checkServiceRun.findFirst({
+      where: {
+        id: checkRunId,
+        work_version_id: workVersionId,
+        kind: TEXT_INTEGRITY_KIND,
+      },
+    });
     if (!run || run.work_version_id !== workVersionId) {
       return { error: { type: 'general', message: 'Check run not found' }, status: 404 };
     }
@@ -849,7 +862,13 @@ export async function handleTextIntegrityAction(
     }
 
     const prisma = await getPrismaClient();
-    const run = await prisma.checkServiceRun.findUnique({ where: { id: checkRunId } });
+    const run = await prisma.checkServiceRun.findFirst({
+      where: {
+        id: checkRunId,
+        work_version_id: workVersionId,
+        kind: TEXT_INTEGRITY_KIND,
+      },
+    });
     if (!run) {
       return { error: { type: 'general', message: 'Check run not found' }, status: 404 };
     }

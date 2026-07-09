@@ -82,6 +82,7 @@ function restartArgs(checkRunId: string) {
 describe('handleTextIntegrityAction restart-similarity-pdf', () => {
   const checkRunId = 'run-1';
   let runData: CheckServiceRunData;
+  let findCheckRun: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -105,9 +106,15 @@ describe('handleTextIntegrityAction restart-similarity-pdf', () => {
       },
     };
 
+    findCheckRun = vi.fn(async () => ({
+      id: checkRunId,
+      work_version_id: 'wv-1',
+      kind: 'checks-text-integrity',
+      data: runData,
+    }));
     scmsServerMocks.getPrismaClient.mockResolvedValue({
       checkServiceRun: {
-        findUnique: vi.fn(async () => ({ id: checkRunId, data: runData })),
+        findFirst: findCheckRun,
       },
     });
     checkRunColumnMocks.safeCheckServiceRunPatch.mockImplementation(
@@ -148,5 +155,29 @@ describe('handleTextIntegrityAction restart-similarity-pdf', () => {
     );
     expect(runData.serviceData.stages.reportGeneration?.status).toBe('processing');
     expect(runData.serviceData.reportPdfId).toBe('pdf-new');
+  });
+
+  it('requires the run to belong to the authorized work version', async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        result: { pdf_id: 'pdf-new' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    findCheckRun.mockResolvedValueOnce(null);
+
+    await expect(handleTextIntegrityAction(restartArgs(checkRunId))).resolves.toEqual({
+      error: { type: 'general', message: 'Check run not found' },
+      status: 404,
+    });
+
+    expect(findCheckRun).toHaveBeenCalledWith({
+      where: {
+        id: checkRunId,
+        work_version_id: 'wv-1',
+        kind: 'checks-text-integrity',
+      },
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
