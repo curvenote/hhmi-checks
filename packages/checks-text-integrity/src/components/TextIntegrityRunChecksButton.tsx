@@ -20,7 +20,9 @@ export function TextIntegrityRunChecksButton({
   const { dialogOpen, setDialogOpen, eulaPresentation, requestEnable, acceptEula, busy } =
     useTextIntegrityEulaEnable(workVersionId);
 
+  const canSubmit = Boolean(actionPath?.trim());
   const runExecute = () => {
+    if (!canSubmit) return;
     const formData = new FormData();
     formData.append('intent', 'execute');
     formData.append('workVersionId', workVersionId);
@@ -40,7 +42,7 @@ export function TextIntegrityRunChecksButton({
           type="button"
           variant="default"
           busy={busy || executeFetcher.state === 'submitting'}
-          disabled={blocked}
+          disabled={blocked || !canSubmit}
           onClick={() => {
             requestEnable(runExecute);
           }}

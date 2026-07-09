@@ -1,6 +1,5 @@
 import { data } from 'react-router';
-import { withAppScopedContext } from '@curvenote/scms-server';
-import { scopes } from '@curvenote/scms-core';
+import { withAppContext } from '@curvenote/scms-server';
 import { handleProofigAction } from '../../server/actions.js';
 import { extension as proofigServerExtension } from '../../server.js';
 
@@ -14,8 +13,14 @@ export async function loader() {
   );
 }
 
-export async function action(args: Parameters<typeof withAppScopedContext>[0]) {
-  const ctx = await withAppScopedContext(args, [scopes.app.works.upload]);
+export async function action(args: Parameters<typeof withAppContext>[0]) {
+  const ctx = await withAppContext(args);
+  if (!ctx.user) {
+    return data(
+      { error: { type: 'general', message: 'Authentication required' } },
+      { status: 401 },
+    );
+  }
   const formData = await args.request.formData();
   const intent = formData.get('intent')?.toString().trim();
   const workVersionId = formData.get('workVersionId')?.toString().trim();

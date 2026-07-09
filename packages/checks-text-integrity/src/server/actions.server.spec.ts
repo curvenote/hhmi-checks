@@ -25,6 +25,26 @@ vi.mock('./config.server.js', () => ({
   })),
 }));
 
+const scopeMocks = vi.hoisted(() => ({
+  guardTextIntegrityWorkCheckScopes: vi.fn(async (ctx: unknown) => ({
+    ok: true as const,
+    ctx,
+    workId: 'work-1',
+  })),
+}));
+
+vi.mock('./checkWorkScopes.server.js', () => ({
+  guardTextIntegrityWorkCheckScopes: scopeMocks.guardTextIntegrityWorkCheckScopes,
+  TEXT_INTEGRITY_DISPATCH_INTENTS: new Set([
+    'accept-eula',
+    'execute',
+    'retry',
+    'refresh-viewer-url',
+    'relay-status',
+    'restart-similarity-pdf',
+  ]),
+}));
+
 import { handleTextIntegrityAction } from './actions.js';
 
 type CheckServiceRunData = {
@@ -40,6 +60,7 @@ function restartForm(checkRunId: string): FormData {
 function restartArgs(checkRunId: string) {
   return {
     intent: 'restart-similarity-pdf',
+    workVersionId: 'wv-1',
     formData: restartForm(checkRunId),
     ctx: {
       user: { id: 'user-1' },

@@ -11,6 +11,7 @@ import type { TextIntegrityDataSchema } from '../../schema.js';
 import { MINIMAL_TEXT_INTEGRITY_SERVICE_DATA } from '../../schema.js';
 import { assertSubmitterEulaAccepted } from '../../server/eula.server.js';
 import { resolveSimilarityReportDownloadSource } from '../../server/similarity-report-download.server.js';
+import { assertWorkChecksReadForRun } from '../../server/checkWorkScopes.server.js';
 
 type CheckServiceRunData = {
   status: string;
@@ -49,6 +50,12 @@ export async function loader(args: LoaderFunctionArgs) {
   if (!run) {
     throw httpError(404, 'Check run not found');
   }
+
+  const readGate = await assertWorkChecksReadForRun(ctx, run.work_version_id);
+  if (!readGate.ok) {
+    throw httpError(readGate.result.status ?? 403, readGate.result.error?.message ?? 'Forbidden');
+  }
+  ctx.user = readGate.user;
 
   const runData = run.data as CheckServiceRunData | null;
   const serviceData = runData?.serviceData ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;

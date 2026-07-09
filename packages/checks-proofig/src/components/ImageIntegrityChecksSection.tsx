@@ -66,21 +66,23 @@ export function ImageIntegrityChecksSection({
           title="No image integrity checks run yet"
           description="Run image integrity checks to detect potential issues with images in your work."
           action={
-            <ui.MaintenanceTooltip enabled={blocked} message={message}>
-              <fetcher.Form method="post" action={remoteStatusActionPath}>
-                <input type="hidden" name="workVersionId" value={workVersionId} />
-                <ui.StatefulButton
-                  type="submit"
-                  variant="default"
-                  name="intent"
-                  value="execute"
-                  busy={isSubmitting}
-                  disabled={blocked}
-                >
-                  Run checks now
-                </ui.StatefulButton>
-              </fetcher.Form>
-            </ui.MaintenanceTooltip>
+            remoteStatusActionPath ? (
+              <ui.MaintenanceTooltip enabled={blocked} message={message}>
+                <fetcher.Form method="post" action={remoteStatusActionPath}>
+                  <input type="hidden" name="workVersionId" value={workVersionId} />
+                  <ui.StatefulButton
+                    type="submit"
+                    variant="default"
+                    name="intent"
+                    value="execute"
+                    busy={isSubmitting}
+                    disabled={blocked}
+                  >
+                    Run checks now
+                  </ui.StatefulButton>
+                </fetcher.Form>
+              </ui.MaintenanceTooltip>
+            ) : null
           }
         />
       )}

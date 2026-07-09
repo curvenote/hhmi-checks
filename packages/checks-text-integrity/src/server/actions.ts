@@ -32,6 +32,10 @@ import {
 } from './config.server.js';
 import { startTextIntegrityCheckRun } from './startCheckRun.server.js';
 import { retryTextIntegrityCheckRun } from './retryCheckRun.server.js';
+import {
+  guardTextIntegrityWorkCheckScopes,
+  TEXT_INTEGRITY_DISPATCH_INTENTS,
+} from './checkWorkScopes.server.js';
 import type { RelayNotifyEnvelope, RelayRecoveryHint } from '@curvenote/check-relay-types';
 import {
   checksRelayCheckStatusUrl,
@@ -363,12 +367,16 @@ const VIEWER_URL_DEFAULTS = {
 export async function handleTextIntegrityAction(
   args: ExtensionCheckHandleActionArgs,
 ): Promise<ExtensionCheckHandleActionResult | Response> {
-  const { intent: rawIntent, workVersionId, ctx, formData } = args;
+  const { intent: rawIntent, workVersionId, formData } = args;
   const intent = rawIntent.startsWith('checks-text-integrity:')
     ? rawIntent.split(':', 2)[1]
     : rawIntent;
 
-  if (intent === 'eula-status' && ctx) {
+  const scopeGate = await guardTextIntegrityWorkCheckScopes(args.ctx, workVersionId, intent);
+  if (!scopeGate.ok) return scopeGate.result;
+  const ctx = scopeGate.ctx;
+
+  if (intent === 'eula-status') {
     try {
       const status = await getEulaStatusForUser(ctx);
       return {
@@ -381,15 +389,8 @@ export async function handleTextIntegrityAction(
     }
   }
 
-  const outboundIntents = new Set([
-    'accept-eula',
-    'execute',
-    'retry',
-    'refresh-viewer-url',
-    'relay-status',
-    'restart-similarity-pdf',
-  ]);
-  if (ctx && outboundIntents.has(intent)) {
+  const outboundIntents = TEXT_INTEGRITY_DISPATCH_INTENTS;
+  if (outboundIntents.has(intent)) {
     const prisma = await getPrismaClient();
     const baseExt =
       (ctx.$config?.app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};

@@ -22,6 +22,7 @@ import { proofigReportUrlWithAccessToken } from './proofigReportUrl.server.js';
 import { checkRunCoarseStatus } from './checkRunColumns.server.js';
 import { retryProofigCheckRun } from './retryCheckRun.server.js';
 import { startProofigCheckRun } from './startCheckRun.server.js';
+import { guardProofigWorkCheckScopes, PROOFIG_DISPATCH_INTENTS } from './checkWorkScopes.server.js';
 
 async function findProofigRunForWorkVersion(
   workVersionId: string,
@@ -162,14 +163,7 @@ export interface ChecksMetadataSection {
 // };
 
 // Intents that trigger outbound calls to Proofig and must be blocked during maintenance.
-const OUTBOUND_INTENTS = new Set([
-  'execute',
-  'retry',
-  'fetch-remote-status',
-  'refresh-remote-status',
-  'refresh-report-url',
-  'hydrate-subimage-approval-status',
-]);
+const OUTBOUND_INTENTS = PROOFIG_DISPATCH_INTENTS;
 
 /**
  * Handle Proofig check actions.
@@ -180,9 +174,12 @@ const OUTBOUND_INTENTS = new Set([
 export async function handleProofigAction(
   args: ExtensionCheckHandleActionArgs,
 ): Promise<ExtensionCheckHandleActionResult> {
-  const { intent, workVersionId, ctx } = args;
+  const { intent, workVersionId } = args;
+  const scopeGate = await guardProofigWorkCheckScopes(args.ctx, workVersionId, intent);
+  if (!scopeGate.ok) return scopeGate.result;
+  const ctx = scopeGate.ctx;
 
-  if (ctx && OUTBOUND_INTENTS.has(intent)) {
+  if (OUTBOUND_INTENTS.has(intent)) {
     const prisma = await getPrismaClient();
     const base =
       (ctx.$config.app?.extensions?.['checks-proofig'] as Record<string, unknown> | undefined) ??
