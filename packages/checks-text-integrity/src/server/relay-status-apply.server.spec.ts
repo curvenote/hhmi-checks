@@ -1,8 +1,8 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type { RelayNotifyEnvelope } from '@curvenote/check-relay-types';
 import {
   MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
-  WebhookEvent,
   type TextIntegrityDataSchema,
 } from '../schema.js';
 import { applyRelayCheckStatusEnvelopes } from './relay-status-apply.server.js';
@@ -47,9 +47,14 @@ function processingRun(): TextIntegrityDataSchema {
   };
 }
 
-const processingCompleteEnvelope = {
-  event: WebhookEvent.ProcessingPhaseComplete,
+const processingCompleteEnvelope: RelayNotifyEnvelope = {
+  event: 'PROCESSING_PHASE_COMPLETE',
+  check_id: 'sub-1',
+  client_id: 'run-1',
+  service_name: 'checker',
+  occurred_at: TS,
   payload: {
+    completed: true,
     provider_payload: {
       submission_id: 'sub-1',
       overall_match_percentage: 12,
