@@ -57,48 +57,50 @@ export async function applyRelayCheckStatusEnvelopes(
   let serviceDataAfter = serviceDataBefore;
   let appliedEnvelope = false;
 
-  for (const envelope of envelopes) {
-    const parsed = parseNotifyWebhookJson(envelope);
-    if (parsed.ok === false) {
-      return { ok: false, message: parsed.issues.map((i) => i.message).join('; ') };
-    }
-    if ('noop' in parsed) {
-      continue;
-    }
-    const webhook = parsed.webhook;
-    const receivedAt = new Date().toISOString();
+  try {
+    for (const envelope of envelopes) {
+      const parsed = parseNotifyWebhookJson(envelope);
+      if (parsed.ok === false) {
+        return { ok: false, message: parsed.issues.map((i) => i.message).join('; ') };
+      }
+      if ('noop' in parsed) {
+        continue;
+      }
+      const webhook = parsed.webhook;
+      const receivedAt = new Date().toISOString();
 
-    try {
-      await patchTextIntegrityRunServiceData(
-        checkServiceRunId,
-        (currentServiceData: TextIntegrityDataSchema) => {
-          const nextServiceData = applyWebhookEvent(currentServiceData, webhook, receivedAt);
-          if (!nextServiceData) {
-            return currentServiceData;
-          }
-          serviceDataAfter = nextServiceData;
-          appliedEnvelope = true;
-          return nextServiceData;
-        },
-        receivedAt,
+      try {
+        await patchTextIntegrityRunServiceData(
+          checkServiceRunId,
+          (currentServiceData: TextIntegrityDataSchema) => {
+            const nextServiceData = applyWebhookEvent(currentServiceData, webhook, receivedAt);
+            if (!nextServiceData) {
+              return currentServiceData;
+            }
+            serviceDataAfter = nextServiceData;
+            appliedEnvelope = true;
+            return nextServiceData;
+          },
+          receivedAt,
+        );
+      } catch (err) {
+        return {
+          ok: false,
+          message: err instanceof Error ? err.message : 'Failed to apply relay status envelope',
+        };
+      }
+    }
+
+    return { ok: true };
+  } finally {
+    if (appliedEnvelope) {
+      void trackTextIntegrityTerminalTransition(
+        existingRun,
+        serviceDataBefore,
+        serviceDataAfter,
+        undefined,
+        options?.request,
       );
-    } catch (err) {
-      return {
-        ok: false,
-        message: err instanceof Error ? err.message : 'Failed to apply relay status envelope',
-      };
     }
   }
-
-  if (appliedEnvelope) {
-    void trackTextIntegrityTerminalTransition(
-      existingRun,
-      serviceDataBefore,
-      serviceDataAfter,
-      undefined,
-      options?.request,
-    );
-  }
-
-  return { ok: true };
 }

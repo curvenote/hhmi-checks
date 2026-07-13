@@ -131,4 +131,47 @@ describe('applyRelayCheckStatusEnvelopes', () => {
       request,
     );
   });
+
+  it('tracks terminal transition when a later envelope fails after an earlier apply', async () => {
+    mockPatch
+      .mockImplementationOnce(
+        async (
+          _id: string,
+          modifyFn: (current: TextIntegrityDataSchema) => TextIntegrityDataSchema,
+        ) => modifyFn(processingRun()),
+      )
+      .mockRejectedValueOnce(new Error('Persistence failed'));
+
+    const result = await applyRelayCheckStatusEnvelopes('run-1', [
+      processingCompleteEnvelope,
+      processingCompleteEnvelope,
+    ]);
+
+    expect(result).toEqual({ ok: false, message: 'Persistence failed' });
+    expect(mockTrackTerminal).toHaveBeenCalledTimes(1);
+    const [, before, after] = mockTrackTerminal.mock.calls[0] as [
+      typeof existingRun,
+      TextIntegrityDataSchema,
+      TextIntegrityDataSchema,
+    ];
+    expect(before.stages?.processing?.status).toBe('processing');
+    expect(after.stages?.processing?.status).toBe('completed');
+  });
+
+  it('tracks terminal transition when a later envelope fails validation after an earlier apply', async () => {
+    mockPatch.mockImplementationOnce(
+      async (
+        _id: string,
+        modifyFn: (current: TextIntegrityDataSchema) => TextIntegrityDataSchema,
+      ) => modifyFn(processingRun()),
+    );
+
+    const result = await applyRelayCheckStatusEnvelopes('run-1', [
+      processingCompleteEnvelope,
+      { not: 'a valid envelope' } as never,
+    ]);
+
+    expect(result.ok).toBe(false);
+    expect(mockTrackTerminal).toHaveBeenCalledTimes(1);
+  });
 });
