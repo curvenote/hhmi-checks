@@ -193,13 +193,6 @@ export async function handleProofigAction(
     const mergedConfig = await getProofigConfigWithOverrides(base, prisma);
     const maintenanceBlock = maintenanceGuardFromConfig(mergedConfig);
     if (maintenanceBlock) {
-      if (workVersionId) {
-        void trackChecksEvent(ctx, HHMIChecksTrackEvent.CHECKS_MAINTENANCE_BLOCKED, {
-          checkKind: 'proofig',
-          workVersionId,
-          intent,
-        });
-      }
       return checkMaintenanceActionError(maintenanceBlock.error?.message);
     }
   }

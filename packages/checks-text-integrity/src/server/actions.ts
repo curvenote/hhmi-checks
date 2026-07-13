@@ -420,13 +420,6 @@ export async function handleTextIntegrityAction(
     const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
     const maintenanceBlock = maintenanceGuardFromConfig(mergedConfig);
     if (maintenanceBlock) {
-      if (workVersionId) {
-        void trackChecksEvent(ctx, HHMIChecksTrackEvent.CHECKS_MAINTENANCE_BLOCKED, {
-          checkKind: 'checks-text-integrity',
-          workVersionId,
-          intent,
-        });
-      }
       return checkMaintenanceActionError(maintenanceBlock.error?.message);
     }
   }

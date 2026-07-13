@@ -15,7 +15,6 @@ export enum HHMIChecksTrackEvent {
   CHECKS_EULA_DIALOG_OPENED = 'HHMI Checks EULA Dialog Opened',
   CHECKS_EULA_ACCEPTED = 'HHMI Checks EULA Accepted',
   CHECKS_EULA_DECLINED = 'HHMI Checks EULA Declined',
-  CHECKS_MAINTENANCE_BLOCKED = 'HHMI Checks Maintenance Blocked',
 }
 
 export const HHMIChecksTrackEventDescriptions: Record<HHMIChecksTrackEvent, string> = {
@@ -42,6 +41,4 @@ export const HHMIChecksTrackEventDescriptions: Record<HHMIChecksTrackEvent, stri
   [HHMIChecksTrackEvent.CHECKS_EULA_DIALOG_OPENED]: 'Text integrity EULA dialog was shown',
   [HHMIChecksTrackEvent.CHECKS_EULA_ACCEPTED]: 'User accepted the text integrity EULA',
   [HHMIChecksTrackEvent.CHECKS_EULA_DECLINED]: 'User closed the EULA dialog without accepting',
-  [HHMIChecksTrackEvent.CHECKS_MAINTENANCE_BLOCKED]:
-    'User action was blocked because the check service is under maintenance',
 };

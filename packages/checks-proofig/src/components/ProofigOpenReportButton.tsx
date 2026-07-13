@@ -72,13 +72,7 @@ export function ProofigOpenReportButton({
         variant={variant}
         disabled={isDisabled}
         onClick={() => {
-          if (blocked) {
-            void pingEvent(HHMIChecksTrackEvent.CHECKS_MAINTENANCE_BLOCKED, {
-              surface: 'open_report_button',
-            });
-            return;
-          }
-          if (!canServerOpen) return;
+          if (!canServerOpen || blocked) return;
           const fd = new FormData();
           fd.set('intent', 'refresh-report-url');
           fd.set('workVersionId', workVersionId!.trim());

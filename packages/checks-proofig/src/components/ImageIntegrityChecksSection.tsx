@@ -97,13 +97,6 @@ export function ImageIntegrityChecksSection({
                     value="execute"
                     busy={isSubmitting}
                     disabled={blocked}
-                    onClick={() => {
-                      if (blocked) {
-                        void pingEvent(HHMIChecksTrackEvent.CHECKS_MAINTENANCE_BLOCKED, {
-                          surface: 'run_checks_button',
-                        });
-                      }
-                    }}
                   >
                     Run checks now
                   </ui.StatefulButton>
