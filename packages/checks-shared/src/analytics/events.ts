@@ -5,7 +5,6 @@ import type { ExtensionAnalyticsEvents } from '@curvenote/scms-core';
  * Platform upload and checks-page routes resolve Segment names per extension catalog.
  */
 export const ExtensionCheckTrackEventKey = {
-  CHECKS_UPLOAD_OPTION_TOGGLED: 'CHECKS_UPLOAD_OPTION_TOGGLED',
   CHECKS_UPLOAD_CONFIRMED: 'CHECKS_UPLOAD_CONFIRMED',
   CHECKS_PAGE_VIEWED: 'CHECKS_PAGE_VIEWED',
   CHECKS_RUN_STARTED: 'CHECKS_RUN_STARTED',
@@ -37,10 +36,6 @@ export function createExtensionCheckAnalyticsCatalog(
   serviceDisplayName: string,
 ): ExtensionAnalyticsEvents {
   const events: ExtensionCheckTrackEvents = {
-    [ExtensionCheckTrackEventKey.CHECKS_UPLOAD_OPTION_TOGGLED]: eventName(
-      serviceDisplayName,
-      'Upload Option Toggled',
-    ),
     [ExtensionCheckTrackEventKey.CHECKS_UPLOAD_CONFIRMED]: eventName(
       serviceDisplayName,
       'Upload Confirmed',
@@ -92,7 +87,6 @@ export function createExtensionCheckAnalyticsCatalog(
   };
 
   const descriptions: Record<string, string> = {
-    [events.CHECKS_UPLOAD_OPTION_TOGGLED]: `User enabled or disabled ${serviceDisplayName} during work upload`,
     [events.CHECKS_UPLOAD_CONFIRMED]: `User confirmed upload with ${serviceDisplayName} selected for dispatch`,
     [events.CHECKS_PAGE_VIEWED]: `User viewed the ${serviceDisplayName} section on the work checks page`,
     [events.CHECKS_RUN_STARTED]: `${serviceDisplayName} run started and its job was enqueued`,
