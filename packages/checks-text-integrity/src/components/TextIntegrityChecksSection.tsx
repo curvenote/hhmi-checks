@@ -1,4 +1,9 @@
+'use client';
+
+import { useEffect, useRef } from 'react';
 import { ui, useRevalidateOnInterval, ServiceLogo } from '@curvenote/scms-core';
+import { TextIntegrityTrackEvent } from '../analytics.catalog.js';
+import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 import { TextIntegrityRunChecksButton } from './TextIntegrityRunChecksButton.js';
 import { TextIntegrityCheckRunRetryButton } from './TextIntegrityCheckRunRetryButton.js';
 import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
@@ -31,6 +36,11 @@ export function TextIntegrityChecksSection({
   checkRunId,
   checkRunDateModified,
 }: TextIntegrityChecksSectionProps) {
+  const pingEvent = useChecksPingEvent({
+    checkKind: 'checks-text-integrity',
+    workVersionId,
+  });
+  const lastTrackedCheckRunIdRef = useRef<string | undefined>(undefined);
   const hasData = !!metadata?.stages;
   const showResults = canShowResults(metadata);
   const awaitingInitialStages = isAwaitingInitialTextIntegrityStages(metadata, checkRunId);
@@ -42,6 +52,23 @@ export function TextIntegrityChecksSection({
     enabled: shouldPollTextIntegrityChecks(metadata, checkRunId),
     interval: awaitingInitialStages ? 2000 : 3000,
   });
+
+  useEffect(() => {
+    if (
+      !showResults ||
+      !metadata?.summaryReport ||
+      !workVersionId ||
+      !checkRunId ||
+      lastTrackedCheckRunIdRef.current === checkRunId
+    ) {
+      return;
+    }
+    lastTrackedCheckRunIdRef.current = checkRunId;
+    void pingEvent(TextIntegrityTrackEvent.CHECKS_RESULTS_DISPLAYED, {
+      checkRunId,
+      similarityScore: metadata.summaryReport.overallMatchPercentage,
+    });
+  }, [checkRunId, metadata?.summaryReport, pingEvent, showResults, workVersionId]);
 
   if (!hasData) {
     return (

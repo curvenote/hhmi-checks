@@ -1,12 +1,20 @@
+'use client';
+
 import { useFetcher } from 'react-router';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ExtensionCheckSectionActivityProps } from '@curvenote/scms-core';
 import { ui, useCheckMaintenanceBlocked, useRevalidateOnInterval } from '@curvenote/scms-core';
+import { ImageIntegrityTrackEvent } from '../analytics.catalog.js';
+import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 import { Logos } from '../client.js';
 import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
 import { ProofigProgressComponent } from './ProofigProgressComponent.js';
 import type { ProofigDataSchema } from '../schema.js';
-import { ALL_PENDING_STAGES, isProofigAwaitingDocumentPreparationInUi } from '../schema.js';
+import {
+  ALL_PENDING_STAGES,
+  KnownState,
+  isProofigAwaitingDocumentPreparationInUi,
+} from '../schema.js';
 
 // Re-export types that might be needed by consumers
 // Note: ProofigDataSchema is exported from schema.js, so we don't re-export it here to avoid duplicates
@@ -23,6 +31,8 @@ export function ImageIntegrityChecksSection({
   remoteStatusActionPath,
 }: ImageIntegrityChecksSectionProps) {
   const fetcher = useFetcher();
+  const pingEvent = useChecksPingEvent({ checkKind: 'proofig', workVersionId });
+  const lastTrackedCheckRunIdRef = useRef<string | undefined>(undefined);
   const { blocked, message } = useCheckMaintenanceBlocked('proofig');
 
   // Check if we need to dispatch the initial POST
@@ -51,6 +61,20 @@ export function ImageIntegrityChecksSection({
     if (err?.message) ui.toastError(err.message);
   }, [fetcher.state, fetcher.data, checkedAvailableOrInProgress]);
 
+  useEffect(() => {
+    const reportState = metadata?.summary?.state;
+    const reportReady =
+      reportState === KnownState.ReportClean || reportState === KnownState.ReportFlagged;
+    if (!reportReady || !checkRunId || lastTrackedCheckRunIdRef.current === checkRunId) {
+      return;
+    }
+    lastTrackedCheckRunIdRef.current = checkRunId;
+    void pingEvent(ImageIntegrityTrackEvent.CHECKS_RESULTS_DISPLAYED, {
+      checkRunId,
+      proofigState: reportState,
+    });
+  }, [checkRunId, metadata?.summary?.state, pingEvent]);
+
   return (
     <div>
       {checkedAvailableOrInProgress ? (
@@ -70,6 +94,7 @@ export function ImageIntegrityChecksSection({
               <ui.MaintenanceTooltip enabled={blocked} message={message}>
                 <fetcher.Form method="post" action={remoteStatusActionPath}>
                   <input type="hidden" name="workVersionId" value={workVersionId} />
+                  <input type="hidden" name="trigger" value="checks_page" />
                   <ui.StatefulButton
                     type="submit"
                     variant="default"

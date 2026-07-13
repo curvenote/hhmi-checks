@@ -1,6 +1,10 @@
+'use client';
+
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useFetcher } from 'react-router';
 import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
+import { ImageIntegrityTrackEvent } from '../analytics.catalog.js';
+import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 
 export type ProofigOpenReportFetcherData = {
   success?: boolean;
@@ -34,6 +38,10 @@ export function ProofigOpenReportButton({
   onOpenedProofig?: () => void;
 }) {
   const { blocked, message } = useCheckMaintenanceBlocked('proofig');
+  const pingEvent = useChecksPingEvent({
+    checkKind: 'proofig',
+    workVersionId: workVersionId ?? '',
+  });
   const canServerOpen = Boolean(actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim());
   const fetcher = useFetcher<ProofigOpenReportFetcherData>();
   const lastHandledFetcherDataRef = useRef<unknown>(undefined);
@@ -48,10 +56,11 @@ export function ProofigOpenReportButton({
       return;
     }
     if (d.success === true && d.proofigReportOpenUrl) {
+      void pingEvent(ImageIntegrityTrackEvent.CHECKS_REPORT_OPENED, { checkRunId });
       window.open(d.proofigReportOpenUrl, '_blank', 'noopener,noreferrer');
       onOpenedProofig?.();
     }
-  }, [fetcher.state, fetcher.data, onOpenedProofig]);
+  }, [fetcher.state, fetcher.data, onOpenedProofig, checkRunId, pingEvent]);
 
   const busy = fetcher.state !== 'idle';
   const isDisabled = disabled || blocked || !canServerOpen || !reportUrl.trim() || busy;
@@ -63,7 +72,7 @@ export function ProofigOpenReportButton({
         variant={variant}
         disabled={isDisabled}
         onClick={() => {
-          if (!canServerOpen) return;
+          if (!canServerOpen || blocked) return;
           const fd = new FormData();
           fd.set('intent', 'refresh-report-url');
           fd.set('workVersionId', workVersionId!.trim());

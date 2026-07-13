@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { ui } from '@curvenote/scms-core';
+import { TextIntegrityTrackEvent } from '../analytics.catalog.js';
+import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 import { TEXT_INTEGRITY_CHECKS_ACTION_PATH } from '../client.js';
 
 type EulaStatusPayload = {
@@ -24,6 +26,10 @@ function logEulaError(message: string, details?: Record<string, unknown>) {
 }
 
 export function useTextIntegrityEulaEnable(workVersionId: string) {
+  const pingEvent = useChecksPingEvent({
+    checkKind: 'checks-text-integrity',
+    workVersionId,
+  });
   const statusFetcher = useFetcher<EulaStatusPayload>();
   const acceptFetcher = useFetcher<EulaStatusPayload>();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -57,10 +63,11 @@ export function useTextIntegrityEulaEnable(workVersionId: string) {
         statusFetcherState: statusFetcher.state,
         acceptFetcherState: acceptFetcher.state,
       });
+      void pingEvent(TextIntegrityTrackEvent.CHECKS_EULA_STATUS_REQUESTED, {});
       pendingEnableRef.current = onEnabled;
       loadStatus();
     },
-    [acceptFetcher.state, loadStatus, statusFetcher.state, workVersionId],
+    [acceptFetcher.state, loadStatus, pingEvent, statusFetcher.state, workVersionId],
   );
 
   useEffect(() => {
@@ -109,6 +116,7 @@ export function useTextIntegrityEulaEnable(workVersionId: string) {
       hasHtml: Boolean(data.eula?.html),
       url: data.eula?.url,
     });
+    void pingEvent(TextIntegrityTrackEvent.CHECKS_EULA_DIALOG_OPENED, { eulaVersion: version });
     setEulaPresentation({
       version,
       html: data.eula?.html,
@@ -161,10 +169,11 @@ export function useTextIntegrityEulaEnable(workVersionId: string) {
   );
 
   const cancelDialog = useCallback(() => {
+    void pingEvent(TextIntegrityTrackEvent.CHECKS_EULA_DECLINED, {});
     setDialogOpen(false);
     setEulaPresentation(null);
     pendingEnableRef.current = null;
-  }, []);
+  }, [pingEvent]);
 
   return {
     dialogOpen,

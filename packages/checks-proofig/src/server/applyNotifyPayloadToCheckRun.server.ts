@@ -28,7 +28,16 @@ export async function applyNotifyPayloadToCheckRun(
     const prisma = await getPrismaClient();
     const existingRun = await prisma.checkServiceRun.findUnique({
       where: { id: checkServiceRunId },
-      select: { data: true },
+      select: {
+        id: true,
+        kind: true,
+        work_version_id: true,
+        created_by_id: true,
+        attempt: true,
+        retry_of_id: true,
+        date_created: true,
+        data: true,
+      },
     });
     const priorState = readProofigLatestState(existingRun?.data);
 
@@ -43,6 +52,8 @@ export async function applyNotifyPayloadToCheckRun(
         return nextServiceData ?? null;
       },
       receivedAt,
+      5,
+      { trackTerminalAnalytics: true },
     );
 
     if (isProofigSlackMilestoneState(parsed.data.state)) {

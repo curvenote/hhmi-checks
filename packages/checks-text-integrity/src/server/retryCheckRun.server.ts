@@ -20,6 +20,8 @@ import {
 import { markCheckServiceRunNoAutoRetry } from './checkRunColumns.server.js';
 import { startTextIntegrityCheckRun } from './startCheckRun.server.js';
 import { notifyTextIntegrityRetry } from './slackNotify.server.js';
+import { trackTextIntegrityRunRetried } from './analytics.server.js';
+import type { ChecksAnalyticsTrigger } from '@hhmi/checks-shared/analytics/properties';
 
 const TEXT_INTEGRITY_KIND = 'checks-text-integrity';
 
@@ -29,6 +31,7 @@ export type TextIntegrityRetryOptions = {
   scheduledAt?: string;
   /** When true, skip per-run Slack (cron sweep emits one summary instead). */
   suppressSlack?: boolean;
+  trigger?: ChecksAnalyticsTrigger | string | null;
 };
 
 /**
@@ -101,6 +104,8 @@ export async function retryTextIntegrityCheckRun(
 
   const existingSuccessorId = await findExistingTextIntegrityRetrySuccessorId(sourceRun.id);
   let checkRunId: string;
+  const retryTrigger =
+    options.trigger ?? (mode === 'admin' ? (options.scheduledAt ? 'cron' : 'admin') : 'retry');
   if (existingSuccessorId) {
     checkRunId = existingSuccessorId;
   } else {
@@ -109,6 +114,7 @@ export async function retryTextIntegrityCheckRun(
       invokedById: serviceAccountId,
       scheduledAt: options.scheduledAt,
       suppressSlack: options.suppressSlack,
+      trigger: retryTrigger,
       lineage: {
         retryOfRunId: sourceRun.id,
         sourceAttempt: (sourceRun.attempt ?? 1) + 1,
@@ -160,6 +166,12 @@ export async function retryTextIntegrityCheckRun(
       sourceRun.id,
       mode === 'admin' ? 'admin' : 'user',
     );
+  }
+  if (!existingSuccessorId) {
+    void trackTextIntegrityRunRetried(ctx, workVersionId, sourceRun.id, checkRunId, {
+      attempt: (sourceRun.attempt ?? 1) + 1,
+      trigger: retryTrigger,
+    });
   }
   return { success: true, checkRunId } as ExtensionCheckHandleActionResult & {
     checkRunId: string;

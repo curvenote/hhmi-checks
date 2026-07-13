@@ -12,6 +12,36 @@
       "development": "./src/index.ts",
       "node": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./analytics/events": {
+      "development": "./src/analytics/events.ts",
+      "types": "./dist/analytics/events.d.ts",
+      "default": "./dist/analytics/events.js"
+    },
+    "./analytics/client": {
+      "development": "./src/analytics/client.ts",
+      "types": "./dist/analytics/client.d.ts",
+      "default": "./dist/analytics/client.js"
+    },
+    "./analytics/server": {
+      "development": "./src/analytics/server.ts",
+      "types": "./dist/analytics/server.d.ts",
+      "default": "./dist/analytics/server.js"
+    },
+    "./analytics/properties": {
+      "development": "./src/analytics/properties.ts",
+      "types": "./dist/analytics/properties.d.ts",
+      "default": "./dist/analytics/properties.js"
+    },
+    "./analytics/runContext.server": {
+      "development": "./src/analytics/runContext.server.ts",
+      "types": "./dist/analytics/runContext.server.d.ts",
+      "default": "./dist/analytics/runContext.server.js"
+    },
+    "./analytics/trigger.server": {
+      "development": "./src/analytics/trigger.server.ts",
+      "types": "./dist/analytics/trigger.server.d.ts",
+      "default": "./dist/analytics/trigger.server.js"
     }
   },
   "types": "./dist/index.d.ts",
@@ -31,7 +61,9 @@
   },
   "dependencies": {
     "@curvenote/scms-core": "*",
-    "@curvenote/scms-server": "*"
+    "@curvenote/scms-server": "*",
+    "react": "^18.3.1",
+    "react-router": "^7.9.5"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",

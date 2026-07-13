@@ -26,6 +26,7 @@ export function TextIntegrityRunChecksButton({
     const formData = new FormData();
     formData.append('intent', 'execute');
     formData.append('workVersionId', workVersionId);
+    formData.append('trigger', 'checks_page');
     executeFetcher.submit(formData, { method: 'post', action: actionPath });
   };
 
@@ -43,9 +44,7 @@ export function TextIntegrityRunChecksButton({
           variant="default"
           busy={busy || executeFetcher.state === 'submitting'}
           disabled={blocked || !canSubmit}
-          onClick={() => {
-            requestEnable(runExecute);
-          }}
+          onClick={() => requestEnable(runExecute)}
         >
           Run checks now
         </ui.StatefulButton>

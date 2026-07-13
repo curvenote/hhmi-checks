@@ -11,7 +11,20 @@ const checkRunColumnMocks = vi.hoisted(() => ({
   safeCheckServiceRunPatch: vi.fn(),
   patchTextIntegrityRunServiceData: vi.fn(),
   checkRunCoarseStatus: vi.fn((s: string) => s),
-  errorColumnPatch: vi.fn(),
+  errorColumnPatch: vi.fn(() => ({ status: 'error' })),
+}));
+
+const eulaMocks = vi.hoisted(() => ({
+  assertSubmitterEulaAccepted: vi.fn(),
+  getEulaStatusForUser: vi.fn(),
+}));
+
+const analyticsMocks = vi.hoisted(() => ({
+  trackTextIntegrityRunStartFailed: vi.fn(),
+}));
+
+const startCheckRunMocks = vi.hoisted(() => ({
+  startTextIntegrityCheckRun: vi.fn(),
 }));
 
 vi.mock('@curvenote/scms-server', () => scmsServerMocks);
@@ -43,6 +56,26 @@ vi.mock('./checkWorkScopes.server.js', () => ({
     'relay-status',
     'restart-similarity-pdf',
   ]),
+}));
+
+vi.mock('./eula.server.js', () => ({
+  acceptEulaAtProvider: vi.fn(),
+  assertSubmitterEulaAccepted: eulaMocks.assertSubmitterEulaAccepted,
+  buildViewerEulaPayload: vi.fn(),
+  getEulaStatusForUser: eulaMocks.getEulaStatusForUser,
+  recordUserEulaAcceptance: vi.fn(),
+}));
+
+vi.mock('./analytics.server.js', () => ({
+  trackTextIntegrityRunStartFailed: analyticsMocks.trackTextIntegrityRunStartFailed,
+}));
+
+vi.mock('./startCheckRun.server.js', () => ({
+  startTextIntegrityCheckRun: startCheckRunMocks.startTextIntegrityCheckRun,
+}));
+
+vi.mock('./retryCheckRun.server.js', () => ({
+  retryTextIntegrityCheckRun: vi.fn(),
 }));
 
 import { handleTextIntegrityAction } from './actions.js';
@@ -179,5 +212,66 @@ describe('handleTextIntegrityAction restart-similarity-pdf', () => {
       },
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleTextIntegrityAction execute', () => {
+  const workVersionId = 'wv-1';
+  let createCheckRun: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    createCheckRun = vi.fn(async () => ({ id: 'failed-run-1' }));
+    scmsServerMocks.getPrismaClient.mockResolvedValue({
+      checkServiceRun: {
+        create: createCheckRun,
+      },
+    });
+    eulaMocks.getEulaStatusForUser.mockResolvedValue({
+      requireEula: true,
+      eula: { version: '2024-01' },
+    });
+    startCheckRunMocks.startTextIntegrityCheckRun.mockResolvedValue({
+      ok: true,
+      checkRunId: 'run-1',
+    });
+  });
+
+  it('emits CHECKS_RUN_START_FAILED when execute is blocked by EULA', async () => {
+    const eulaBlock = 'Accept the Text Integrity EULA before running this check.';
+    eulaMocks.assertSubmitterEulaAccepted.mockResolvedValue(eulaBlock);
+
+    await expect(
+      handleTextIntegrityAction({
+        intent: 'execute',
+        workVersionId,
+        ctx: {
+          user: { id: 'user-1' },
+          $config: {
+            app: {
+              extensions: {
+                'checks-text-integrity': {},
+              },
+            },
+          },
+        },
+      } as Parameters<typeof handleTextIntegrityAction>[0]),
+    ).resolves.toEqual({
+      error: { type: 'general', message: eulaBlock },
+      status: 400,
+      requiresEula: true,
+      requireEula: true,
+      eula: { version: '2024-01' },
+    });
+
+    expect(createCheckRun).toHaveBeenCalledOnce();
+    expect(analyticsMocks.trackTextIntegrityRunStartFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ user: { id: 'user-1' } }),
+      workVersionId,
+      expect.any(String),
+      eulaBlock,
+      expect.objectContaining({ trigger: 'checks_page' }),
+    );
+    expect(startCheckRunMocks.startTextIntegrityCheckRun).not.toHaveBeenCalled();
   });
 });

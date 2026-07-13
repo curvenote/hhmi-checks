@@ -64,6 +64,10 @@ import {
   notifyTextIntegrityActionError,
   notifyTextIntegrityEulaAccepted,
 } from './slackNotify.server.js';
+import { resolveChecksAnalyticsTriggerFromArgs } from '@hhmi/checks-shared/analytics/trigger.server';
+import { TextIntegrityTrackEvent } from '../analytics.catalog.js';
+import { trackChecksEvent } from '@hhmi/checks-shared/analytics/server';
+import { trackTextIntegrityRunStartFailed } from './analytics.server.js';
 
 type AppChecksConfig = {
   relayBaseUrl?: string;
@@ -104,7 +108,7 @@ async function recordTextIntegrityExecuteFailure(
   ctx: NonNullable<ExtensionCheckHandleActionArgs['ctx']>,
   workVersionId: string,
   message: string,
-): Promise<void> {
+): Promise<{ checkRunId: string; manifestVersion?: string }> {
   const prisma = await getPrismaClient();
   const baseExt =
     (ctx.$config?.app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};
@@ -118,9 +122,10 @@ async function recordTextIntegrityExecuteFailure(
     message,
   );
   const timestamp = new Date().toISOString();
+  const checkRunId = uuid();
   await prisma.checkServiceRun.create({
     data: {
-      id: uuid(),
+      id: checkRunId,
       date_created: timestamp,
       date_modified: timestamp,
       kind: TEXT_INTEGRITY_KIND,
@@ -133,6 +138,7 @@ async function recordTextIntegrityExecuteFailure(
       },
     },
   });
+  return { checkRunId, manifestVersion: manifest?.version };
 }
 
 function readServiceDataFromRunData(runData: unknown): TextIntegrityDataSchema | undefined {
@@ -448,6 +454,13 @@ export async function handleTextIntegrityAction(
         { id: ctx.user?.id, email: userRow?.email ?? null },
         { version, language, acceptedAt },
       );
+      if (workVersionId) {
+        void trackChecksEvent(ctx, TextIntegrityTrackEvent.CHECKS_EULA_ACCEPTED, {
+          checkKind: 'checks-text-integrity',
+          workVersionId,
+          eulaVersion: version,
+        });
+      }
       return { success: true, accepted: true, version, acceptedAt };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to accept EULA';
@@ -466,9 +479,19 @@ export async function handleTextIntegrityAction(
       };
     }
 
+    const analyticsTrigger = resolveChecksAnalyticsTriggerFromArgs(args, 'checks_page');
+
     const eulaBlock = await assertSubmitterEulaAccepted(ctx);
     if (eulaBlock) {
-      await recordTextIntegrityExecuteFailure(ctx, workVersionId, eulaBlock);
+      const { checkRunId, manifestVersion } = await recordTextIntegrityExecuteFailure(
+        ctx,
+        workVersionId,
+        eulaBlock,
+      );
+      void trackTextIntegrityRunStartFailed(ctx, workVersionId, checkRunId, eulaBlock, {
+        trigger: analyticsTrigger,
+        manifestVersion,
+      });
       const status = await getEulaStatusForUser(ctx);
       return {
         error: { type: 'general', message: eulaBlock },
@@ -479,7 +502,9 @@ export async function handleTextIntegrityAction(
       };
     }
 
-    const result = await startTextIntegrityCheckRun(ctx, workVersionId);
+    const result = await startTextIntegrityCheckRun(ctx, workVersionId, {
+      trigger: analyticsTrigger,
+    });
     if (!result.ok) {
       return {
         error: { type: 'general', message: result.message },
@@ -500,7 +525,9 @@ export async function handleTextIntegrityAction(
     if (!checkRunId) {
       return { error: { type: 'general', message: 'checkRunId is required' }, status: 400 };
     }
-    return retryTextIntegrityCheckRun(ctx, workVersionId, checkRunId, 'user');
+    return retryTextIntegrityCheckRun(ctx, workVersionId, checkRunId, 'user', {
+      trigger: resolveChecksAnalyticsTriggerFromArgs(args, 'retry'),
+    });
   }
 
   if (intent === 'refresh-viewer-url') {
@@ -665,8 +692,6 @@ export async function handleTextIntegrityAction(
       viewerUrl: string;
     };
   }
-
-  /** Poll checks-relay check status and apply notify-equivalent envelopes to this run. */
   if (intent === 'relay-status') {
     if (!ctx) {
       return {
@@ -1050,6 +1075,12 @@ export async function handleTextIntegrityAction(
     }
 
     await recordSimilarityPdfStartAccepted(checkRunId, newPdfId);
+
+    void trackChecksEvent(ctx, TextIntegrityTrackEvent.CHECKS_PDF_REGENERATION_REQUESTED, {
+      checkKind: 'checks-text-integrity',
+      workVersionId,
+      checkRunId,
+    });
 
     return { success: true };
   }

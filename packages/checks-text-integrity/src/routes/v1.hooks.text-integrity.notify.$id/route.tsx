@@ -16,6 +16,7 @@ import {
   notifyTextIntegrityWebhookHandlerError,
   notifyTextIntegrityWebhookMilestone,
 } from '../../server/slackNotify.server.js';
+import { trackTextIntegrityTerminalTransition } from '../../server/analytics.server.js';
 
 export function loader() {
   throw error405();
@@ -58,6 +59,31 @@ export async function action(args: ActionFunctionArgs) {
 
   const webhook = parsed.webhook;
   const receivedAt = new Date().toISOString();
+
+  const prisma = await getPrismaClient();
+  const existingRun = await prisma.checkServiceRun.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      kind: true,
+      work_version_id: true,
+      created_by_id: true,
+      attempt: true,
+      retry_of_id: true,
+      date_created: true,
+      data: true,
+    },
+  });
+  if (!existingRun) {
+    return Response.json({ ok: false, error: 'Check run not found' }, { status: 404 });
+  }
+
+  const beforeParsed = textIntegrityDataSchema.safeParse(
+    (existingRun.data as { serviceData?: unknown } | null)?.serviceData,
+  );
+  const serviceDataBefore = beforeParsed.success
+    ? beforeParsed.data
+    : MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
 
   let serviceDataAfterWebhook: TextIntegrityDataSchema | undefined;
   let priorEvent: string | undefined;
@@ -104,7 +130,6 @@ export async function action(args: ActionFunctionArgs) {
   }
 
   if (serviceDataAfterWebhook && shouldEnqueuePersistPdfNotify(webhook, serviceDataAfterWebhook)) {
-    const prisma = await getPrismaClient();
     const run = await prisma.checkServiceRun.findUnique({
       where: { id },
       select: { work_version_id: true, created_by_id: true },
@@ -117,6 +142,14 @@ export async function action(args: ActionFunctionArgs) {
       );
     }
   }
+
+  void trackTextIntegrityTerminalTransition(
+    existingRun,
+    serviceDataBefore,
+    serviceDataAfterWebhook,
+    undefined,
+    args.request,
+  );
 
   return Response.json({ ok: true }, { status: 200 });
 }

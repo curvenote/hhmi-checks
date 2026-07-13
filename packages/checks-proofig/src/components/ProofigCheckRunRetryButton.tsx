@@ -44,6 +44,7 @@ export function ProofigCheckRunRetryButton({
           <input type="hidden" name="intent" value="retry" />
           <input type="hidden" name="workVersionId" value={workVersionId} />
           <input type="hidden" name="checkRunId" value={checkRunId} />
+          <input type="hidden" name="trigger" value="retry" />
           <ui.StatefulButton type="submit" variant="outline" disabled={blocked || pending}>
             Retry check
           </ui.StatefulButton>

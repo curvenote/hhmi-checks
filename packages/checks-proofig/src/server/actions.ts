@@ -15,6 +15,7 @@ import {
 } from '../schema.js';
 import { applyDocumentPreparationFromConverterJob } from './applyDocumentPreparationFromConverterJob.server.js';
 import { getProofigConfigWithOverrides } from './config.server.js';
+import { resolveChecksAnalyticsTriggerFromArgs } from '@hhmi/checks-shared/analytics/trigger.server';
 import { postProofigRemoteStatus } from './proofigRemoteStatus.server.js';
 import { applyNotifyPayloadToCheckRun } from './applyNotifyPayloadToCheckRun.server.js';
 import { getProofingToken } from './proofigAuth.server.js';
@@ -206,7 +207,9 @@ export async function handleProofigAction(
       };
     }
 
-    const result = await startProofigCheckRun(ctx, workVersionId);
+    const result = await startProofigCheckRun(ctx, workVersionId, {
+      trigger: resolveChecksAnalyticsTriggerFromArgs(args, 'checks_page'),
+    });
     if (!result.ok) {
       return {
         error: { type: 'general', message: result.message },
@@ -227,7 +230,9 @@ export async function handleProofigAction(
     if (!checkRunId) {
       return { error: { type: 'general', message: 'checkRunId is required' }, status: 400 };
     }
-    return retryProofigCheckRun(ctx, workVersionId, checkRunId, 'user');
+    return retryProofigCheckRun(ctx, workVersionId, checkRunId, 'user', {
+      trigger: resolveChecksAnalyticsTriggerFromArgs(args, 'retry'),
+    });
   }
 
   // ----- Sync documentPreparation from CONVERTER_TASK job status (DOCX uploads) -----

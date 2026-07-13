@@ -12,6 +12,9 @@ import { MINIMAL_TEXT_INTEGRITY_SERVICE_DATA } from '../../schema.js';
 import { assertSubmitterEulaAccepted } from '../../server/eula.server.js';
 import { resolveSimilarityReportDownloadSource } from '../../server/similarity-report-download.server.js';
 import { assertWorkChecksReadForRun } from '../../server/checkWorkScopes.server.js';
+import { TextIntegrityTrackEvent } from '../../analytics.catalog.js';
+import { loadChecksRunAnalyticsContext } from '@hhmi/checks-shared/analytics/runContext.server';
+import { trackChecksEvent } from '@hhmi/checks-shared/analytics/server';
 
 type CheckServiceRunData = {
   status: string;
@@ -75,6 +78,11 @@ export async function loader(args: LoaderFunctionArgs) {
         const file = new File(backend, downloadSource.path, bucket);
         if (await file.exists()) {
           const stream = await file.readStream();
+          void loadChecksRunAnalyticsContext(run.work_version_id, 'checks-text-integrity', {
+            checkRunId: id,
+          }).then((props) =>
+            trackChecksEvent(ctx, TextIntegrityTrackEvent.CHECKS_PDF_DOWNLOADED, props),
+          );
           return new Response(stream as unknown as ReadableStream, {
             status: 200,
             headers: {
