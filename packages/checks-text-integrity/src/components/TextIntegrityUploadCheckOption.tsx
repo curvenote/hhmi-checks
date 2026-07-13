@@ -32,7 +32,6 @@ export function TextIntegrityUploadCheckOption({
         }
         title="Check Text Integrity"
         description="Verify text in your work with similarity checking."
-        infoLine="Multiple files allowed, DOCX or PDF, 100 MB maximum total size"
         enabled={enabled}
         disabled={disabled}
         invalid={invalid}
