@@ -1,8 +1,27 @@
 import type { RelayNotifyEnvelope } from '@curvenote/check-relay-types';
-import { parseNotifyWebhookJson } from '../schema.js';
+import { getPrismaClient } from '@curvenote/scms-server';
+import {
+  MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+  parseNotifyWebhookJson,
+  textIntegrityDataSchema,
+} from '../schema.js';
 import type { TextIntegrityDataSchema } from '../schema.js';
+import { trackTextIntegrityTerminalTransition } from './analytics.server.js';
 import { applyWebhookEvent } from './stateMachine.server.js';
 import { patchTextIntegrityRunServiceData } from './checkRunColumns.server.js';
+
+function readServiceDataFromRun(data: unknown): TextIntegrityDataSchema {
+  const raw =
+    data != null && typeof data === 'object'
+      ? (data as { serviceData?: unknown }).serviceData
+      : undefined;
+  const parsed = textIntegrityDataSchema.safeParse(raw);
+  return parsed.success ? parsed.data : MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+}
+
+export type ApplyRelayCheckStatusEnvelopesOptions = {
+  request?: Request;
+};
 
 /**
  * Apply relay check-status notify envelopes (same shapes as ingest `notify_url`) to a run.
@@ -10,7 +29,34 @@ import { patchTextIntegrityRunServiceData } from './checkRunColumns.server.js';
 export async function applyRelayCheckStatusEnvelopes(
   checkServiceRunId: string,
   envelopes: readonly RelayNotifyEnvelope[],
+  options?: ApplyRelayCheckStatusEnvelopesOptions,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (envelopes.length === 0) {
+    return { ok: true };
+  }
+
+  const prisma = await getPrismaClient();
+  const existingRun = await prisma.checkServiceRun.findUnique({
+    where: { id: checkServiceRunId },
+    select: {
+      id: true,
+      kind: true,
+      work_version_id: true,
+      created_by_id: true,
+      attempt: true,
+      retry_of_id: true,
+      date_created: true,
+      data: true,
+    },
+  });
+  if (!existingRun) {
+    return { ok: false, message: 'Check run not found' };
+  }
+
+  const serviceDataBefore = readServiceDataFromRun(existingRun.data);
+  let serviceDataAfter = serviceDataBefore;
+  let appliedEnvelope = false;
+
   for (const envelope of envelopes) {
     const parsed = parseNotifyWebhookJson(envelope);
     if (parsed.ok === false) {
@@ -27,7 +73,12 @@ export async function applyRelayCheckStatusEnvelopes(
         checkServiceRunId,
         (currentServiceData: TextIntegrityDataSchema) => {
           const nextServiceData = applyWebhookEvent(currentServiceData, webhook, receivedAt);
-          return nextServiceData ?? currentServiceData;
+          if (!nextServiceData) {
+            return currentServiceData;
+          }
+          serviceDataAfter = nextServiceData;
+          appliedEnvelope = true;
+          return nextServiceData;
         },
         receivedAt,
       );
@@ -37,6 +88,16 @@ export async function applyRelayCheckStatusEnvelopes(
         message: err instanceof Error ? err.message : 'Failed to apply relay status envelope',
       };
     }
+  }
+
+  if (appliedEnvelope) {
+    void trackTextIntegrityTerminalTransition(
+      existingRun,
+      serviceDataBefore,
+      serviceDataAfter,
+      undefined,
+      options?.request,
+    );
   }
 
   return { ok: true };
