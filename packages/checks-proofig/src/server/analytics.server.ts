@@ -20,7 +20,7 @@ const PROOFIG_COMPLETED_SUMMARY_STATES = new Set<string>([
   KnownState.ReportFlagged,
 ]);
 
-function resolveProofigFailureReason(serviceData: ProofigDataSchema): string {
+function resolveProofigFailureReason(serviceData: ProofigDataSchema): string | undefined {
   if (serviceData.deleted || serviceData.summary?.state === KnownState.Deleted) {
     return sanitizeAnalyticsErrorMessage('Proofig run deleted at provider');
   }
