@@ -142,7 +142,8 @@ Check **System → Cron** for last run status and **Text Integrity admin** for m
 | `src/server/eulaCacheCron.server.ts` | Builtin id, scope, schedule; seed/install/status helpers |
 | `src/server/eula.server.ts` | `refreshEulaCache`, `runEulaCacheCronRefresh` |
 | `src/routes/v1.hooks.text-integrity.eula-cache.refresh/route.tsx` | POST webhook; handshake verification |
-| `src/admin/TextIntegrityRefreshEulaRow.tsx` | Manual refresh + cron install/status UI |
+| `src/admin/TextIntegrityRefreshEulaRow.tsx` | Manual EULA refresh button (service actions row) |
+| `src/admin/TextIntegrityEulaCronPanel.tsx` | Scheduled EULA refresh cron install/status UI |
 | `src/admin/actionHandlers.server.ts` | `text-integrity-install-eula-cron`, `text-integrity-eula-cron-status` intents |
 | `packages/scms-server/.../runDueCronJobs.server.ts` | Mints scoped handshake for `HANDSHAKE` cron jobs |
 | `packages/scms-server/.../cron/scopes.ts` | `verifyEndpointScopedHandshake` |

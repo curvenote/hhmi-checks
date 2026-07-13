@@ -11,6 +11,7 @@ import { TextIntegrityRefreshEulaRow } from './TextIntegrityRefreshEulaRow.js';
 import { TextIntegrityUpdateConfigurationForm } from './TextIntegrityUpdateConfigurationForm.js';
 import { TextIntegritySettingsPanel } from './TextIntegritySettingsPanel.js';
 import { TextIntegrityFailedRunsAdminPanel } from './FailedRunsAdminPanel.js';
+import { TextIntegrityEulaCronPanel } from './TextIntegrityEulaCronPanel.js';
 import { TextIntegrityRetryCronPanel } from './TextIntegrityRetryCronPanel.js';
 import { textIntegrityServiceLogoClassName } from '../textIntegrityLogoStyles.js';
 
@@ -52,7 +53,7 @@ export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) 
       />
       <div
         id="text-integrity-service-actions"
-        className="flex flex-wrap gap-3 items-start min-w-0 scroll-mt-4"
+        className="flex flex-wrap gap-3 items-center min-w-0 scroll-mt-4"
       >
         <TextIntegrityTestConnectionRow credentials={credentials} />
         <TextIntegrityRefreshEulaRow />
@@ -66,6 +67,7 @@ export default function ExtensionAdminCard({ record }: ExtensionAdminCardProps) 
         maintenance={displayConfig.maintenance as CheckMaintenanceRecord | undefined}
         serviceLabel={title}
       />
+      <TextIntegrityEulaCronPanel />
       <TextIntegrityRetryCronPanel />
       <TextIntegrityFailedRunsAdminPanel />
     </div>
