@@ -10,7 +10,11 @@ import { Logos } from '../client.js';
 import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
 import { ProofigProgressComponent } from './ProofigProgressComponent.js';
 import type { ProofigDataSchema } from '../schema.js';
-import { ALL_PENDING_STAGES, isProofigAwaitingDocumentPreparationInUi } from '../schema.js';
+import {
+  ALL_PENDING_STAGES,
+  KnownState,
+  isProofigAwaitingDocumentPreparationInUi,
+} from '../schema.js';
 
 // Re-export types that might be needed by consumers
 // Note: ProofigDataSchema is exported from schema.js, so we don't re-export it here to avoid duplicates
@@ -58,8 +62,9 @@ export function ImageIntegrityChecksSection({
   }, [fetcher.state, fetcher.data, checkedAvailableOrInProgress]);
 
   useEffect(() => {
-    const reportState = metadata?.latest?.state;
-    const reportReady = reportState === 'Report: Clean' || reportState === 'Report: Flagged';
+    const reportState = metadata?.summary?.state;
+    const reportReady =
+      reportState === KnownState.ReportClean || reportState === KnownState.ReportFlagged;
     if (!reportReady || !checkRunId || lastTrackedCheckRunIdRef.current === checkRunId) {
       return;
     }
@@ -68,7 +73,7 @@ export function ImageIntegrityChecksSection({
       checkRunId,
       proofigState: reportState,
     });
-  }, [checkRunId, metadata?.latest?.state, pingEvent]);
+  }, [checkRunId, metadata?.summary?.state, pingEvent]);
 
   return (
     <div>
