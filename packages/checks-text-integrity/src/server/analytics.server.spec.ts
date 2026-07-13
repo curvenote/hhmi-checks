@@ -64,6 +64,22 @@ describe('resolveTextIntegrityTerminalOutcome', () => {
     expect(resolveTextIntegrityTerminalOutcome(processingCompleteWithoutSummary())).toBeNull();
   });
 
+  it('returns null when a preliminary summaryReport arrives before processing completes', () => {
+    expect(
+      resolveTextIntegrityTerminalOutcome({
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        },
+        summaryReport: {
+          ...SAMPLE_SUMMARY,
+          status: 'PROCESSING',
+          overallMatchPercentage: 6,
+        },
+      }),
+    ).toBeNull();
+  });
+
   it('returns completed when summaryReport is present', () => {
     expect(
       resolveTextIntegrityTerminalOutcome({
@@ -135,6 +151,27 @@ describe('trackTextIntegrityTerminalTransition', () => {
       },
     };
     const after = processingCompleteWithoutSummary();
+
+    await trackTextIntegrityTerminalTransition(RUN_ROW, before, after);
+
+    expect(mockTrackChecksEventForUser).not.toHaveBeenCalled();
+  });
+
+  it('does not emit completion when a preliminary summaryReport arrives mid-processing', async () => {
+    const before: TextIntegrityDataSchema = {
+      stages: {
+        submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+        processing: { status: 'processing', history: [], timestamp: '2025-01-01T00:00:00Z' },
+      },
+    };
+    const after: TextIntegrityDataSchema = {
+      ...before,
+      summaryReport: {
+        ...SAMPLE_SUMMARY,
+        status: 'PROCESSING',
+        overallMatchPercentage: 6,
+      },
+    };
 
     await trackTextIntegrityTerminalTransition(RUN_ROW, before, after);
 
