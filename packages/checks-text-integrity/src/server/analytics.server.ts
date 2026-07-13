@@ -12,18 +12,18 @@ import { trackChecksEvent, trackChecksEventForUser } from '@hhmi/checks-shared/a
 import type { TrackChecksContext } from '@hhmi/checks-shared/analytics/server';
 import type { ChecksAnalyticsTrigger } from '@hhmi/checks-shared/analytics/properties';
 import type { TextIntegrityDataSchema } from '../schema.js';
-import { canShowResults, hasPipelineError } from '../serviceDataSchemas.js';
+import { hasPipelineError } from '../serviceDataSchemas.js';
 
 type TextIntegrityTerminalOutcome = 'completed' | 'failed';
 
-function resolveTextIntegrityTerminalOutcome(
+/** Analytics terminal state — narrower than UI/run-failure (waits for summaryReport). */
+export function resolveTextIntegrityTerminalOutcome(
   serviceData: TextIntegrityDataSchema | undefined,
 ): TextIntegrityTerminalOutcome | null {
   if (!serviceData) return null;
   if (hasPipelineError(serviceData)) return 'failed';
-  if (canShowResults(serviceData)) {
-    return serviceData.summaryReport ? 'completed' : 'failed';
-  }
+  if (serviceData.summaryReport) return 'completed';
+  if (serviceData.stages?.reportGeneration?.status === 'error') return 'failed';
   return null;
 }
 
