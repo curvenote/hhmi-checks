@@ -28,7 +28,7 @@ export function ImageIntegrityChecksSection({
 }: ImageIntegrityChecksSectionProps) {
   const fetcher = useFetcher();
   const pingEvent = useChecksPingEvent({ checkKind: 'proofig', workVersionId });
-  const hasTrackedResultsRef = useRef(false);
+  const lastTrackedCheckRunIdRef = useRef<string | undefined>(undefined);
   const { blocked, message } = useCheckMaintenanceBlocked('proofig');
 
   // Check if we need to dispatch the initial POST
@@ -60,10 +60,10 @@ export function ImageIntegrityChecksSection({
   useEffect(() => {
     const reportState = metadata?.latest?.state;
     const reportReady = reportState === 'Report: Clean' || reportState === 'Report: Flagged';
-    if (!reportReady || hasTrackedResultsRef.current) {
+    if (!reportReady || !checkRunId || lastTrackedCheckRunIdRef.current === checkRunId) {
       return;
     }
-    hasTrackedResultsRef.current = true;
+    lastTrackedCheckRunIdRef.current = checkRunId;
     void pingEvent(HHMIChecksTrackEvent.CHECKS_RESULTS_DISPLAYED, {
       checkRunId,
       proofigState: reportState,

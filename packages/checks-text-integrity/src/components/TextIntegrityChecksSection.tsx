@@ -40,7 +40,7 @@ export function TextIntegrityChecksSection({
     checkKind: 'checks-text-integrity',
     workVersionId,
   });
-  const hasTrackedResultsRef = useRef(false);
+  const lastTrackedCheckRunIdRef = useRef<string | undefined>(undefined);
   const hasData = !!metadata?.stages;
   const showResults = canShowResults(metadata);
   const awaitingInitialStages = isAwaitingInitialTextIntegrityStages(metadata, checkRunId);
@@ -58,11 +58,12 @@ export function TextIntegrityChecksSection({
       !showResults ||
       !metadata?.summaryReport ||
       !workVersionId ||
-      hasTrackedResultsRef.current
+      !checkRunId ||
+      lastTrackedCheckRunIdRef.current === checkRunId
     ) {
       return;
     }
-    hasTrackedResultsRef.current = true;
+    lastTrackedCheckRunIdRef.current = checkRunId;
     void pingEvent(HHMIChecksTrackEvent.CHECKS_RESULTS_DISPLAYED, {
       checkRunId,
       similarityScore: metadata.summaryReport.overallMatchPercentage,
