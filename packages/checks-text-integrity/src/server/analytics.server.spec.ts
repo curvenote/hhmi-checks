@@ -1,6 +1,6 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
+import { TextIntegrityTrackEvent } from '../analytics.catalog.js';
 import {
   resolveTextIntegrityTerminalOutcome,
   trackTextIntegrityTerminalTransition,
@@ -152,7 +152,7 @@ describe('trackTextIntegrityTerminalTransition', () => {
 
     expect(mockTrackChecksEventForUser).toHaveBeenCalledWith(
       'user-1',
-      HHMIChecksTrackEvent.CHECKS_RUN_COMPLETED,
+      TextIntegrityTrackEvent.CHECKS_RUN_COMPLETED,
       expect.objectContaining({ checkRunId: 'run-1' }),
       undefined,
     );

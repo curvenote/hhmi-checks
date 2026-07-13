@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useFetcher } from 'react-router';
 import { ui, ServiceLogo, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
-import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
+import { TextIntegrityTrackEvent } from '../analytics.catalog.js';
 import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 import { TextIntegrityEulaDialog } from './TextIntegrityEulaDialog.js';
 import { useTextIntegrityEulaEnable } from './useTextIntegrityEulaEnable.js';
@@ -61,7 +61,7 @@ export function ViewReportForm({
       return;
     }
     if (d.success === true && d.viewerUrl) {
-      void pingEvent(HHMIChecksTrackEvent.CHECKS_REPORT_OPENED, { checkRunId });
+      void pingEvent(TextIntegrityTrackEvent.CHECKS_REPORT_OPENED, { checkRunId });
       window.open(d.viewerUrl, '_blank', 'noopener,noreferrer');
     }
   }, [fetcher.state, fetcher.data, checkRunId, pingEvent]);

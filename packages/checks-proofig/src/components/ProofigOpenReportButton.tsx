@@ -3,7 +3,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useFetcher } from 'react-router';
 import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
-import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
+import { ImageIntegrityTrackEvent } from '../analytics.catalog.js';
 import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 
 export type ProofigOpenReportFetcherData = {
@@ -56,7 +56,7 @@ export function ProofigOpenReportButton({
       return;
     }
     if (d.success === true && d.proofigReportOpenUrl) {
-      void pingEvent(HHMIChecksTrackEvent.CHECKS_REPORT_OPENED, { checkRunId });
+      void pingEvent(ImageIntegrityTrackEvent.CHECKS_REPORT_OPENED, { checkRunId });
       window.open(d.proofigReportOpenUrl, '_blank', 'noopener,noreferrer');
       onOpenedProofig?.();
     }

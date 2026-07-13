@@ -1,4 +1,4 @@
-import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
+import { TextIntegrityTrackEvent } from '../analytics.catalog.js';
 import {
   buildChecksRunStartFailedProps,
   buildChecksRunStartedProps,
@@ -55,7 +55,7 @@ export async function trackTextIntegrityRunStarted(
     });
     await trackChecksEvent(
       ctx,
-      HHMIChecksTrackEvent.CHECKS_RUN_STARTED,
+      TextIntegrityTrackEvent.CHECKS_RUN_STARTED,
       buildChecksRunStartedProps(props),
     );
   } catch (err) {
@@ -82,7 +82,7 @@ export async function trackTextIntegrityRunStartFailed(
     });
     await trackChecksEvent(
       ctx,
-      HHMIChecksTrackEvent.CHECKS_RUN_START_FAILED,
+      TextIntegrityTrackEvent.CHECKS_RUN_START_FAILED,
       buildChecksRunStartFailedProps(props, failureReason),
     );
   } catch (err) {
@@ -108,7 +108,7 @@ export async function trackTextIntegrityRunRetried(
       trigger: options.trigger ?? 'retry',
       createdByUserId: ctx.user?.id,
     });
-    await trackChecksEvent(ctx, HHMIChecksTrackEvent.CHECKS_RUN_RETRIED, props);
+    await trackChecksEvent(ctx, TextIntegrityTrackEvent.CHECKS_RUN_RETRIED, props);
   } catch (err) {
     console.warn('Failed to track Text Integrity run retried', err);
   }
@@ -153,8 +153,8 @@ export async function trackTextIntegrityTerminalTransition(
 
     const event =
       outcome === 'completed'
-        ? HHMIChecksTrackEvent.CHECKS_RUN_COMPLETED
-        : HHMIChecksTrackEvent.CHECKS_RUN_FAILED;
+        ? TextIntegrityTrackEvent.CHECKS_RUN_COMPLETED
+        : TextIntegrityTrackEvent.CHECKS_RUN_FAILED;
 
     if (ctx) {
       await trackChecksEvent(ctx, event, props);

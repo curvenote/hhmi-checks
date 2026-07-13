@@ -9,10 +9,7 @@ import type {
   ExtensionIcon,
   NavigationRegistration,
 } from '@curvenote/scms-core';
-import {
-  HHMIChecksTrackEvent,
-  HHMIChecksTrackEventDescriptions,
-} from '@hhmi/checks-shared/analytics/events';
+import { textIntegrityAnalyticsCatalog } from './analytics.catalog.js';
 import { TextIntegrityIcon, TextIntegrityLogo, TextIntegrityLogoMono } from './icons.js';
 import { TextIntegrityChecksSection } from './components/TextIntegrityChecksSection.js';
 import { TextIntegrityUploadCheckOption } from './components/TextIntegrityUploadCheckOption.js';
@@ -94,10 +91,7 @@ export function getDesigns() {
 }
 
 export function getAnalyticsEvents(): ExtensionAnalyticsEvents {
-  return {
-    events: HHMIChecksTrackEvent,
-    descriptions: HHMIChecksTrackEventDescriptions,
-  };
+  return textIntegrityAnalyticsCatalog;
 }
 
 export const extension: ClientExtension = {

@@ -65,7 +65,7 @@ import {
   notifyTextIntegrityEulaAccepted,
 } from './slackNotify.server.js';
 import { resolveChecksAnalyticsTriggerFromArgs } from '@hhmi/checks-shared/analytics/trigger.server';
-import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
+import { TextIntegrityTrackEvent } from '../analytics.catalog.js';
 import { trackChecksEvent } from '@hhmi/checks-shared/analytics/server';
 
 type AppChecksConfig = {
@@ -452,7 +452,7 @@ export async function handleTextIntegrityAction(
         { version, language, acceptedAt },
       );
       if (workVersionId) {
-        void trackChecksEvent(ctx, HHMIChecksTrackEvent.CHECKS_EULA_ACCEPTED, {
+        void trackChecksEvent(ctx, TextIntegrityTrackEvent.CHECKS_EULA_ACCEPTED, {
           checkKind: 'checks-text-integrity',
           workVersionId,
           eulaVersion: version,
@@ -1065,7 +1065,7 @@ export async function handleTextIntegrityAction(
 
     await recordSimilarityPdfStartAccepted(checkRunId, newPdfId);
 
-    void trackChecksEvent(ctx, HHMIChecksTrackEvent.CHECKS_PDF_REGENERATION_REQUESTED, {
+    void trackChecksEvent(ctx, TextIntegrityTrackEvent.CHECKS_PDF_REGENERATION_REQUESTED, {
       checkKind: 'checks-text-integrity',
       workVersionId,
       checkRunId,

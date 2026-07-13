@@ -9,10 +9,7 @@ import type {
   ExtensionIcon,
   NavigationRegistration,
 } from '@curvenote/scms-core';
-import {
-  HHMIChecksTrackEvent,
-  HHMIChecksTrackEventDescriptions,
-} from '@hhmi/checks-shared/analytics/events';
+import { imageIntegrityAnalyticsCatalog } from './analytics.catalog.js';
 import { Icon, LogoMono, Logo, LogoThemed } from './icons.js';
 import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSection.js';
 import { ProofigUploadCheckOption } from './components/ProofigUploadCheckOption.js';
@@ -97,10 +94,7 @@ export function getDesigns() {
 }
 
 export function getAnalyticsEvents(): ExtensionAnalyticsEvents {
-  return {
-    events: HHMIChecksTrackEvent,
-    descriptions: HHMIChecksTrackEventDescriptions,
-  };
+  return imageIntegrityAnalyticsCatalog;
 }
 
 export const extension: ClientExtension = {

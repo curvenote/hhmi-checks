@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { ui, useRevalidateOnInterval, ServiceLogo } from '@curvenote/scms-core';
-import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
+import { TextIntegrityTrackEvent } from '../analytics.catalog.js';
 import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 import { TextIntegrityRunChecksButton } from './TextIntegrityRunChecksButton.js';
 import { TextIntegrityCheckRunRetryButton } from './TextIntegrityCheckRunRetryButton.js';
@@ -64,7 +64,7 @@ export function TextIntegrityChecksSection({
       return;
     }
     lastTrackedCheckRunIdRef.current = checkRunId;
-    void pingEvent(HHMIChecksTrackEvent.CHECKS_RESULTS_DISPLAYED, {
+    void pingEvent(TextIntegrityTrackEvent.CHECKS_RESULTS_DISPLAYED, {
       checkRunId,
       similarityScore: metadata.summaryReport.overallMatchPercentage,
     });

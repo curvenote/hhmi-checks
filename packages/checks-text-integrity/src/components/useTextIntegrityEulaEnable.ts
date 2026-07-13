@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { ui } from '@curvenote/scms-core';
-import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
+import { TextIntegrityTrackEvent } from '../analytics.catalog.js';
 import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 import { TEXT_INTEGRITY_CHECKS_ACTION_PATH } from '../client.js';
 
@@ -63,7 +63,7 @@ export function useTextIntegrityEulaEnable(workVersionId: string) {
         statusFetcherState: statusFetcher.state,
         acceptFetcherState: acceptFetcher.state,
       });
-      void pingEvent(HHMIChecksTrackEvent.CHECKS_EULA_STATUS_REQUESTED, {});
+      void pingEvent(TextIntegrityTrackEvent.CHECKS_EULA_STATUS_REQUESTED, {});
       pendingEnableRef.current = onEnabled;
       loadStatus();
     },
@@ -116,7 +116,7 @@ export function useTextIntegrityEulaEnable(workVersionId: string) {
       hasHtml: Boolean(data.eula?.html),
       url: data.eula?.url,
     });
-    void pingEvent(HHMIChecksTrackEvent.CHECKS_EULA_DIALOG_OPENED, { eulaVersion: version });
+    void pingEvent(TextIntegrityTrackEvent.CHECKS_EULA_DIALOG_OPENED, { eulaVersion: version });
     setEulaPresentation({
       version,
       html: data.eula?.html,
@@ -169,7 +169,7 @@ export function useTextIntegrityEulaEnable(workVersionId: string) {
   );
 
   const cancelDialog = useCallback(() => {
-    void pingEvent(HHMIChecksTrackEvent.CHECKS_EULA_DECLINED, {});
+    void pingEvent(TextIntegrityTrackEvent.CHECKS_EULA_DECLINED, {});
     setDialogOpen(false);
     setEulaPresentation(null);
     pendingEnableRef.current = null;

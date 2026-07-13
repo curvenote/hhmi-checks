@@ -1,4 +1,4 @@
-import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
+import { ImageIntegrityTrackEvent } from '../analytics.catalog.js';
 import {
   buildChecksRunStartFailedProps,
   buildChecksRunStartedProps,
@@ -54,7 +54,7 @@ export async function trackProofigRunStarted(
     }
     await trackChecksEvent(
       ctx,
-      HHMIChecksTrackEvent.CHECKS_RUN_STARTED,
+      ImageIntegrityTrackEvent.CHECKS_RUN_STARTED,
       buildChecksRunStartedProps(props),
     );
   } catch (err) {
@@ -77,7 +77,7 @@ export async function trackProofigRunStartFailed(
     });
     await trackChecksEvent(
       ctx,
-      HHMIChecksTrackEvent.CHECKS_RUN_START_FAILED,
+      ImageIntegrityTrackEvent.CHECKS_RUN_START_FAILED,
       buildChecksRunStartFailedProps(props, failureReason),
     );
   } catch (err) {
@@ -103,7 +103,7 @@ export async function trackProofigRunRetried(
       trigger: options.trigger ?? 'retry',
       createdByUserId: ctx.user?.id,
     });
-    await trackChecksEvent(ctx, HHMIChecksTrackEvent.CHECKS_RUN_RETRIED, props);
+    await trackChecksEvent(ctx, ImageIntegrityTrackEvent.CHECKS_RUN_RETRIED, props);
   } catch (err) {
     console.warn('Failed to track Proofig run retried', err);
   }
@@ -141,8 +141,8 @@ export async function trackProofigStateTransition(
 
     const event =
       outcome === 'completed'
-        ? HHMIChecksTrackEvent.CHECKS_RUN_COMPLETED
-        : HHMIChecksTrackEvent.CHECKS_RUN_FAILED;
+        ? ImageIntegrityTrackEvent.CHECKS_RUN_COMPLETED
+        : ImageIntegrityTrackEvent.CHECKS_RUN_FAILED;
 
     if (ctx) {
       await trackChecksEvent(ctx, event, props);

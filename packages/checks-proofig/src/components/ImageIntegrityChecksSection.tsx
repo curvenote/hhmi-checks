@@ -4,7 +4,7 @@ import { useFetcher } from 'react-router';
 import { useEffect, useRef } from 'react';
 import type { ExtensionCheckSectionActivityProps } from '@curvenote/scms-core';
 import { ui, useCheckMaintenanceBlocked, useRevalidateOnInterval } from '@curvenote/scms-core';
-import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
+import { ImageIntegrityTrackEvent } from '../analytics.catalog.js';
 import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 import { Logos } from '../client.js';
 import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
@@ -64,7 +64,7 @@ export function ImageIntegrityChecksSection({
       return;
     }
     lastTrackedCheckRunIdRef.current = checkRunId;
-    void pingEvent(HHMIChecksTrackEvent.CHECKS_RESULTS_DISPLAYED, {
+    void pingEvent(ImageIntegrityTrackEvent.CHECKS_RESULTS_DISPLAYED, {
       checkRunId,
       proofigState: reportState,
     });
