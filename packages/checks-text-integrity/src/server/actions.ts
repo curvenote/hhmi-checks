@@ -64,6 +64,9 @@ import {
   notifyTextIntegrityActionError,
   notifyTextIntegrityEulaAccepted,
 } from './slackNotify.server.js';
+import { resolveChecksAnalyticsTriggerFromArgs } from '@hhmi/checks-shared/analytics/trigger.server';
+import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
+import { trackChecksEvent } from '@hhmi/checks-shared/analytics/server';
 
 type AppChecksConfig = {
   relayBaseUrl?: string;
@@ -417,6 +420,13 @@ export async function handleTextIntegrityAction(
     const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
     const maintenanceBlock = maintenanceGuardFromConfig(mergedConfig);
     if (maintenanceBlock) {
+      if (workVersionId) {
+        void trackChecksEvent(ctx, HHMIChecksTrackEvent.CHECKS_MAINTENANCE_BLOCKED, {
+          checkKind: 'checks-text-integrity',
+          workVersionId,
+          intent,
+        });
+      }
       return checkMaintenanceActionError(maintenanceBlock.error?.message);
     }
   }
@@ -448,6 +458,13 @@ export async function handleTextIntegrityAction(
         { id: ctx.user?.id, email: userRow?.email ?? null },
         { version, language, acceptedAt },
       );
+      if (workVersionId) {
+        void trackChecksEvent(ctx, HHMIChecksTrackEvent.CHECKS_EULA_ACCEPTED, {
+          checkKind: 'checks-text-integrity',
+          workVersionId,
+          eulaVersion: version,
+        });
+      }
       return { success: true, accepted: true, version, acceptedAt };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to accept EULA';
@@ -466,6 +483,8 @@ export async function handleTextIntegrityAction(
       };
     }
 
+    const analyticsTrigger = resolveChecksAnalyticsTriggerFromArgs(args, 'checks_page');
+
     const eulaBlock = await assertSubmitterEulaAccepted(ctx);
     if (eulaBlock) {
       await recordTextIntegrityExecuteFailure(ctx, workVersionId, eulaBlock);
@@ -479,7 +498,9 @@ export async function handleTextIntegrityAction(
       };
     }
 
-    const result = await startTextIntegrityCheckRun(ctx, workVersionId);
+    const result = await startTextIntegrityCheckRun(ctx, workVersionId, {
+      trigger: analyticsTrigger,
+    });
     if (!result.ok) {
       return {
         error: { type: 'general', message: result.message },
@@ -500,7 +521,9 @@ export async function handleTextIntegrityAction(
     if (!checkRunId) {
       return { error: { type: 'general', message: 'checkRunId is required' }, status: 400 };
     }
-    return retryTextIntegrityCheckRun(ctx, workVersionId, checkRunId, 'user');
+    return retryTextIntegrityCheckRun(ctx, workVersionId, checkRunId, 'user', {
+      trigger: resolveChecksAnalyticsTriggerFromArgs(args, 'retry'),
+    });
   }
 
   if (intent === 'refresh-viewer-url') {
@@ -661,12 +684,16 @@ export async function handleTextIntegrityAction(
       };
     }
 
+    void trackChecksEvent(ctx, HHMIChecksTrackEvent.CHECKS_REPORT_OPENED, {
+      checkKind: 'checks-text-integrity',
+      workVersionId,
+      checkRunId,
+    });
+
     return { success: true, viewerUrl } as ExtensionCheckHandleActionResult & {
       viewerUrl: string;
     };
   }
-
-  /** Poll checks-relay check status and apply notify-equivalent envelopes to this run. */
   if (intent === 'relay-status') {
     if (!ctx) {
       return {
@@ -1050,6 +1077,12 @@ export async function handleTextIntegrityAction(
     }
 
     await recordSimilarityPdfStartAccepted(checkRunId, newPdfId);
+
+    void trackChecksEvent(ctx, HHMIChecksTrackEvent.CHECKS_PDF_REGENERATION_REQUESTED, {
+      checkKind: 'checks-text-integrity',
+      workVersionId,
+      checkRunId,
+    });
 
     return { success: true };
   }

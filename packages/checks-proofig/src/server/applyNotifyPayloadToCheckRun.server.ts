@@ -5,6 +5,7 @@ import { MINIMAL_PROOFIG_SERVICE_DATA, ProofigNotifyPayloadSchema } from '../sch
 import { updateStagesAndServiceDataFromValidatedNotifyPayload } from './stateMachine.server.js';
 import { patchProofigRunServiceData } from './checkRunColumns.server.js';
 import { notifyProofigWebhookMilestone, readProofigLatestState } from './slackNotify.server.js';
+import { trackProofigStateTransition } from './analytics.server.js';
 
 export type ApplyNotifyResult =
   | { ok: true }
@@ -28,7 +29,16 @@ export async function applyNotifyPayloadToCheckRun(
     const prisma = await getPrismaClient();
     const existingRun = await prisma.checkServiceRun.findUnique({
       where: { id: checkServiceRunId },
-      select: { data: true },
+      select: {
+        id: true,
+        kind: true,
+        work_version_id: true,
+        created_by_id: true,
+        attempt: true,
+        retry_of_id: true,
+        date_created: true,
+        data: true,
+      },
     });
     const priorState = readProofigLatestState(existingRun?.data);
 
@@ -51,6 +61,16 @@ export async function applyNotifyPayloadToCheckRun(
         parsed.data.state,
         parsed.data,
         priorState,
+      );
+    }
+
+    if (existingRun) {
+      void trackProofigStateTransition(
+        existingRun,
+        priorState,
+        parsed.data.state,
+        undefined,
+        undefined,
       );
     }
   } catch (err) {

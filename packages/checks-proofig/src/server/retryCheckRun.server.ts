@@ -10,6 +10,8 @@ import {
 } from './runSuperseded.server.js';
 import { startProofigCheckRun } from './startCheckRun.server.js';
 import { notifyProofigRetry } from './slackNotify.server.js';
+import { trackProofigRunRetried } from './analytics.server.js';
+import type { ChecksAnalyticsTrigger } from '@hhmi/checks-shared/analytics/properties';
 
 const PROOFIG_KIND = 'proofig';
 
@@ -23,6 +25,7 @@ export async function retryProofigCheckRun(
   workVersionId: string,
   sourceCheckRunId: string,
   mode: ProofigRetryMode,
+  options: { trigger?: ChecksAnalyticsTrigger | string | null } = {},
 ): Promise<ExtensionCheckHandleActionResult> {
   const prisma = await getPrismaClient();
   const sourceRun = await prisma.checkServiceRun.findFirst({
@@ -58,9 +61,12 @@ export async function retryProofigCheckRun(
       ? (sourceRun.created_by_id ?? ctx.user?.id ?? undefined)
       : (ctx.user?.id ?? undefined);
 
+  const retryTrigger = options.trigger ?? (mode === 'admin' ? 'admin' : 'retry');
+
   const result = await startProofigCheckRun(ctx, workVersionId, {
     createdById,
     invokedById: serviceAccountId,
+    trigger: retryTrigger,
     lineage: {
       retryOfRunId: sourceRun.id,
       sourceAttempt: (sourceRun.attempt ?? 1) + 1,
@@ -82,6 +88,10 @@ export async function retryProofigCheckRun(
     );
   }
   void notifyProofigRetry(ctx, result.checkRunId, sourceRun.id);
+  void trackProofigRunRetried(ctx, workVersionId, sourceRun.id, result.checkRunId, {
+    attempt: (sourceRun.attempt ?? 1) + 1,
+    trigger: retryTrigger,
+  });
   return { success: true, checkRunId: result.checkRunId } as ExtensionCheckHandleActionResult & {
     checkRunId: string;
   };

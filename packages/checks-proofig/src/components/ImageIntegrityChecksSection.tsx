@@ -1,7 +1,11 @@
+'use client';
+
 import { useFetcher } from 'react-router';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ExtensionCheckSectionActivityProps } from '@curvenote/scms-core';
 import { ui, useCheckMaintenanceBlocked, useRevalidateOnInterval } from '@curvenote/scms-core';
+import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
+import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 import { Logos } from '../client.js';
 import { CTAPlaceholderPanel } from './CTAPlaceholderPanel.js';
 import { ProofigProgressComponent } from './ProofigProgressComponent.js';
@@ -23,6 +27,8 @@ export function ImageIntegrityChecksSection({
   remoteStatusActionPath,
 }: ImageIntegrityChecksSectionProps) {
   const fetcher = useFetcher();
+  const pingEvent = useChecksPingEvent({ checkKind: 'proofig', workVersionId });
+  const hasTrackedResultsRef = useRef(false);
   const { blocked, message } = useCheckMaintenanceBlocked('proofig');
 
   // Check if we need to dispatch the initial POST
@@ -51,6 +57,19 @@ export function ImageIntegrityChecksSection({
     if (err?.message) ui.toastError(err.message);
   }, [fetcher.state, fetcher.data, checkedAvailableOrInProgress]);
 
+  useEffect(() => {
+    const reportState = metadata?.latest?.state;
+    const reportReady = reportState === 'Report: Clean' || reportState === 'Report: Flagged';
+    if (!reportReady || hasTrackedResultsRef.current) {
+      return;
+    }
+    hasTrackedResultsRef.current = true;
+    void pingEvent(HHMIChecksTrackEvent.CHECKS_RESULTS_DISPLAYED, {
+      checkRunId,
+      proofigState: reportState,
+    });
+  }, [checkRunId, metadata?.latest?.state, pingEvent]);
+
   return (
     <div>
       {checkedAvailableOrInProgress ? (
@@ -70,6 +89,7 @@ export function ImageIntegrityChecksSection({
               <ui.MaintenanceTooltip enabled={blocked} message={message}>
                 <fetcher.Form method="post" action={remoteStatusActionPath}>
                   <input type="hidden" name="workVersionId" value={workVersionId} />
+                  <input type="hidden" name="trigger" value="checks_page" />
                   <ui.StatefulButton
                     type="submit"
                     variant="default"
@@ -77,6 +97,13 @@ export function ImageIntegrityChecksSection({
                     value="execute"
                     busy={isSubmitting}
                     disabled={blocked}
+                    onClick={() => {
+                      if (blocked) {
+                        void pingEvent(HHMIChecksTrackEvent.CHECKS_MAINTENANCE_BLOCKED, {
+                          surface: 'run_checks_button',
+                        });
+                      }
+                    }}
                   >
                     Run checks now
                   </ui.StatefulButton>

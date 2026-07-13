@@ -3,6 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { useFetcher, useRevalidator } from 'react-router';
 import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
+import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
+import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 
 type ProofigCheckRunRetryButtonProps = {
   actionPath?: string;
@@ -18,6 +20,7 @@ export function ProofigCheckRunRetryButton({
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
   const lastHandledFetcherDataRef = useRef<unknown>(undefined);
+  const pingEvent = useChecksPingEvent({ checkKind: 'proofig', workVersionId });
   const { blocked, message } = useCheckMaintenanceBlocked('proofig');
   const canRetry = Boolean(actionPath && checkRunId?.trim());
   const pending = fetcher.state !== 'idle';
@@ -44,7 +47,19 @@ export function ProofigCheckRunRetryButton({
           <input type="hidden" name="intent" value="retry" />
           <input type="hidden" name="workVersionId" value={workVersionId} />
           <input type="hidden" name="checkRunId" value={checkRunId} />
-          <ui.StatefulButton type="submit" variant="outline" disabled={blocked || pending}>
+          <input type="hidden" name="trigger" value="retry" />
+          <ui.StatefulButton
+            type="submit"
+            variant="outline"
+            disabled={blocked || pending}
+            onClick={() => {
+              if (blocked) {
+                void pingEvent(HHMIChecksTrackEvent.CHECKS_MAINTENANCE_BLOCKED, {
+                  surface: 'retry_button',
+                });
+              }
+            }}
+          >
             Retry check
           </ui.StatefulButton>
         </fetcher.Form>

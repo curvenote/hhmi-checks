@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import { useFetcher } from 'react-router';
 import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
+import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
+import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 import { TextIntegrityEulaDialog } from './TextIntegrityEulaDialog.js';
 import { useTextIntegrityEulaEnable } from './useTextIntegrityEulaEnable.js';
 
@@ -16,6 +18,10 @@ export function TextIntegrityRunChecksButton({
   workVersionId,
 }: TextIntegrityRunChecksButtonProps) {
   const executeFetcher = useFetcher();
+  const pingEvent = useChecksPingEvent({
+    checkKind: 'checks-text-integrity',
+    workVersionId,
+  });
   const { blocked, message } = useCheckMaintenanceBlocked('checks-text-integrity');
   const { dialogOpen, setDialogOpen, eulaPresentation, requestEnable, acceptEula, busy } =
     useTextIntegrityEulaEnable(workVersionId);
@@ -26,6 +32,7 @@ export function TextIntegrityRunChecksButton({
     const formData = new FormData();
     formData.append('intent', 'execute');
     formData.append('workVersionId', workVersionId);
+    formData.append('trigger', 'checks_page');
     executeFetcher.submit(formData, { method: 'post', action: actionPath });
   };
 
@@ -44,6 +51,12 @@ export function TextIntegrityRunChecksButton({
           busy={busy || executeFetcher.state === 'submitting'}
           disabled={blocked || !canSubmit}
           onClick={() => {
+            if (blocked) {
+              void pingEvent(HHMIChecksTrackEvent.CHECKS_MAINTENANCE_BLOCKED, {
+                surface: 'run_checks_button',
+              });
+              return;
+            }
             requestEnable(runExecute);
           }}
         >

@@ -17,6 +17,8 @@ import {
   patchProofigRunServiceData,
 } from './checkRunColumns.server.js';
 import { notifyProofigStarted } from './slackNotify.server.js';
+import { trackProofigRunStartFailed, trackProofigRunStarted } from './analytics.server.js';
+import type { ChecksAnalyticsTrigger } from '@hhmi/checks-shared/analytics/properties';
 
 export type ProofigCheckRunLineage = {
   retryOfRunId?: string;
@@ -34,6 +36,7 @@ type StartProofigCheckRunOptions = {
   scheduledAt?: string;
   /** When true, skip Slack lifecycle notifications (e.g. cron retry sweep batch). */
   suppressSlack?: boolean;
+  trigger?: ChecksAnalyticsTrigger | string | null;
 };
 
 function resolveServiceAccountUserId(config: Awaited<ReturnType<typeof getConfig>>): string {
@@ -88,6 +91,9 @@ export async function startProofigCheckRun(
     if (!options.suppressSlack) {
       void notifyProofigStarted(ctx, failedRun.id, workVersionId, { failedInline: true });
     }
+    void trackProofigRunStartFailed(ctx, workVersionId, failedRun.id, noFilesMessage, {
+      trigger: options.trigger,
+    });
     return {
       ok: false,
       message: noFilesMessage,
@@ -204,6 +210,9 @@ export async function startProofigCheckRun(
         ? markInitialPostError(base, errMsg, new Date().toISOString())
         : markDocumentPreparationError(base, errMsg, new Date().toISOString());
     });
+    void trackProofigRunStartFailed(ctx, workVersionId, checkRunId, errMsg, {
+      trigger: options.trigger,
+    });
     return { ok: false, message: errMsg, status: 500, checkRunId };
   }
 
@@ -212,6 +221,14 @@ export async function startProofigCheckRun(
       sourceFormat: hasPdf ? 'pdf' : 'docx',
     });
   }
+
+  void trackProofigRunStarted(ctx, workVersionId, checkRunId, {
+    attempt: nextAttempt,
+    retryOfRunId: options.lineage?.retryOfRunId,
+    trigger: options.trigger,
+    sourceFormat: hasPdf ? 'pdf' : 'docx',
+    invokedByUserId: invokedById,
+  });
 
   return { ok: true, checkRunId };
 }

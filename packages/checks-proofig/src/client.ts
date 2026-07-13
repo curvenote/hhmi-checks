@@ -5,9 +5,14 @@
 import type {
   ClientExtension,
   ClientExtensionCheckService,
+  ExtensionAnalyticsEvents,
   ExtensionIcon,
   NavigationRegistration,
 } from '@curvenote/scms-core';
+import {
+  HHMIChecksTrackEvent,
+  HHMIChecksTrackEventDescriptions,
+} from '@hhmi/checks-shared/analytics/events';
 import { Icon, LogoMono, Logo, LogoThemed } from './icons.js';
 import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSection.js';
 import { ProofigUploadCheckOption } from './components/ProofigUploadCheckOption.js';
@@ -91,6 +96,13 @@ export function getDesigns() {
   return ExtensionDesigns;
 }
 
+export function getAnalyticsEvents(): ExtensionAnalyticsEvents {
+  return {
+    events: HHMIChecksTrackEvent,
+    descriptions: HHMIChecksTrackEventDescriptions,
+  };
+}
+
 export const extension: ClientExtension = {
   id,
   name,
@@ -100,4 +112,5 @@ export const extension: ClientExtension = {
   registerNavigation,
   getExtensionAdminCard,
   getDesigns,
+  getAnalyticsEvents,
 } as const;

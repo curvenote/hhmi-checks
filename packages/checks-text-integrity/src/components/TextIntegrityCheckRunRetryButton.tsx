@@ -33,6 +33,7 @@ export function TextIntegrityCheckRunRetryButton({
     formData.append('intent', 'retry');
     formData.append('workVersionId', workVersionId);
     formData.append('checkRunId', checkRunId);
+    formData.append('trigger', 'retry');
     fetcher.submit(formData, { method: 'post', action: actionPath });
   };
 

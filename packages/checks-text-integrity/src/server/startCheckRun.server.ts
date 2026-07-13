@@ -20,6 +20,11 @@ import {
   patchTextIntegrityRunServiceData,
 } from './checkRunColumns.server.js';
 import { notifyTextIntegrityStarted } from './slackNotify.server.js';
+import {
+  trackTextIntegrityRunStartFailed,
+  trackTextIntegrityRunStarted,
+} from './analytics.server.js';
+import type { ChecksAnalyticsTrigger } from '@hhmi/checks-shared/analytics/properties';
 
 export type TextIntegrityCheckRunLineage = {
   retryOfRunId?: string;
@@ -37,6 +42,7 @@ type StartTextIntegrityCheckRunOptions = {
   scheduledAt?: string;
   /** When true, skip Slack lifecycle notifications (e.g. cron retry sweep batch). */
   suppressSlack?: boolean;
+  trigger?: ChecksAnalyticsTrigger | string | null;
 };
 
 function resolveServiceAccountUserId(config: Awaited<ReturnType<typeof getConfig>>): string {
@@ -102,6 +108,7 @@ export async function startTextIntegrityCheckRun(
   const baseExt =
     (ctx.$config?.app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};
   const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
+  const manifest = parseServiceManifestSnapshot(mergedConfig.manifest);
   const createdById = options.createdById ?? ctx.user?.id ?? undefined;
 
   if (!hasPdf && !hasDocx) {
@@ -116,10 +123,13 @@ export async function startTextIntegrityCheckRun(
     if (!options.suppressSlack) {
       void notifyTextIntegrityStarted(ctx, checkRunId, workVersionId, { failedInline: true });
     }
+    void trackTextIntegrityRunStartFailed(ctx, workVersionId, checkRunId, noFilesMessage, {
+      trigger: options.trigger,
+      manifestVersion: manifest?.version,
+    });
     return { ok: false, message: noFilesMessage, status: 400, checkRunId };
   }
 
-  const manifest = parseServiceManifestSnapshot(mergedConfig.manifest);
   const timestamp = new Date().toISOString();
   const initialServiceData: TextIntegrityDataSchema = {
     ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
@@ -170,12 +180,24 @@ export async function startTextIntegrityCheckRun(
       (serviceData) => markSubmissionError(serviceData ?? initialServiceData, message),
       timestamp,
     );
+    void trackTextIntegrityRunStartFailed(ctx, workVersionId, checkRunId, message, {
+      trigger: options.trigger,
+      manifestVersion: manifest?.version,
+    });
     return { ok: false, message, status: 500, checkRunId };
   }
 
   if (!options.suppressSlack) {
     void notifyTextIntegrityStarted(ctx, checkRunId, workVersionId);
   }
+
+  void trackTextIntegrityRunStarted(ctx, workVersionId, checkRunId, {
+    attempt: nextAttempt,
+    retryOfRunId: options.lineage?.retryOfRunId,
+    trigger: options.trigger,
+    manifestVersion: manifest?.version,
+    invokedByUserId: invokedById,
+  });
 
   return { ok: true, checkRunId };
 }

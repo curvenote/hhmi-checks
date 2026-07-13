@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useFetcher } from 'react-router';
 import { ui, ServiceLogo, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
+import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
+import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 import { TextIntegrityEulaDialog } from './TextIntegrityEulaDialog.js';
 import { useTextIntegrityEulaEnable } from './useTextIntegrityEulaEnable.js';
 
@@ -30,6 +32,10 @@ export function ViewReportForm({
   const fetcher = useFetcher<ViewReportFetcherData>();
   const formRef = useRef<HTMLFormElement>(null);
   const lastHandledFetcherDataRef = useRef<unknown>(undefined);
+  const pingEvent = useChecksPingEvent({
+    checkKind: 'checks-text-integrity',
+    workVersionId: workVersionId ?? '',
+  });
   const {
     dialogOpen,
     setDialogOpen,
@@ -55,9 +61,10 @@ export function ViewReportForm({
       return;
     }
     if (d.success === true && d.viewerUrl) {
+      void pingEvent(HHMIChecksTrackEvent.CHECKS_REPORT_OPENED, { checkRunId });
       window.open(d.viewerUrl, '_blank', 'noopener,noreferrer');
     }
-  }, [fetcher.state, fetcher.data]);
+  }, [fetcher.state, fetcher.data, checkRunId, pingEvent]);
 
   const busy = fetcher.state !== 'idle' || eulaBusy;
   const canOpen =
