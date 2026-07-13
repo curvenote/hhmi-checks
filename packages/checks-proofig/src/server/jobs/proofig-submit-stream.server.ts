@@ -50,12 +50,17 @@ async function handleProofigSubmitJobFailure(
       rollingLog,
     },
   });
-  await patchProofigRunServiceData(proofigRunId, (serviceData) =>
-    markInitialPostError(
-      serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
-      errorMessage,
-      new Date().toISOString(),
-    ),
+  await patchProofigRunServiceData(
+    proofigRunId,
+    (serviceData) =>
+      markInitialPostError(
+        serviceData ?? MINIMAL_PROOFIG_SERVICE_DATA,
+        errorMessage,
+        new Date().toISOString(),
+      ),
+    new Date().toISOString(),
+    5,
+    { trackTerminalAnalytics: true },
   );
   return updatedJob;
 }

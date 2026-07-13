@@ -77,8 +77,12 @@ export async function applyDocumentPreparationFromConverterJob(
       (job.status === JobStatus.CANCELLED
         ? 'Document conversion was cancelled.'
         : 'Document conversion failed.');
-    await patchProofigRunServiceData(checkRunId, (current) =>
-      markDocumentPreparationError(current ?? serviceData, errorMessage, receivedAt),
+    await patchProofigRunServiceData(
+      checkRunId,
+      (current) => markDocumentPreparationError(current ?? serviceData, errorMessage, receivedAt),
+      receivedAt,
+      5,
+      { trackTerminalAnalytics: true },
     );
     return { ok: true, updated: true };
   }

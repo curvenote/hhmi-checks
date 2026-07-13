@@ -5,7 +5,6 @@ import { MINIMAL_PROOFIG_SERVICE_DATA, ProofigNotifyPayloadSchema } from '../sch
 import { updateStagesAndServiceDataFromValidatedNotifyPayload } from './stateMachine.server.js';
 import { patchProofigRunServiceData } from './checkRunColumns.server.js';
 import { notifyProofigWebhookMilestone, readProofigLatestState } from './slackNotify.server.js';
-import { trackProofigStateTransition } from './analytics.server.js';
 
 export type ApplyNotifyResult =
   | { ok: true }
@@ -53,6 +52,8 @@ export async function applyNotifyPayloadToCheckRun(
         return nextServiceData ?? null;
       },
       receivedAt,
+      5,
+      { trackTerminalAnalytics: true },
     );
 
     if (isProofigSlackMilestoneState(parsed.data.state)) {
@@ -61,16 +62,6 @@ export async function applyNotifyPayloadToCheckRun(
         parsed.data.state,
         parsed.data,
         priorState,
-      );
-    }
-
-    if (existingRun) {
-      void trackProofigStateTransition(
-        existingRun,
-        priorState,
-        parsed.data.state,
-        undefined,
-        undefined,
       );
     }
   } catch (err) {

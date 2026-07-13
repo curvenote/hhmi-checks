@@ -11,20 +11,45 @@ import {
 import { trackChecksEvent, trackChecksEventForUser } from '@hhmi/checks-shared/analytics/server';
 import type { TrackChecksContext } from '@hhmi/checks-shared/analytics/server';
 import type { ChecksAnalyticsTrigger } from '@hhmi/checks-shared/analytics/properties';
-import { PROOFIG_SLACK_MILESTONE_STATES } from '@hhmi/checks-notify';
+import { KnownState, STAGE_ORDER, hasError, type ProofigDataSchema } from '../schema.js';
 
-const PROOFIG_COMPLETED_STATES = new Set(['Report: Clean', 'Report: Flagged']);
-const PROOFIG_FAILED_STATES = new Set(['Deleted']);
+type ProofigTerminalOutcome = 'completed' | 'failed';
 
-function resolveProofigTerminalOutcome(state: string | undefined): 'completed' | 'failed' | null {
-  if (!state) return null;
-  if (PROOFIG_COMPLETED_STATES.has(state)) return 'completed';
-  if (PROOFIG_FAILED_STATES.has(state)) return 'failed';
+const PROOFIG_COMPLETED_SUMMARY_STATES = new Set<string>([
+  KnownState.ReportClean,
+  KnownState.ReportFlagged,
+]);
+
+function resolveProofigFailureReason(serviceData: ProofigDataSchema): string {
+  if (serviceData.deleted || serviceData.summary?.state === KnownState.Deleted) {
+    return sanitizeAnalyticsErrorMessage('Proofig run deleted at provider');
+  }
+  for (const stageKey of STAGE_ORDER) {
+    const stage = serviceData.stages?.[stageKey];
+    if (stage?.status === 'error' && stage.error?.trim()) {
+      return sanitizeAnalyticsErrorMessage(stage.error.trim());
+    }
+  }
+  if (serviceData.summary?.state?.trim()) {
+    return sanitizeAnalyticsErrorMessage(`Proofig state: ${serviceData.summary.state}`);
+  }
+  return sanitizeAnalyticsErrorMessage('Proofig check failed');
+}
+
+/** Analytics terminal state — includes notify outcomes and local stage/column errors. */
+export function resolveProofigTerminalOutcomeFromServiceData(
+  serviceData: ProofigDataSchema | undefined,
+): ProofigTerminalOutcome | null {
+  if (!serviceData) return null;
+  if (serviceData.deleted || serviceData.summary?.state === KnownState.Deleted) return 'failed';
+  if (hasError(serviceData)) return 'failed';
+  const summaryState = serviceData.summary?.state;
+  if (summaryState && PROOFIG_COMPLETED_SUMMARY_STATES.has(summaryState)) return 'completed';
   return null;
 }
 
-function isProofigTerminalState(state: string | undefined): boolean {
-  return resolveProofigTerminalOutcome(state) != null;
+function wasProofigTerminal(serviceData: ProofigDataSchema | undefined): boolean {
+  return resolveProofigTerminalOutcomeFromServiceData(serviceData) != null;
 }
 
 export async function trackProofigRunStarted(
@@ -109,7 +134,7 @@ export async function trackProofigRunRetried(
   }
 }
 
-export async function trackProofigStateTransition(
+export async function trackProofigTerminalTransition(
   run: {
     id: string;
     kind: string;
@@ -119,23 +144,21 @@ export async function trackProofigStateTransition(
     retry_of_id?: string | null;
     date_created?: string | Date | null;
   },
-  priorState: string | undefined,
-  nextState: string | undefined,
+  before: ProofigDataSchema | undefined,
+  after: ProofigDataSchema | undefined,
   ctx?: TrackChecksContext,
   request?: Request,
 ): Promise<void> {
   try {
-    if (isProofigTerminalState(priorState)) return;
-    const outcome = resolveProofigTerminalOutcome(nextState);
+    if (wasProofigTerminal(before)) return;
+    const outcome = resolveProofigTerminalOutcomeFromServiceData(after);
     if (!outcome) return;
 
     const props = {
       ...runLifecyclePropsFromRow(run, 'proofig', {
-        proofigState: nextState,
+        proofigState: after?.summary?.state,
         failureReason:
-          outcome === 'failed'
-            ? sanitizeAnalyticsErrorMessage(`Proofig state: ${nextState}`)
-            : undefined,
+          outcome === 'failed' && after ? resolveProofigFailureReason(after) : undefined,
       }),
     };
 
@@ -149,9 +172,8 @@ export async function trackProofigStateTransition(
       return;
     }
 
-    if (!PROOFIG_SLACK_MILESTONE_STATES.has(nextState ?? '')) return;
     await trackChecksEventForUser(run.created_by_id, event, props, request);
   } catch (err) {
-    console.warn('Failed to track Proofig state transition', err);
+    console.warn('Failed to track Proofig terminal transition', err);
   }
 }

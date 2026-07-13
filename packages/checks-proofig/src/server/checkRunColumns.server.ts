@@ -3,6 +3,12 @@ import { httpError } from '@curvenote/scms-core';
 import { getPrismaClient } from '@curvenote/scms-server';
 import { hasError, proofigDataSchema, type ProofigDataSchema } from '../schema.js';
 import { notifyProofigErrorTransition } from './slackNotify.server.js';
+import { trackProofigTerminalTransition } from './analytics.server.js';
+
+export type PatchProofigRunServiceDataOptions = {
+  trackTerminalAnalytics?: boolean;
+  request?: Request;
+};
 
 export type CheckRunCoarseStatus = 'healthy' | 'error' | 'unknown';
 
@@ -128,6 +134,7 @@ export async function patchProofigRunServiceData(
   modifyServiceData: (current: ProofigDataSchema) => ProofigDataSchema | null | undefined,
   failedAt = new Date().toISOString(),
   maxRetries = 5,
+  options?: PatchProofigRunServiceDataOptions,
 ): Promise<Prisma.CheckServiceRunGetPayload<Record<string, never>>> {
   const prisma = await getPrismaClient();
   let retries = 0;
@@ -166,6 +173,23 @@ export async function patchProofigRunServiceData(
         },
       });
       void notifyProofigErrorTransition(checkServiceRunId, beforeStatus, nextServiceData);
+      if (options?.trackTerminalAnalytics) {
+        void trackProofigTerminalTransition(
+          {
+            id: current.id,
+            kind: current.kind,
+            work_version_id: current.work_version_id,
+            created_by_id: current.created_by_id,
+            attempt: current.attempt,
+            retry_of_id: current.retry_of_id,
+            date_created: current.date_created,
+          },
+          base,
+          nextServiceData,
+          undefined,
+          options.request,
+        );
+      }
       return updated;
     } catch {
       retries += 1;
