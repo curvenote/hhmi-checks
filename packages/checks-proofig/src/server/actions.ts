@@ -16,8 +16,6 @@ import {
 import { applyDocumentPreparationFromConverterJob } from './applyDocumentPreparationFromConverterJob.server.js';
 import { getProofigConfigWithOverrides } from './config.server.js';
 import { resolveChecksAnalyticsTriggerFromArgs } from '@hhmi/checks-shared/analytics/trigger.server';
-import { HHMIChecksTrackEvent } from '@hhmi/checks-shared/analytics/events';
-import { trackChecksEvent } from '@hhmi/checks-shared/analytics/server';
 import { postProofigRemoteStatus } from './proofigRemoteStatus.server.js';
 import { applyNotifyPayloadToCheckRun } from './applyNotifyPayloadToCheckRun.server.js';
 import { getProofingToken } from './proofigAuth.server.js';
@@ -425,12 +423,6 @@ export async function handleProofigAction(
         status: 400,
       };
     }
-
-    void trackChecksEvent(ctx, HHMIChecksTrackEvent.CHECKS_REPORT_OPENED, {
-      checkKind: 'proofig',
-      workVersionId,
-      checkRunId: checkRunIdField,
-    });
 
     return {
       success: true,

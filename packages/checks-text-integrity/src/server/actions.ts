@@ -677,12 +677,6 @@ export async function handleTextIntegrityAction(
       };
     }
 
-    void trackChecksEvent(ctx, HHMIChecksTrackEvent.CHECKS_REPORT_OPENED, {
-      checkKind: 'checks-text-integrity',
-      workVersionId,
-      checkRunId,
-    });
-
     return { success: true, viewerUrl } as ExtensionCheckHandleActionResult & {
       viewerUrl: string;
     };
