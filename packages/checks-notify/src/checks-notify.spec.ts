@@ -32,8 +32,12 @@ describe('shouldNotifyErrorTransition', () => {
 });
 
 describe('proofig milestones', () => {
-  it('includes action-required and terminal states only', () => {
+  it('includes terminal states only', () => {
     expect(isProofigSlackMilestoneState('Report: Flagged')).toBe(true);
+    expect(isProofigSlackMilestoneState('Report: Clean')).toBe(true);
+    expect(isProofigSlackMilestoneState('Deleted')).toBe(true);
+    expect(isProofigSlackMilestoneState('Awaiting: Review')).toBe(false);
+    expect(isProofigSlackMilestoneState('Awaiting: Sub-Image Approval')).toBe(false);
     expect(isProofigSlackMilestoneState('Processing')).toBe(false);
   });
 
@@ -44,17 +48,16 @@ describe('proofig milestones', () => {
 });
 
 describe('text-integrity milestones', () => {
-  it('includes failure and completion events', () => {
-    expect(isTextIntegritySlackWebhookEvent('PROCESSING_PHASE_COMPLETE')).toBe(true);
+  it('includes terminal failure and completion events only', () => {
+    expect(isTextIntegritySlackWebhookEvent('REPORT_GENERATION_COMPLETE')).toBe(true);
+    expect(isTextIntegritySlackWebhookEvent('REPORT_GENERATION_FAILED')).toBe(true);
+    expect(isTextIntegritySlackWebhookEvent('SUBMISSION_FAILED')).toBe(true);
+    expect(isTextIntegritySlackWebhookEvent('PROCESSING_PHASE_COMPLETE')).toBe(false);
     expect(isTextIntegritySlackWebhookEvent('SUBMISSION_COMPLETE')).toBe(false);
-    expect(
-      isTextIntegritySlackWebhookEvent('UNKNOWN', { provider_event: 'SIMILARITY_UPDATED' }),
-    ).toBe(true);
+    expect(isTextIntegritySlackWebhookEvent('UNKNOWN')).toBe(false);
   });
 
-  it('includes match percentage in processing complete message', () => {
-    expect(textIntegrityWebhookMessage('PROCESSING_PHASE_COMPLETE', undefined, 12.5)).toContain(
-      '12.5%',
-    );
+  it('includes match percentage in report complete message', () => {
+    expect(textIntegrityWebhookMessage('REPORT_GENERATION_COMPLETE', 12.5)).toContain('12.5%');
   });
 });

@@ -9,7 +9,6 @@ import {
   markProofigSourceRunSupersededByRetry,
 } from './runSuperseded.server.js';
 import { startProofigCheckRun } from './startCheckRun.server.js';
-import { notifyProofigRetry } from './slackNotify.server.js';
 import { trackProofigRunRetried } from './analytics.server.js';
 import type { ChecksAnalyticsTrigger } from '@hhmi/checks-shared/analytics/properties';
 
@@ -87,7 +86,6 @@ export async function retryProofigCheckRun(
       err,
     );
   }
-  void notifyProofigRetry(ctx, result.checkRunId, sourceRun.id);
   void trackProofigRunRetried(ctx, workVersionId, sourceRun.id, result.checkRunId, {
     attempt: (sourceRun.attempt ?? 1) + 1,
     trigger: retryTrigger,

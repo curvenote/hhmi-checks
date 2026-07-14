@@ -115,10 +115,7 @@ export async function action(args: ActionFunctionArgs) {
     );
   }
 
-  if (
-    serviceDataAfterWebhook &&
-    isTextIntegritySlackWebhookEvent(webhook.event, webhook.metadata)
-  ) {
+  if (serviceDataAfterWebhook && isTextIntegritySlackWebhookEvent(webhook.event)) {
     void notifyTextIntegrityWebhookMilestone(
       id,
       webhook.event,

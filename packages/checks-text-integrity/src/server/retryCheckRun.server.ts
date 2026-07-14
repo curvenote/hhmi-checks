@@ -19,7 +19,6 @@ import {
 } from './runSuperseded.server.js';
 import { markCheckServiceRunNoAutoRetry } from './checkRunColumns.server.js';
 import { startTextIntegrityCheckRun } from './startCheckRun.server.js';
-import { notifyTextIntegrityRetry } from './slackNotify.server.js';
 import { trackTextIntegrityRunRetried } from './analytics.server.js';
 import type { ChecksAnalyticsTrigger } from '@hhmi/checks-shared/analytics/properties';
 
@@ -158,14 +157,6 @@ export async function retryTextIntegrityCheckRun(
       markSupersededFailed: true;
       checkRunId: string;
     };
-  }
-  if (!options.suppressSlack) {
-    void notifyTextIntegrityRetry(
-      ctx,
-      checkRunId,
-      sourceRun.id,
-      mode === 'admin' ? 'admin' : 'user',
-    );
   }
   if (!existingSuccessorId) {
     void trackTextIntegrityRunRetried(ctx, workVersionId, sourceRun.id, checkRunId, {

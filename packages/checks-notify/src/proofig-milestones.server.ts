@@ -1,7 +1,5 @@
-/** Proofig notify states that warrant Slack (excludes noisy Processing). */
+/** Proofig notify states that warrant Slack (terminal outcomes only). */
 export const PROOFIG_SLACK_MILESTONE_STATES = new Set([
-  'Awaiting: Sub-Image Approval',
-  'Awaiting: Review',
   'Report: Clean',
   'Report: Flagged',
   'Deleted',
@@ -20,10 +18,6 @@ export function proofigMilestoneColor(state: string): 'good' | 'warning' | 'dang
 export function proofigMilestoneMessage(state: string, reportId?: string): string {
   const idSuffix = reportId?.trim() ? ` (${reportId.trim()})` : '';
   switch (state) {
-    case 'Awaiting: Sub-Image Approval':
-      return `Proofig awaiting sub-image approval${idSuffix}`;
-    case 'Awaiting: Review':
-      return `Proofig awaiting review${idSuffix}`;
     case 'Report: Clean':
       return `Proofig report clean${idSuffix}`;
     case 'Report: Flagged':

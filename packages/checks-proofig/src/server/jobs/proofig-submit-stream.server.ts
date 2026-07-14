@@ -29,7 +29,6 @@ import {
   startInitialPostProcessing,
 } from '../stateMachine.server.js';
 import { patchProofigRunServiceData } from '../checkRunColumns.server.js';
-import { notifyProofigSubmitAccepted } from '../slackNotify.server.js';
 
 function getErrorMessage(err: unknown): string {
   return err instanceof Error
@@ -264,8 +263,6 @@ export async function proofigSubmitStreamHandler(
         receivedAt,
       ),
     );
-    void notifyProofigSubmitAccepted(ctx, payload.proofig_run_id);
-
     const completed = await jobs.dbUpdateJob(job.id, {
       status: JobStatus.COMPLETED,
       message: 'Proofig submission accepted',
