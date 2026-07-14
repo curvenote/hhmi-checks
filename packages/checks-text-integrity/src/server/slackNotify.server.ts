@@ -14,7 +14,6 @@ import {
   resolveTextIntegrityCoarseStatus,
   type CheckRunCoarseStatus,
 } from './checkRunColumns.server.js';
-import type { TextIntegrityRetrySweepResult } from './retrySweep.server.js';
 
 function firstTextIntegrityErrorDetails(serviceData: TextIntegrityDataSchema | undefined): {
   stage?: string;
@@ -122,56 +121,6 @@ export async function notifyTextIntegrityStarted(
   });
 }
 
-export async function notifyTextIntegrityRetry(
-  source: {
-    sendSlackNotification: (message: Parameters<typeof sendCheckSlack>[1]) => Promise<void>;
-  },
-  checkRunId: string,
-  sourceCheckRunId: string,
-  origin: 'user' | 'admin' = 'user',
-): Promise<void> {
-  const runContext = await loadCheckRunContext(checkRunId);
-  if (!runContext) return;
-
-  await sendCheckSlack(source, {
-    eventType: SlackEventType.CHECK_RUN_RETRY,
-    message: 'Text integrity check retry started',
-    color: 'warning',
-    user: runContext.createdById ? { id: runContext.createdById } : undefined,
-    metadata: buildCheckRunMetadata(runContext, {
-      sourceCheckRunId,
-      origin,
-    }),
-  });
-}
-
-export async function notifyTextIntegritySweepSummary(
-  result: TextIntegrityRetrySweepResult,
-): Promise<void> {
-  if (result.retried <= 0) return;
-
-  const skippedTotal = result.skippedClaimed + result.skippedNotEligible + result.skippedEula;
-  const errorSample = result.errors.slice(0, 3).map((e) => `${e.runId}: ${e.message}`);
-
-  await sendCheckSlackFromConfig({
-    eventType: SlackEventType.CHECK_RUN_RETRY,
-    message: `Text integrity auto-retry sweep: ${result.retried} run(s) retried (scanned ${result.scanned}, skipped ${skippedTotal}, failed ${result.failed})`,
-    color: 'warning',
-    metadata: {
-      checkKind: 'checks-text-integrity',
-      origin: 'cron-sweep',
-      scanned: result.scanned,
-      retried: result.retried,
-      skippedClaimed: result.skippedClaimed,
-      skippedNotEligible: result.skippedNotEligible,
-      skippedEula: result.skippedEula,
-      failed: result.failed,
-      errorCount: result.errors.length,
-      ...(errorSample.length > 0 ? { errorSample: errorSample.join('; ') } : {}),
-    },
-  });
-}
-
 export async function notifyTextIntegritySweepHandlerError(message: string): Promise<void> {
   await sendCheckSlackFromConfig({
     eventType: SlackEventType.CHECK_RUN_ERROR,
@@ -189,7 +138,7 @@ export async function notifyTextIntegrityWebhookMilestone(
   serviceData: TextIntegrityDataSchema | undefined,
   urlOptions?: CheckSlackUrlOptions,
 ): Promise<void> {
-  if (event === priorEvent && metadata?.provider_event !== 'SIMILARITY_UPDATED') return;
+  if (event === priorEvent) return;
 
   const runContext = await loadCheckRunContext(checkRunId);
   if (!runContext) return;
@@ -205,11 +154,10 @@ export async function notifyTextIntegrityWebhookMilestone(
     eventType: SlackEventType.CHECK_RUN_MILESTONE,
     message: textIntegrityWebhookMessage(
       event,
-      metadata,
       serviceData?.summaryReport?.overallMatchPercentage ??
         serviceData?.latest?.overallMatchPercentage,
     ),
-    color: textIntegrityWebhookColor(event, metadata),
+    color: textIntegrityWebhookColor(event),
     user: runContext.createdById ? { id: runContext.createdById } : undefined,
     metadata: buildCheckRunMetadata(
       runContext,
@@ -224,29 +172,6 @@ export async function notifyTextIntegrityWebhookMilestone(
       },
       urlOptions,
     ),
-  });
-}
-
-export async function notifyTextIntegrityPdfPersisted(
-  source: {
-    sendSlackNotification: (message: Parameters<typeof sendCheckSlack>[1]) => Promise<void>;
-  },
-  checkRunId: string,
-  extra: { reportPdfId?: string; storagePath?: string },
-): Promise<void> {
-  const runContext = await loadCheckRunContext(checkRunId);
-  if (!runContext) return;
-
-  await sendCheckSlack(source, {
-    eventType: SlackEventType.CHECK_RUN_MILESTONE,
-    message: 'Similarity PDF stored for text integrity check',
-    color: 'good',
-    user: runContext.createdById ? { id: runContext.createdById } : undefined,
-    metadata: buildCheckRunMetadata(runContext, {
-      milestone: 'similarityPdfStored',
-      ...(extra.reportPdfId ? { reportPdfId: extra.reportPdfId } : {}),
-      ...(extra.storagePath ? { storagePath: extra.storagePath } : {}),
-    }),
   });
 }
 

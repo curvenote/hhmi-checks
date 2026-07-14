@@ -20,7 +20,6 @@ import {
   isTextIntegrityRunAutoRetryEligible,
 } from './autoRetryPolicy.server.js';
 import { retryTextIntegrityCheckRun } from './retryCheckRun.server.js';
-import { notifyTextIntegritySweepSummary } from './slackNotify.server.js';
 
 const TEXT_INTEGRITY_KIND = 'checks-text-integrity';
 export const TEXT_INTEGRITY_RETRY_SWEEP_CRON_ID = 'text-integrity-retry-sweep';
@@ -353,6 +352,5 @@ export async function runTextIntegrityRetrySweep(options?: {
     });
   }
 
-  void notifyTextIntegritySweepSummary(result);
   return result;
 }

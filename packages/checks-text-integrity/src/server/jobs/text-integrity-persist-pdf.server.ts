@@ -14,10 +14,7 @@ import type { TextIntegrityDataSchema } from '../../schema.js';
 import { textIntegrityDataSchema } from '../../schema.js';
 import { getTextIntegrityConfigWithOverrides } from '../config.server.js';
 import { patchTextIntegrityRunServiceData } from '../checkRunColumns.server.js';
-import {
-  notifyTextIntegrityPdfPersisted,
-  notifyTextIntegrityPdfPersistFailed,
-} from '../slackNotify.server.js';
+import { notifyTextIntegrityPdfPersistFailed } from '../slackNotify.server.js';
 import { fetchSimilarityReportPdfFromRelay } from '../fetch-similarity-report-from-relay.server.js';
 import { resolveRelayInstanceId } from '../relay-urls.server.js';
 import { getAppChecksFromContext, resolveServiceName } from '../relay-config.server.js';
@@ -161,11 +158,6 @@ export async function textIntegrityPersistPdfHandler(
         similarityReportStored: true,
         storedReportPdfId: pdfId,
       };
-    });
-
-    void notifyTextIntegrityPdfPersisted(ctx, payload.check_service_run_id, {
-      reportPdfId: pdfId,
-      storagePath,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to persist similarity PDF';

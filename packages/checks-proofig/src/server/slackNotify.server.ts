@@ -95,46 +95,6 @@ export async function notifyProofigStarted(
   });
 }
 
-export async function notifyProofigRetry(
-  source: {
-    sendSlackNotification: (message: Parameters<typeof sendCheckSlack>[1]) => Promise<void>;
-  },
-  checkRunId: string,
-  sourceCheckRunId: string,
-): Promise<void> {
-  const runContext = await loadCheckRunContext(checkRunId);
-  if (!runContext) return;
-
-  await sendCheckSlack(source, {
-    eventType: SlackEventType.CHECK_RUN_RETRY,
-    message: 'Proofig check retry started',
-    color: 'warning',
-    user: runContext.createdById ? { id: runContext.createdById } : undefined,
-    metadata: buildCheckRunMetadata(runContext, {
-      sourceCheckRunId,
-      origin: 'user',
-    }),
-  });
-}
-
-export async function notifyProofigSubmitAccepted(
-  source: {
-    sendSlackNotification: (message: Parameters<typeof sendCheckSlack>[1]) => Promise<void>;
-  },
-  checkRunId: string,
-): Promise<void> {
-  const runContext = await loadCheckRunContext(checkRunId);
-  if (!runContext) return;
-
-  await sendCheckSlack(source, {
-    eventType: SlackEventType.CHECK_RUN_MILESTONE,
-    message: 'Proofig submission accepted by provider',
-    color: 'good',
-    user: runContext.createdById ? { id: runContext.createdById } : undefined,
-    metadata: buildCheckRunMetadata(runContext, { milestone: 'initialPostAccepted' }),
-  });
-}
-
 export async function notifyProofigWebhookMilestone(
   checkRunId: string,
   state: string,

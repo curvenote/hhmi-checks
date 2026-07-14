@@ -70,10 +70,6 @@ vi.mock('./checkRunColumns.server.js', () => ({
     retrySweepMocks.mockMarkNoAutoRetry(...args),
 }));
 
-vi.mock('./slackNotify.server.js', () => ({
-  notifyTextIntegritySweepSummary: vi.fn(),
-}));
-
 const sourceRun = {
   id: 'run-1',
   work_version_id: 'wv-1',

@@ -1,10 +1,7 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { RelayNotifyEnvelope } from '@curvenote/check-relay-types';
-import {
-  MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
-  type TextIntegrityDataSchema,
-} from '../schema.js';
+import { MINIMAL_TEXT_INTEGRITY_SERVICE_DATA, type TextIntegrityDataSchema } from '../schema.js';
 import { applyRelayCheckStatusEnvelopes } from './relay-status-apply.server.js';
 
 const mockFindUnique = vi.fn();
