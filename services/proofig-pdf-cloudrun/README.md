@@ -53,8 +53,12 @@ On success the service:
 
 ## Local development
 
+Local host port defaults to **8088** (container still listens on 8080) so it does not
+collide with other services on 8080. Override with `PORT=...` in `.env` or the
+environment; `local.sh`, `run.sh`, and the test scripts all honour it.
+
 ```bash
-cp .env.sample .env   # set GCP_PROJECT, GCP_REGION
+cp .env.sample .env   # set GCP_PROJECT, GCP_REGION, PORT
 
 # Optional: enable render-only smoke tests (no SCMS callbacks)
 # PROOFIG_PDF_RENDER_ONLY=1

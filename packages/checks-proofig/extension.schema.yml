@@ -46,4 +46,4 @@ properties:
         secret: true
       devLocalPushUrl:
         type: string
-        description: Optional local HTTP stub URL for development pushes (defaults to http://127.0.0.1:8080/).
+        description: Optional local HTTP stub URL for development pushes (defaults to http://127.0.0.1:8088/).

@@ -26,14 +26,14 @@ docker build --tag proofig-pdf-local .
 echo "✅ Local build complete!"
 echo ""
 
-PORT="${PORT:-8080}"
-echo "🚀 Starting container on port ${PORT}..."
-
 DOCKER_ENV=()
 if [[ -f ".env" ]]; then
   # shellcheck source=/dev/null
   source .env
 fi
+
+PORT="${PORT:-8088}"
+echo "🚀 Starting container on port ${PORT}..."
 
 if [[ "${PROOFIG_PDF_RENDER_ONLY:-}" == "1" ]]; then
   echo "🧪 Render-only test mode enabled (POST /test-render)"

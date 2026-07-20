@@ -11,7 +11,7 @@ export type PdfServiceConfig = {
   credentialsJson: string;
   /** Pub/Sub topic name (id or full resource name). */
   topic: string;
-  /** Optional local HTTP stub URL for development pushes (defaults to loopback:8080). */
+  /** Optional local HTTP stub URL for development pushes (defaults to loopback:8088). */
   devLocalPushUrl?: string;
 };
 
@@ -58,6 +58,6 @@ export async function dispatchProofigPdfService(
       credentialsJson: pdfService.credentialsJson,
       topicName: pdfService.topic,
     },
-    devLocalPush: { url: pdfService.devLocalPushUrl ?? 'http://127.0.0.1:8080/' },
+    devLocalPush: { url: pdfService.devLocalPushUrl ?? 'http://127.0.0.1:8088/' },
   });
 }
