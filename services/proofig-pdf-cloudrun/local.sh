@@ -41,9 +41,17 @@ if [[ "${PROOFIG_PDF_RENDER_ONLY:-}" == "1" ]]; then
 fi
 
 if [[ -n "${RENDER_OUTPUT_DIR:-}" ]]; then
-  mkdir -p "${RENDER_OUTPUT_DIR}"
-  echo "📁 Render output mounted at ${RENDER_OUTPUT_DIR}"
-  DOCKER_ENV+=(-e "RENDER_OUTPUT_DIR=${RENDER_OUTPUT_DIR}" -v "${RENDER_OUTPUT_DIR}:${RENDER_OUTPUT_DIR}")
+  # Docker bind mounts require absolute paths. Allow relative values in .env
+  # (e.g. ./output) — resolve against the service directory on the host, and
+  # mount into a fixed absolute path inside the container.
+  HOST_OUTPUT_DIR="${RENDER_OUTPUT_DIR}"
+  if [[ "${HOST_OUTPUT_DIR}" != /* ]]; then
+    HOST_OUTPUT_DIR="$(cd "$(dirname "${HOST_OUTPUT_DIR}")" && pwd)/$(basename "${HOST_OUTPUT_DIR}")"
+  fi
+  mkdir -p "${HOST_OUTPUT_DIR}"
+  CONTAINER_OUTPUT_DIR="/render-output"
+  echo "📁 Render output: ${HOST_OUTPUT_DIR} → ${CONTAINER_OUTPUT_DIR}"
+  DOCKER_ENV+=(-e "RENDER_OUTPUT_DIR=${CONTAINER_OUTPUT_DIR}" -v "${HOST_OUTPUT_DIR}:${CONTAINER_OUTPUT_DIR}")
 fi
 
 docker run -p "${PORT}:8080" \

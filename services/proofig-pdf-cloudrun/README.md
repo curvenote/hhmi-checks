@@ -81,8 +81,9 @@ Set `PROOFIG_PDF_RENDER_ONLY=1` in `.env` before `./local.sh`. The container exp
 and returns `{ ok, size, md5, outputPath? }` without patching jobs, uploading to CDN,
 or calling the pdf-stored hook.
 
-When `RENDER_OUTPUT_DIR=./output` is set, the PDF is copied to `./output/proofig-report.pdf`
-on the host (the directory is mounted automatically by `local.sh`).
+When `RENDER_OUTPUT_DIR=./output` is set, `local.sh` resolves that relative path on
+the host and bind-mounts it to `/render-output` inside the container. The PDF is
+written as `./output/proofig-report.pdf` on the host.
 
 Do **not** set `PROOFIG_PDF_RENDER_ONLY` on deployed Cloud Run services.
 
