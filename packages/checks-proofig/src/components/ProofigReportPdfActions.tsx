@@ -22,8 +22,8 @@ function downloadHref(checkRunId: string): string {
  * Download / regenerate actions for the persisted Proofig report PDF.
  *
  * Only rendered at the final report stage (Clean / Flagged). Download is enabled once a PDF has
- * been stored; regenerate re-runs the render with `force` to capture edits made after the initial
- * auto-generation.
+ * been stored for the current report id. Generate/Regenerate is always offered when a report URL
+ * is available so a failed first auto-persist can be retried with `force`.
  */
 export function ProofigReportPdfActions({
   proofigData,
@@ -98,7 +98,12 @@ export function ProofigReportPdfActions({
 
   const stored = hasStoredProofigReport(proofigData);
   const busy = fetcher.state !== 'idle';
-  const canRegenerate = Boolean(actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim());
+  const hasReportUrl = Boolean(
+    proofigData?.reportUrl?.trim() || proofigData?.summary?.reportUrl?.trim(),
+  );
+  const canRegenerate = Boolean(
+    actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim() && hasReportUrl,
+  );
 
   const submitRegenerate = () => {
     if (!canRegenerate) return;
@@ -123,22 +128,20 @@ export function ProofigReportPdfActions({
         </ui.Button>
       ) : (
         <span className="text-sm font-normal opacity-50 animate-pulse text-primary">
-          {busy ? 'Regenerating report PDF…' : 'Preparing report PDF…'}
+          {busy ? 'Generating report PDF…' : 'Preparing report PDF…'}
         </span>
       )}
-      {stored ? (
-        <ui.MaintenanceTooltip enabled={blocked} message={message}>
-          <ui.Button
-            type="button"
-            variant="ghost"
-            disabled={!canRegenerate || blocked || busy}
-            onClick={submitRegenerate}
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${busy ? 'animate-spin' : ''}`} />
-            {busy ? 'Regenerating…' : 'Regenerate PDF'}
-          </ui.Button>
-        </ui.MaintenanceTooltip>
-      ) : null}
+      <ui.MaintenanceTooltip enabled={blocked} message={message}>
+        <ui.Button
+          type="button"
+          variant="ghost"
+          disabled={!canRegenerate || blocked || busy}
+          onClick={submitRegenerate}
+        >
+          <RefreshCw className={`w-4 h-4 mr-2 ${busy ? 'animate-spin' : ''}`} />
+          {busy ? 'Generating…' : stored ? 'Regenerate PDF' : 'Generate PDF'}
+        </ui.Button>
+      </ui.MaintenanceTooltip>
     </div>
   );
 }

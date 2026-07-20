@@ -141,19 +141,30 @@ export async function proofigPersistPdfHandler(ctx: Context, data: CreateJob) {
   const jobUrl = workerJobUrl(ctx, `/jobs/${job.id}`);
   const userId = ctx.user?.id ?? 'system';
 
-  const messageId = await dispatchProofigPdfService(
-    { handshake, jobUrl, userId },
-    {
-      reportUrl,
-      work_version_id: payload.work_version_id,
-      check_service_run_id: payload.check_service_run_id,
-      cdn: workVersion.cdn,
-      cdn_key: workVersion.cdn_key,
-      report_id: serviceData.reportId,
-      force: payload.force,
-    },
-    pdfService,
-  );
+  let messageId: string;
+  try {
+    messageId = await dispatchProofigPdfService(
+      { handshake, jobUrl, userId },
+      {
+        reportUrl,
+        work_version_id: payload.work_version_id,
+        check_service_run_id: payload.check_service_run_id,
+        cdn: workVersion.cdn,
+        cdn_key: workVersion.cdn_key,
+        report_id: serviceData.reportId,
+        force: payload.force,
+      },
+      pdfService,
+    );
+  } catch (err) {
+    // Job is already RUNNING via dbStartJob; mark FAILED so Pub/Sub failures do not leave a
+    // stuck RUNNING row with no worker callback (and so transient retries cannot re-enter).
+    const message =
+      err instanceof Error
+        ? `Failed to publish Proofig PDF render message: ${err.message}`
+        : 'Failed to publish Proofig PDF render message';
+    return jobs.dbUpdateJob(job.id, { status: JobStatus.FAILED, message });
+  }
 
   return jobs.dbUpdateJob(job.id, {
     status: JobStatus.RUNNING,
