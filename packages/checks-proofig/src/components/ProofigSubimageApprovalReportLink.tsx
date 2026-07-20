@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useFetcher, useRevalidator } from 'react-router';
 import { ui } from '@curvenote/scms-core';
+import type { ProofigDataSchema } from '../schema.js';
 import { ProofigOpenReportButton } from './ProofigOpenReportButton.js';
+import { ProofigReportPdfActions } from './ProofigReportPdfActions.js';
 
 type RefreshFetcherData = {
   success?: boolean;
@@ -24,6 +26,7 @@ export function ProofigSubimageApprovalReportLink({
   checkRunId,
   children,
   disabled,
+  proofigData,
   followUpDialogTitle = DEFAULT_FOLLOW_UP_TITLE,
   followUpDialogDescription = DEFAULT_FOLLOW_UP_DESCRIPTION,
 }: {
@@ -33,6 +36,8 @@ export function ProofigSubimageApprovalReportLink({
   checkRunId?: string;
   children: ReactNode;
   disabled?: boolean;
+  /** When set, exposes download/regenerate report PDF actions in the return dialog. */
+  proofigData?: ProofigDataSchema;
   /** Shown after the report opens in a new tab (when remote refresh is configured). */
   followUpDialogTitle?: string;
   followUpDialogDescription?: string;
@@ -93,6 +98,12 @@ export function ProofigSubimageApprovalReportLink({
               <ui.DialogTitle>{followUpDialogTitle}</ui.DialogTitle>
               <ui.DialogDescription>{followUpDialogDescription}</ui.DialogDescription>
             </ui.DialogHeader>
+            <ProofigReportPdfActions
+              proofigData={proofigData}
+              workVersionId={workVersionId}
+              checkRunId={checkRunId}
+              actionPath={actionPath}
+            />
             <div className="flex justify-end pt-2">
               <ui.Button type="button" onClick={() => handleOpenChange(false)}>
                 Continue

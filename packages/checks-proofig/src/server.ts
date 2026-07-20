@@ -18,6 +18,10 @@ import {
   PROOFIG_CONVERTER_FAILURE_CLEANUP,
   proofigConverterFailureCleanupHandler,
 } from './server/jobs/proofig-converter-failure-cleanup.server.js';
+import {
+  PROOFIG_PERSIST_PDF,
+  proofigPersistPdfHandler,
+} from './server/jobs/proofig-persist-pdf.server.js';
 import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSection.js';
 import { ProofigUploadCheckOption } from './components/ProofigUploadCheckOption.js';
 import { isProofigUploadEligible, resolveProofigUploadEligibility } from './uploadEligibility.js';
@@ -26,6 +30,7 @@ import { ImageIntegritySectionHeader } from './components/ImageIntegritySectionH
 import { getExtensionAdminActionHandlers } from './admin/actionHandlers.server.js';
 
 export { PROOFIG_SUBMIT_STREAM };
+export { PROOFIG_PERSIST_PDF };
 export { getProofigConfigWithOverrides } from './server/config.server.js';
 
 function getSafeAdminConfig(config: Record<string, unknown>): Record<string, unknown> {
@@ -85,6 +90,10 @@ export const extension: ServerExtension = {
     {
       jobType: PROOFIG_CONVERTER_FAILURE_CLEANUP,
       handler: proofigConverterFailureCleanupHandler as JobRegistration['handler'],
+    },
+    {
+      jobType: PROOFIG_PERSIST_PDF,
+      handler: proofigPersistPdfHandler as JobRegistration['handler'],
     },
   ],
   registerRoutes,

@@ -6,6 +6,7 @@ import { MissingReportUrlIcon } from './MissingReportUrlIcon.js';
 import { ReportNoLongerAvailable } from './ReportNoLongerAvailable.js';
 import { ProofigRefreshRemoteStatusButton } from './ProofigRefreshRemoteStatusButton.js';
 import { ProofigSubimageApprovalReportLink } from './ProofigSubimageApprovalReportLink.js';
+import { ProofigReportPdfActions } from './ProofigReportPdfActions.js';
 import { CheckItemHeadline } from './CheckItemHeadline.js';
 
 const COLORS = {
@@ -172,6 +173,7 @@ export function ResultsSummaryArea({
                     workVersionId={workVersionId}
                     checkRunId={checkRunId}
                     disabled={!reportUrl}
+                    proofigData={proofigData}
                     followUpDialogTitle="Proofig was opened for results review"
                     followUpDialogDescription="Your report was opened in a new tab at Proofig. When you have finished reviewing there, press Continue below to close this dialog and fetch the latest status."
                   >
@@ -187,6 +189,12 @@ export function ResultsSummaryArea({
             </div>
             <div className="flex-1 min-h-px min-w-4 basis-4" aria-hidden />
             <div className="flex flex-wrap gap-2 justify-end items-center">
+              <ProofigReportPdfActions
+                proofigData={proofigData}
+                workVersionId={workVersionId}
+                checkRunId={checkRunId}
+                actionPath={remoteStatusActionPath}
+              />
               {remoteStatusActionPath && workVersionId ? (
                 <ProofigRefreshRemoteStatusButton
                   actionPath={remoteStatusActionPath}

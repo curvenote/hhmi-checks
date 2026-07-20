@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FileMetadataSectionItemSchema } from '@curvenote/scms-core';
 
 /**
  * Proofig webhook "ready notification" states.
@@ -151,6 +152,12 @@ export const proofigDataSchema = z.object({
   supersededByRunId: z.string().optional(),
   supersededAt: z.string().optional(),
   supersededByUserId: z.string().optional(),
+  /** Generated report files keyed by storage path (e.g. the Proofig report PDF). */
+  files: z.record(z.string(), FileMetadataSectionItemSchema).optional(),
+  /** True after the Proofig report PDF for `storedReportId` was written to storage. */
+  proofigReportStored: z.boolean().optional(),
+  /** Proofig report id that was persisted to `files` (used for idempotency). */
+  storedReportId: z.string().optional(),
 });
 
 export type ProofigStageStatus = z.infer<typeof LinearStageStatusSchema>;

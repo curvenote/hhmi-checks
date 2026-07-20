@@ -30,3 +30,20 @@ properties:
     type: string
     description: Proofig API client secret for authentication.
     secret: true
+  pdfService:
+    type: object
+    description: Proofig PDF Cloud Run worker (Pub/Sub target) used to render report PDFs.
+    properties:
+      projectId:
+        type: string
+        description: GCP project id that owns the Pub/Sub topic.
+      topic:
+        type: string
+        description: Pub/Sub topic name (id or full resource name) for the proofig-pdf-service worker.
+      credentialsJson:
+        type: string
+        description: Service-account key JSON with pubsub.publisher used to publish render jobs.
+        secret: true
+      devLocalPushUrl:
+        type: string
+        description: Optional local HTTP stub URL for development pushes (defaults to http://127.0.0.1:8080/).

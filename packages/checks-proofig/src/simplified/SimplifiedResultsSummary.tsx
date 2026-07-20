@@ -6,6 +6,7 @@ import { LogoMono } from '../icons.js';
 import { ReportNoLongerAvailable } from '../components/ReportNoLongerAvailable.js';
 import { ProofigRefreshRemoteStatusButton } from '../components/ProofigRefreshRemoteStatusButton.js';
 import { ProofigOpenReportButton } from '../components/ProofigOpenReportButton.js';
+import { ProofigReportPdfActions } from '../components/ProofigReportPdfActions.js';
 
 const REVIEW = 'text-amber-700 dark:text-amber-300';
 const CLEAR = 'text-[#1B8364] dark:text-[#5cd09a]';
@@ -194,6 +195,12 @@ export function SimplifiedResultsSummary({
             </div>
             <div className="flex-1 min-h-px min-w-4 basis-4" aria-hidden />
             <div className="flex flex-wrap gap-2 justify-end items-center">
+              <ProofigReportPdfActions
+                proofigData={proofigData}
+                workVersionId={workVersionId}
+                checkRunId={checkRunId}
+                actionPath={remoteStatusActionPath}
+              />
               {remoteStatusActionPath && workVersionId ? (
                 <ProofigRefreshRemoteStatusButton
                   actionPath={remoteStatusActionPath}
