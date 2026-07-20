@@ -20,26 +20,6 @@ export type RenderReportPdfResult = {
 
 const PDF_MAGIC = Buffer.from('%PDF-', 'utf-8');
 
-/**
- * Chromium's print engine sometimes clips a line mid-glyph at the page edge
- * instead of moving the whole line. Prefer keeping common block elements intact
- * and reserve a bit of bottom margin so clipped descenders are less likely.
- */
-const PRINT_PAGE_BREAK_CSS = `
-  @media print {
-    h1, h2, h3, h4, h5, h6,
-    p, li, tr, section, article,
-    [class*="Typography"], [class*="typography"] {
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-    p, li {
-      orphans: 3;
-      widows: 3;
-    }
-  }
-`;
-
 /** Basic guard that the written file is actually a PDF. */
 async function assertIsPdf(localPath: string): Promise<number> {
   const stat = await fs.stat(localPath);
@@ -60,6 +40,10 @@ async function assertIsPdf(localPath: string): Promise<number> {
  * Open a Proofig report URL in headless Chromium, emulate print media (so the
  * Proofig print stylesheet applies, matching the browser "Save as PDF" flow),
  * and write the printed PDF to disk.
+ *
+ * Extra bottom margin reduces Chromium's occasional mid-line clipping at page
+ * boundaries. Avoid injecting break-inside CSS — it can clip glyphs horizontally
+ * in Proofig's Article Details layout.
  */
 export async function renderReportPdf(
   options: RenderReportPdfOptions,
@@ -77,13 +61,11 @@ export async function renderReportPdf(
     const page = await browser.newPage();
     await page.goto(reportUrl, { waitUntil: 'networkidle', timeout: navigationTimeoutMs });
     await page.emulateMedia({ media: 'print' });
-    await page.addStyleTag({ content: PRINT_PAGE_BREAK_CSS });
     await page.pdf({
       path: localPath,
       format: 'A4',
       printBackground: true,
-      // Extra bottom margin reduces mid-line clipping at page boundaries.
-      margin: { top: '1.2cm', bottom: '1.8cm', left: '1cm', right: '1cm' },
+      margin: { top: '1.2cm', bottom: '1.8cm', left: '1.2cm', right: '1.2cm' },
     });
   } finally {
     if (browser) {
