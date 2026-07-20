@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useFetcher, useRevalidator } from 'react-router';
 import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
-import { Download } from 'lucide-react';
 import type { ProofigDataSchema } from '../schema.js';
 import { PROOFIG_REPORT_FILENAME, getProofigPdfReadiness } from '../proofigReportFiles.js';
 import { ProofigActionOverflow, type ProofigOverflowMenuItem } from './ProofigActionOverflow.js';
@@ -190,12 +189,11 @@ export function ProofigReportPdfActions({
     primary = (
       <ui.Button
         type="button"
-        variant="outline"
+        variant="link"
         disabled={downloading}
         onClick={() => void runDownload()}
       >
-        <Download className="mr-2 w-4 h-4" />
-        {downloading ? 'Downloading…' : 'Download PDF'}
+        {downloading ? 'Downloading…' : 'Download PDF report'}
       </ui.Button>
     );
   } else if (failed) {
