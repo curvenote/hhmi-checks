@@ -21,6 +21,15 @@ export type RenderReportPdfResult = {
 const PDF_MAGIC = Buffer.from('%PDF-', 'utf-8');
 
 /**
+ * Playwright `page.pdf({ scale })` default is 1 (100%). We were not setting it,
+ * but a 1280px viewport made Chromium shrink-to-fit the layout onto A4, which
+ * looks like a low zoom. Prefer an A4-ish viewport and a slight explicit scale.
+ */
+const PDF_SCALE = 1.15;
+/** ~A4 width at 96dpi is ~794px; stay a bit wider for app chrome without heavy shrink. */
+const PRINT_VIEWPORT = { width: 900, height: 1270 } as const;
+
+/**
  * Chromium's print engine often clips text mid-glyph when an ancestor has
  * `overflow: hidden` (common in app shells / cards). Force visible overflow for
  * print. Prefer `@page` margins (content reflows) over Playwright `margin`
@@ -77,8 +86,7 @@ export async function renderReportPdf(
       args: ['--no-sandbox', '--disable-dev-shm-usage'],
     });
     const page = await browser.newPage({
-      // Wide enough that Proofig's layout does not shrink-to-fit oddly for A4.
-      viewport: { width: 1280, height: 1800 },
+      viewport: PRINT_VIEWPORT,
     });
     await page.goto(reportUrl, { waitUntil: 'networkidle', timeout: navigationTimeoutMs });
     await page.evaluate(async () => {
@@ -91,6 +99,7 @@ export async function renderReportPdf(
       path: localPath,
       format: 'A4',
       printBackground: true,
+      scale: PDF_SCALE,
       // Keep API margins at 0 — spacing comes from @page in PRINT_CLIP_FIX_CSS so
       // content reflows instead of being cropped (which re-introduces clipping).
       preferCSSPageSize: true,
