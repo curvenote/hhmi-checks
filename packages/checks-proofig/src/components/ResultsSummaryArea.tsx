@@ -4,7 +4,6 @@ import { getProofigResultDisplayState } from '../utils/proofigSummary.js';
 import { plural, ui } from '@curvenote/scms-core';
 import { MissingReportUrlIcon } from './MissingReportUrlIcon.js';
 import { ReportNoLongerAvailable } from './ReportNoLongerAvailable.js';
-import { ProofigRefreshRemoteStatusButton } from './ProofigRefreshRemoteStatusButton.js';
 import { ProofigSubimageApprovalReportLink } from './ProofigSubimageApprovalReportLink.js';
 import { ProofigReportPdfActions } from './ProofigReportPdfActions.js';
 import { CheckItemHeadline } from './CheckItemHeadline.js';
@@ -194,14 +193,8 @@ export function ResultsSummaryArea({
                 workVersionId={workVersionId}
                 checkRunId={checkRunId}
                 actionPath={remoteStatusActionPath}
+                includeRemoteRefresh
               />
-              {remoteStatusActionPath && workVersionId ? (
-                <ProofigRefreshRemoteStatusButton
-                  actionPath={remoteStatusActionPath}
-                  workVersionId={workVersionId}
-                  checkRunId={checkRunId}
-                />
-              ) : null}
             </div>
           </>
         )}

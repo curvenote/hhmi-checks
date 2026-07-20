@@ -4,7 +4,6 @@ import { getProofigResultDisplayState } from '../utils/proofigSummary.js';
 import { plural } from '@curvenote/scms-core';
 import { LogoMono } from '../icons.js';
 import { ReportNoLongerAvailable } from '../components/ReportNoLongerAvailable.js';
-import { ProofigRefreshRemoteStatusButton } from '../components/ProofigRefreshRemoteStatusButton.js';
 import { ProofigOpenReportButton } from '../components/ProofigOpenReportButton.js';
 import { ProofigReportPdfActions } from '../components/ProofigReportPdfActions.js';
 
@@ -200,14 +199,8 @@ export function SimplifiedResultsSummary({
                 workVersionId={workVersionId}
                 checkRunId={checkRunId}
                 actionPath={remoteStatusActionPath}
+                includeRemoteRefresh
               />
-              {remoteStatusActionPath && workVersionId ? (
-                <ProofigRefreshRemoteStatusButton
-                  actionPath={remoteStatusActionPath}
-                  workVersionId={workVersionId}
-                  checkRunId={checkRunId}
-                />
-              ) : null}
             </div>
           </div>
         )}
