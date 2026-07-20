@@ -568,6 +568,17 @@ export async function handleProofigAction(
         status: 400,
       };
     }
+    const storedReportUrl =
+      serviceData?.reportUrl?.trim() || serviceData?.summary?.reportUrl?.trim();
+    if (!storedReportUrl) {
+      return {
+        error: {
+          type: 'general',
+          message: 'No report URL is stored for this run yet; cannot regenerate PDF.',
+        },
+        status: 400,
+      };
+    }
     const result = await enqueueProofigPersistPdfIfNeeded(run.id, {
       force: true,
       invokedById: ctx.user?.id,
