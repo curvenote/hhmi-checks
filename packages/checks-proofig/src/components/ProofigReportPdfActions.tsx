@@ -140,9 +140,7 @@ export function ProofigReportPdfActions({
   const failed = readiness === 'failed';
   const regenBusy = regenerateFetcher.state !== 'idle';
   const refreshBusy = refreshFetcher.state !== 'idle';
-  const canRegenerate = Boolean(
-    actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim(),
-  );
+  const canRegenerate = Boolean(actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim());
   const pdfError = proofigData?.proofigReportPdfError?.trim();
 
   const submitRegenerate = () => {
@@ -196,13 +194,13 @@ export function ProofigReportPdfActions({
         disabled={downloading}
         onClick={() => void runDownload()}
       >
-        <Download className="w-4 h-4 mr-2" />
+        <Download className="mr-2 w-4 h-4" />
         {downloading ? 'Downloading…' : 'Download PDF'}
       </ui.Button>
     );
   } else if (failed) {
     const failedLabel = (
-      <span className="text-sm font-normal text-destructive whitespace-nowrap">
+      <span className="text-sm font-normal whitespace-nowrap text-destructive">
         PDF Generation Failed
       </span>
     );
@@ -215,7 +213,7 @@ export function ProofigReportPdfActions({
     );
   } else {
     primary = (
-      <span className="text-sm font-normal opacity-50 animate-pulse text-primary whitespace-nowrap">
+      <span className="text-sm font-normal whitespace-nowrap opacity-50 animate-pulse text-primary">
         Generating report PDF…
       </span>
     );
