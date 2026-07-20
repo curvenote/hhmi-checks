@@ -20,6 +20,24 @@ export type RenderReportPdfResult = {
 
 const PDF_MAGIC = Buffer.from('%PDF-', 'utf-8');
 
+/**
+ * Chromium's print engine often clips text mid-glyph when an ancestor has
+ * `overflow: hidden` (common in app shells / cards). Force visible overflow for
+ * print, and prefer the page's own @page margins over Playwright defaults.
+ */
+const PRINT_CLIP_FIX_CSS = `
+  @media print {
+    html, body {
+      height: auto !important;
+      overflow: visible !important;
+    }
+    *, *::before, *::after {
+      overflow: visible !important;
+      text-overflow: clip !important;
+    }
+  }
+`;
+
 /** Basic guard that the written file is actually a PDF. */
 async function assertIsPdf(localPath: string): Promise<number> {
   const stat = await fs.stat(localPath);
@@ -40,10 +58,6 @@ async function assertIsPdf(localPath: string): Promise<number> {
  * Open a Proofig report URL in headless Chromium, emulate print media (so the
  * Proofig print stylesheet applies, matching the browser "Save as PDF" flow),
  * and write the printed PDF to disk.
- *
- * Extra bottom margin reduces Chromium's occasional mid-line clipping at page
- * boundaries. Avoid injecting break-inside CSS — it can clip glyphs horizontally
- * in Proofig's Article Details layout.
  */
 export async function renderReportPdf(
   options: RenderReportPdfOptions,
@@ -58,14 +72,24 @@ export async function renderReportPdf(
     browser = await chromium.launch({
       args: ['--no-sandbox', '--disable-dev-shm-usage'],
     });
-    const page = await browser.newPage();
+    const page = await browser.newPage({
+      // Wide enough that Proofig's layout does not shrink-to-fit oddly for A4.
+      viewport: { width: 1280, height: 1800 },
+    });
     await page.goto(reportUrl, { waitUntil: 'networkidle', timeout: navigationTimeoutMs });
+    await page.evaluate(async () => {
+      // Wait for webfonts so glyph metrics match what print layout expects.
+      if (document.fonts?.ready) await document.fonts.ready;
+    });
     await page.emulateMedia({ media: 'print' });
+    await page.addStyleTag({ content: PRINT_CLIP_FIX_CSS });
     await page.pdf({
       path: localPath,
       format: 'A4',
       printBackground: true,
-      margin: { top: '1.2cm', bottom: '1.8cm', left: '1.2cm', right: '1.2cm' },
+      // Let Proofig's @page / print CSS own margins (avoids double-cropping).
+      preferCSSPageSize: true,
+      margin: { top: '0', bottom: '0', left: '0', right: '0' },
     });
   } finally {
     if (browser) {
