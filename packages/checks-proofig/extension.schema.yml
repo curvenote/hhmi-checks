@@ -41,4 +41,8 @@ properties:
         description: Pub/Sub topic name (id or full resource name) for the proofig-pdf-service worker.
       devLocalPushUrl:
         type: string
-        description: Optional local HTTP stub URL for development pushes (defaults to http://127.0.0.1:8088/).
+        description: >-
+          Optional local HTTP stub URL for development pushes (defaults to
+          http://127.0.0.1:8088/). When set, dispatched reportUrl hosts of
+          localhost/127.0.0.1 are rewritten to host.docker.internal so the
+          Docker PDF worker can reach the Proofig UI on the host.

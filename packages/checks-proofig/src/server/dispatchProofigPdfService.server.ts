@@ -7,7 +7,7 @@ import { getConfig, sendJobPubSubMessage } from '@curvenote/scms-server';
 export type PdfServiceConfig = {
   /** Pub/Sub topic name (id or full resource name). */
   topic: string;
-  /** Optional local HTTP stub URL for development pushes (defaults to loopback:8088). */
+  /** Optional local HTTP stub URL for development pushes (defaults to loopback:8088). When set, also rewrites loopback report hosts for the Docker worker. */
   devLocalPushUrl?: string;
 };
 

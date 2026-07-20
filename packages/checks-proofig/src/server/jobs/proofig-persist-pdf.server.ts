@@ -13,7 +13,10 @@ import {
 } from '../../proofigReportFiles.js';
 import { getProofigConfigWithOverrides } from '../config.server.js';
 import { getProofingToken } from '../proofigAuth.server.js';
-import { proofigReportUrlWithAccessToken } from '../proofigReportUrl.server.js';
+import {
+  proofigReportUrlWithAccessToken,
+  rewriteReportUrlForDockerWorker,
+} from '../proofigReportUrl.server.js';
 import {
   dispatchProofigPdfService,
   readPdfServiceConfig,
@@ -156,6 +159,11 @@ export async function proofigPersistPdfHandler(ctx: Context, data: CreateJob) {
   try {
     const token = await getProofingToken(apiBaseUrl, mergedConfig);
     reportUrl = proofigReportUrlWithAccessToken(storedReportUrl, token);
+    // Local Docker PDF worker cannot reach host loopback; rewrite only on the
+    // dispatched payload when devLocalPushUrl is set (stored reportUrl unchanged).
+    if (pdfService.devLocalPushUrl) {
+      reportUrl = rewriteReportUrlForDockerWorker(reportUrl);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to build report URL';
     return failPersistPdfJob(job.id, payload.check_service_run_id, message);

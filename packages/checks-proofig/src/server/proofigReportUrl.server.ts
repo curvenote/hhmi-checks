@@ -15,3 +15,22 @@ export function proofigReportUrlWithAccessToken(
   url.searchParams.set('token', accessToken);
   return url.toString();
 }
+
+/**
+ * Local-dev helper for the PDF Docker worker: rewrite loopback report hosts to
+ * `host.docker.internal` so Playwright inside the container can reach the Proofig
+ * UI on the host. Does not change stored check-run URLs — apply only on the
+ * dispatched payload when `pdfService.devLocalPushUrl` is configured.
+ */
+export function rewriteReportUrlForDockerWorker(reportUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(reportUrl);
+  } catch {
+    throw new Error('Proofig report URL is not a valid absolute URL');
+  }
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+    url.hostname = 'host.docker.internal';
+  }
+  return url.toString();
+}
