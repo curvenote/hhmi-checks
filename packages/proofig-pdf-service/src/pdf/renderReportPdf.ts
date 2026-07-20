@@ -23,10 +23,14 @@ const PDF_MAGIC = Buffer.from('%PDF-', 'utf-8');
 /**
  * Chromium's print engine often clips text mid-glyph when an ancestor has
  * `overflow: hidden` (common in app shells / cards). Force visible overflow for
- * print, and prefer the page's own @page margins over Playwright defaults.
+ * print. Prefer `@page` margins (content reflows) over Playwright `margin`
+ * options, which shrink the paint box and can re-introduce clipping.
  */
 const PRINT_CLIP_FIX_CSS = `
   @media print {
+    @page {
+      margin: 1.2cm;
+    }
     html, body {
       height: auto !important;
       overflow: visible !important;
@@ -87,7 +91,8 @@ export async function renderReportPdf(
       path: localPath,
       format: 'A4',
       printBackground: true,
-      // Let Proofig's @page / print CSS own margins (avoids double-cropping).
+      // Keep API margins at 0 — spacing comes from @page in PRINT_CLIP_FIX_CSS so
+      // content reflows instead of being cropped (which re-introduces clipping).
       preferCSSPageSize: true,
       margin: { top: '0', bottom: '0', left: '0', right: '0' },
     });
