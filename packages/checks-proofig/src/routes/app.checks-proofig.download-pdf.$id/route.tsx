@@ -8,7 +8,11 @@ import {
   withAppContext,
 } from '@curvenote/scms-server';
 import { proofigDataSchema } from '../../schema.js';
-import { PROOFIG_REPORT_FILENAME, getStoredProofigReportFile } from '../../proofigReportFiles.js';
+import {
+  PROOFIG_REPORT_FILENAME,
+  getStoredProofigReportFile,
+  hasStoredProofigReport,
+} from '../../proofigReportFiles.js';
 import { assertWorkChecksReadForRun } from '../../server/checkWorkScopes.server.js';
 
 type CheckServiceRunData = {
@@ -32,6 +36,7 @@ export async function action() {
 
 /**
  * Stream the persisted Proofig report PDF for a check run from work version storage.
+ * Only serves when `hasStoredProofigReport` is true (current report id), matching the UI.
  */
 export async function loader(args: LoaderFunctionArgs) {
   const ctx = await withAppContext(args);
@@ -58,10 +63,12 @@ export async function loader(args: LoaderFunctionArgs) {
   const runData = run.data as CheckServiceRunData | null;
   const parsed = proofigDataSchema.safeParse(runData?.serviceData);
   const serviceData = parsed.success ? parsed.data : undefined;
-  const storedFile = getStoredProofigReportFile(serviceData);
-  if (!storedFile?.path) {
-    return pdfPendingResponse('no-stored-file');
+  if (!hasStoredProofigReport(serviceData)) {
+    const hasFile = Boolean(getStoredProofigReportFile(serviceData)?.path);
+    return pdfPendingResponse(hasFile ? 'stale-stored-report' : 'no-stored-file');
   }
+  // Safe: hasStoredProofigReport requires a generated-slot entry with a path.
+  const storedFile = getStoredProofigReportFile(serviceData)!;
 
   if (!run.work_version_id) {
     return pdfPendingResponse('no-work-version');
