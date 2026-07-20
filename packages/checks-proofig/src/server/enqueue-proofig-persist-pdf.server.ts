@@ -2,8 +2,8 @@ import { uuidv7 as uuid } from 'uuidv7';
 import { JobStatus } from '@curvenote/scms-db';
 import { enqueueAndDispatchJob, getConfig, getPrismaClient } from '@curvenote/scms-server';
 import { proofigDataSchema } from '../schema.js';
-import { shouldPersistProofigReport } from '../proofigReportFiles.js';
-import { PROOFIG_PERSIST_PDF } from './jobs/proofig-persist-pdf.server.js';
+import { currentProofigReportId, shouldPersistProofigReport } from '../proofigReportFiles.js';
+import { PROOFIG_PERSIST_PDF } from './jobs/proofigPersistPdf.constants.js';
 
 type EnqueueResult = { enqueued: true; jobId: string } | { enqueued: false; reason: string };
 
@@ -15,12 +15,22 @@ const IN_FLIGHT_JOB_STATUSES: JobStatus[] = [
   JobStatus.SCHEDULED,
 ];
 
+export type EnqueueProofigPersistPdfOptions = {
+  force?: boolean;
+  invokedById?: string;
+  /** Ignore this job id when checking for an in-flight persist (finishing job). */
+  excludeJobId?: string;
+};
+
 /**
  * True when a PROOFIG_PERSIST_PDF job for this check run is already queued/running
  * (or blocked/scheduled). Used to avoid duplicate auto-enqueues while the first
  * render has not yet set `proofigReportStored`.
  */
-export async function hasInFlightProofigPersistPdfJob(checkServiceRunId: string): Promise<boolean> {
+export async function hasInFlightProofigPersistPdfJob(
+  checkServiceRunId: string,
+  options: { excludeJobId?: string } = {},
+): Promise<boolean> {
   const prisma = await getPrismaClient();
   const existing = await prisma.job.findFirst({
     where: {
@@ -30,6 +40,7 @@ export async function hasInFlightProofigPersistPdfJob(checkServiceRunId: string)
         path: ['check_service_run_id'],
         equals: checkServiceRunId,
       },
+      ...(options.excludeJobId ? { id: { not: options.excludeJobId } } : {}),
     },
     select: { id: true },
   });
@@ -47,7 +58,7 @@ export async function hasInFlightProofigPersistPdfJob(checkServiceRunId: string)
  */
 export async function enqueueProofigPersistPdfIfNeeded(
   checkServiceRunId: string,
-  options: { force?: boolean; invokedById?: string } = {},
+  options: EnqueueProofigPersistPdfOptions = {},
 ): Promise<EnqueueResult> {
   const prisma = await getPrismaClient();
   const run = await prisma.checkServiceRun.findUnique({ where: { id: checkServiceRunId } });
@@ -66,7 +77,12 @@ export async function enqueueProofigPersistPdfIfNeeded(
     return { enqueued: false, reason: 'not-needed' };
   }
 
-  if (!options.force && (await hasInFlightProofigPersistPdfJob(checkServiceRunId))) {
+  if (
+    !options.force &&
+    (await hasInFlightProofigPersistPdfJob(checkServiceRunId, {
+      excludeJobId: options.excludeJobId,
+    }))
+  ) {
     return { enqueued: false, reason: 'already-in-flight' };
   }
 
@@ -74,6 +90,7 @@ export async function enqueueProofigPersistPdfIfNeeded(
   const invokedById =
     options.invokedById ?? appConfig.api.submissionsServiceAccount?.id ?? 'system-cron';
 
+  const reportId = currentProofigReportId(serviceData);
   const jobId = uuid();
   await enqueueAndDispatchJob({
     job_id: jobId,
@@ -81,6 +98,7 @@ export async function enqueueProofigPersistPdfIfNeeded(
     payload: {
       work_version_id: run.work_version_id,
       check_service_run_id: checkServiceRunId,
+      ...(reportId ? { report_id: reportId } : {}),
       ...(options.force ? { force: true } : {}),
     },
     invoked_by_id: invokedById,
@@ -89,4 +107,40 @@ export async function enqueueProofigPersistPdfIfNeeded(
   });
 
   return { enqueued: true, jobId };
+}
+
+/**
+ * After a persist job stores a PDF or fails, enqueue again when the run still needs a PDF
+ * for the *current* report id (e.g. reportId changed while this job was in flight).
+ *
+ * Does not auto-retry when `jobReportId` still matches the current report — that avoids
+ * infinite re-enqueue loops on permanent failures for the same report.
+ */
+export async function enqueueProofigPersistPdfFollowUpIfNeeded(
+  checkServiceRunId: string,
+  options: { excludeJobId: string; jobReportId?: string; invokedById?: string },
+): Promise<EnqueueResult> {
+  const prisma = await getPrismaClient();
+  const run = await prisma.checkServiceRun.findUnique({ where: { id: checkServiceRunId } });
+  if (!run || run.kind !== 'proofig') {
+    return { enqueued: false, reason: 'run-not-found' };
+  }
+
+  const runData = run.data as { serviceData?: unknown } | null;
+  const parsed = proofigDataSchema.safeParse(runData?.serviceData);
+  const serviceData = parsed.success ? parsed.data : undefined;
+
+  if (!shouldPersistProofigReport(serviceData)) {
+    return { enqueued: false, reason: 'not-needed' };
+  }
+
+  const currentId = currentProofigReportId(serviceData);
+  if (options.jobReportId && currentId && options.jobReportId === currentId) {
+    return { enqueued: false, reason: 'same-report-no-auto-retry' };
+  }
+
+  return enqueueProofigPersistPdfIfNeeded(checkServiceRunId, {
+    excludeJobId: options.excludeJobId,
+    invokedById: options.invokedById,
+  });
 }

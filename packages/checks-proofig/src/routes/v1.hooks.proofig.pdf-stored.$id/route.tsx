@@ -3,7 +3,8 @@ import { error405, httpError } from '@curvenote/scms-core';
 import { getConfig, getPrismaClient, verifyHandshakeToken } from '@curvenote/scms-server';
 import { z } from 'zod';
 import { patchProofigRunServiceData } from '../../server/checkRunColumns.server.js';
-import { PROOFIG_PERSIST_PDF } from '../../server/jobs/proofig-persist-pdf.server.js';
+import { enqueueProofigPersistPdfFollowUpIfNeeded } from '../../server/enqueue-proofig-persist-pdf.server.js';
+import { PROOFIG_PERSIST_PDF } from '../../server/jobs/proofigPersistPdf.constants.js';
 import {
   PROOFIG_REPORT_GENERATED_SLOT,
   buildProofigReportFileEntry,
@@ -21,6 +22,7 @@ const PdfStoredBodySchema = z.object({
 const PersistPdfJobPayloadSchema = z.object({
   work_version_id: z.string().min(1),
   check_service_run_id: z.string().min(1),
+  report_id: z.string().min(1).optional(),
 });
 
 /** GET is not supported; the hook is POST-only. */
@@ -35,6 +37,9 @@ export function loader(_args: LoaderFunctionArgs) {
  *
  * The token must be a PROOFIG_PERSIST_PDF job handshake whose payload targets this check run;
  * the registered path must match the expected `{cdn_key}/generated/{checkRunId}/proofig-report.pdf`.
+ *
+ * After registration, if `reportId` advanced while this job was in flight, enqueues a follow-up
+ * persist for the current report (excluding this still-RUNNING job from the in-flight check).
  */
 export async function action(args: ActionFunctionArgs) {
   const id = args.params.id;
@@ -124,6 +129,7 @@ export async function action(args: ActionFunctionArgs) {
 
   const uploadDate = new Date().toISOString();
   const fileEntry = buildProofigReportFileEntry(body.path, body.size, body.md5, uploadDate);
+  const storedReportId = body.report_id ?? jobPayload.data.report_id;
 
   await patchProofigRunServiceData(id, (sd) => {
     const nextFiles = { ...(sd.files ?? {}) };
@@ -137,9 +143,23 @@ export async function action(args: ActionFunctionArgs) {
       ...sd,
       files: nextFiles,
       proofigReportStored: true,
-      storedReportId: body.report_id ?? sd.reportId,
+      storedReportId: storedReportId ?? sd.reportId,
     };
   });
+
+  // If reportId advanced while this render was in flight, kick off a persist for the new id.
+  try {
+    await enqueueProofigPersistPdfFollowUpIfNeeded(id, {
+      excludeJobId: claims.jobId,
+      jobReportId: storedReportId,
+    });
+  } catch (err) {
+    console.error('[proofig] follow-up persist enqueue after pdf-stored failed', {
+      checkServiceRunId: id,
+      jobId: claims.jobId,
+      err,
+    });
+  }
 
   return Response.json({ ok: true }, { status: 200 });
 }

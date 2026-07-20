@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { uuidv7 } from 'uuidv7';
 import { createHandshakeToken, getPrismaClient, jobs, workerJobUrl } from '@curvenote/scms-server';
 import { proofigDataSchema } from '../../schema.js';
-import { shouldPersistProofigReport } from '../../proofigReportFiles.js';
+import { currentProofigReportId, shouldPersistProofigReport } from '../../proofigReportFiles.js';
 import { getProofigConfigWithOverrides } from '../config.server.js';
 import { getProofingToken } from '../proofigAuth.server.js';
 import { proofigReportUrlWithAccessToken } from '../proofigReportUrl.server.js';
@@ -14,13 +14,16 @@ import {
   dispatchProofigPdfService,
   readPdfServiceConfig,
 } from '../dispatchProofigPdfService.server.js';
+import { enqueueProofigPersistPdfFollowUpIfNeeded } from '../enqueue-proofig-persist-pdf.server.js';
+import { PROOFIG_PERSIST_PDF } from './proofigPersistPdf.constants.js';
 
-/** Job type: render a Proofig report to PDF (dispatched to the Cloud Run worker). */
-export const PROOFIG_PERSIST_PDF = 'PROOFIG_PERSIST_PDF';
+export { PROOFIG_PERSIST_PDF };
 
 const CreateProofigPersistPdfJobPayloadSchema = z.object({
   work_version_id: z.string().uuid('work_version_id is required'),
   check_service_run_id: z.string().min(1, 'check_service_run_id is required'),
+  /** Report id this job was enqueued for (used for stale follow-up detection). */
+  report_id: z.string().min(1).optional(),
   /** Bypass idempotency and overwrite the stored PDF (manual regenerate). */
   force: z.boolean().optional(),
 });
@@ -32,6 +35,28 @@ export type CreateProofigPersistPdfJobPayload = z.infer<
 type CheckServiceRunData = {
   serviceData?: unknown;
 };
+
+async function failPersistPdfJob(
+  jobId: string,
+  checkServiceRunId: string,
+  message: string,
+  jobReportId: string | undefined,
+) {
+  const updated = await jobs.dbUpdateJob(jobId, { status: JobStatus.FAILED, message });
+  try {
+    await enqueueProofigPersistPdfFollowUpIfNeeded(checkServiceRunId, {
+      excludeJobId: jobId,
+      jobReportId,
+    });
+  } catch (err) {
+    console.error('[proofig] follow-up persist enqueue after FAILED failed', {
+      checkServiceRunId,
+      jobId,
+      err,
+    });
+  }
+  return updated;
+}
 
 /**
  * PROOFIG_PERSIST_PDF job handler.
@@ -73,6 +98,8 @@ export async function proofigPersistPdfHandler(ctx: Context, data: CreateJob) {
     throw httpError(422, 'Check run has no valid Proofig serviceData');
   }
 
+  const targetedReportId = payload.report_id ?? currentProofigReportId(serviceData);
+
   const job = await jobs.dbStartJob({ ...data, status: JobStatus.RUNNING });
   await prisma.linkedJob.create({
     data: {
@@ -96,10 +123,12 @@ export async function proofigPersistPdfHandler(ctx: Context, data: CreateJob) {
   const storedReportUrl =
     serviceData.reportUrl?.trim() || serviceData.summary?.reportUrl?.trim() || '';
   if (!storedReportUrl) {
-    return jobs.dbUpdateJob(job.id, {
-      status: JobStatus.FAILED,
-      message: 'No Proofig report URL stored on this run; cannot render PDF',
-    });
+    return failPersistPdfJob(
+      job.id,
+      payload.check_service_run_id,
+      'No Proofig report URL stored on this run; cannot render PDF',
+      targetedReportId,
+    );
   }
 
   const baseConfig =
@@ -108,19 +137,23 @@ export async function proofigPersistPdfHandler(ctx: Context, data: CreateJob) {
 
   const pdfService = readPdfServiceConfig(mergedConfig);
   if (!pdfService) {
-    return jobs.dbUpdateJob(job.id, {
-      status: JobStatus.FAILED,
-      message: 'checks-proofig pdfService config missing; cannot dispatch PDF render',
-    });
+    return failPersistPdfJob(
+      job.id,
+      payload.check_service_run_id,
+      'checks-proofig pdfService config missing; cannot dispatch PDF render',
+      targetedReportId,
+    );
   }
 
   const apiBaseUrl =
     (mergedConfig.apiBaseUrl as string | undefined)?.trim() || process.env.PROOFIG_API_BASE_URL;
   if (!apiBaseUrl?.trim()) {
-    return jobs.dbUpdateJob(job.id, {
-      status: JobStatus.FAILED,
-      message: 'checks-proofig apiBaseUrl not configured; cannot refresh report token',
-    });
+    return failPersistPdfJob(
+      job.id,
+      payload.check_service_run_id,
+      'checks-proofig apiBaseUrl not configured; cannot refresh report token',
+      targetedReportId,
+    );
   }
 
   let reportUrl: string;
@@ -129,7 +162,7 @@ export async function proofigPersistPdfHandler(ctx: Context, data: CreateJob) {
     reportUrl = proofigReportUrlWithAccessToken(storedReportUrl, token);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to build report URL';
-    return jobs.dbUpdateJob(job.id, { status: JobStatus.FAILED, message });
+    return failPersistPdfJob(job.id, payload.check_service_run_id, message, targetedReportId);
   }
 
   const handshake = createHandshakeToken(
@@ -151,7 +184,7 @@ export async function proofigPersistPdfHandler(ctx: Context, data: CreateJob) {
         check_service_run_id: payload.check_service_run_id,
         cdn: workVersion.cdn,
         cdn_key: workVersion.cdn_key,
-        report_id: serviceData.reportId,
+        report_id: targetedReportId ?? serviceData.reportId,
         force: payload.force,
       },
       pdfService,
@@ -163,7 +196,7 @@ export async function proofigPersistPdfHandler(ctx: Context, data: CreateJob) {
       err instanceof Error
         ? `Failed to publish Proofig PDF render message: ${err.message}`
         : 'Failed to publish Proofig PDF render message';
-    return jobs.dbUpdateJob(job.id, { status: JobStatus.FAILED, message });
+    return failPersistPdfJob(job.id, payload.check_service_run_id, message, targetedReportId);
   }
 
   return jobs.dbUpdateJob(job.id, {

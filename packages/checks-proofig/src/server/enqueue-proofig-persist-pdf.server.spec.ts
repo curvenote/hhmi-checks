@@ -21,7 +21,10 @@ vi.mock('uuidv7', () => ({
   uuidv7: () => 'job-new-1',
 }));
 
-import { enqueueProofigPersistPdfIfNeeded } from './enqueue-proofig-persist-pdf.server.js';
+import {
+  enqueueProofigPersistPdfFollowUpIfNeeded,
+  enqueueProofigPersistPdfIfNeeded,
+} from './enqueue-proofig-persist-pdf.server.js';
 
 function finalReportServiceData(overrides: Record<string, unknown> = {}) {
   return {
@@ -121,5 +124,68 @@ describe('enqueueProofigPersistPdfIfNeeded', () => {
         payload: expect.objectContaining({ force: true }),
       }),
     );
+  });
+
+  it('stamps report_id on the job payload when known', async () => {
+    mockFindUnique.mockResolvedValue({
+      id: 'run-1',
+      kind: 'proofig',
+      work_version_id: '11111111-1111-4111-8111-111111111111',
+      data: { serviceData: finalReportServiceData() },
+    });
+
+    await enqueueProofigPersistPdfIfNeeded('run-1');
+
+    expect(mockEnqueueAndDispatchJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ report_id: 'report-1' }),
+      }),
+    );
+  });
+
+  it('follow-up enqueues when stored report id is stale vs current reportId', async () => {
+    mockFindUnique.mockResolvedValue({
+      id: 'run-1',
+      kind: 'proofig',
+      work_version_id: '11111111-1111-4111-8111-111111111111',
+      data: {
+        serviceData: finalReportServiceData({
+          reportId: 'report-2',
+          proofigReportStored: true,
+          storedReportId: 'report-1',
+        }),
+      },
+    });
+
+    const result = await enqueueProofigPersistPdfFollowUpIfNeeded('run-1', {
+      excludeJobId: 'job-old',
+      jobReportId: 'report-1',
+    });
+
+    expect(result).toEqual({ enqueued: true, jobId: 'job-new-1' });
+    expect(mockFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { not: 'job-old' },
+        }),
+      }),
+    );
+  });
+
+  it('follow-up does not auto-retry when job targeted the current report id', async () => {
+    mockFindUnique.mockResolvedValue({
+      id: 'run-1',
+      kind: 'proofig',
+      work_version_id: '11111111-1111-4111-8111-111111111111',
+      data: { serviceData: finalReportServiceData() },
+    });
+
+    const result = await enqueueProofigPersistPdfFollowUpIfNeeded('run-1', {
+      excludeJobId: 'job-old',
+      jobReportId: 'report-1',
+    });
+
+    expect(result).toEqual({ enqueued: false, reason: 'same-report-no-auto-retry' });
+    expect(mockEnqueueAndDispatchJob).not.toHaveBeenCalled();
   });
 });
