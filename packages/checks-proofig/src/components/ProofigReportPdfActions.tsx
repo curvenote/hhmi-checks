@@ -62,8 +62,9 @@ export function ProofigReportPdfActions({
     setDownloading(true);
     try {
       const res = await fetch(downloadHref(checkRunId), { credentials: 'same-origin' });
-      if (res.status === 202) {
-        ui.toastInfo('Report PDF is still generating — try again shortly.');
+      if (res.status === 409) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        ui.toastInfo(body?.message ?? 'Report PDF is still generating — try again shortly.');
         return;
       }
       if (!res.ok) {

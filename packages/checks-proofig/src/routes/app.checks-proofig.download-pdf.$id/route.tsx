@@ -9,6 +9,7 @@ import {
 } from '@curvenote/scms-server';
 import { proofigDataSchema } from '../../schema.js';
 import { PROOFIG_REPORT_FILENAME, getStoredProofigReportFile } from '../../proofigReportFiles.js';
+import { assertWorkChecksReadForRun } from '../../server/checkWorkScopes.server.js';
 
 type CheckServiceRunData = {
   serviceData?: unknown;
@@ -34,6 +35,9 @@ export async function action() {
  */
 export async function loader(args: LoaderFunctionArgs) {
   const ctx = await withAppContext(args);
+  if (!ctx.user) {
+    throw httpError(401, 'Authentication required');
+  }
 
   const id = args.params.id;
   if (!id) {
@@ -44,6 +48,11 @@ export async function loader(args: LoaderFunctionArgs) {
   const run = await prisma.checkServiceRun.findUnique({ where: { id } });
   if (!run) {
     throw httpError(404, 'Check run not found');
+  }
+
+  const readGate = await assertWorkChecksReadForRun(ctx, run.work_version_id);
+  if (!readGate.ok) {
+    throw httpError(readGate.result.status ?? 403, readGate.result.error?.message ?? 'Forbidden');
   }
 
   const runData = run.data as CheckServiceRunData | null;
