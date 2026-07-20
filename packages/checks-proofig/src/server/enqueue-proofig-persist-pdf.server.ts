@@ -1,9 +1,17 @@
 import { uuidv7 as uuid } from 'uuidv7';
 import { JobStatus } from '@curvenote/scms-db';
 import { enqueueAndDispatchJob, getConfig, getPrismaClient } from '@curvenote/scms-server';
+import {
+  clearProofigReportPdfError,
+  currentProofigReportId,
+  shouldPersistProofigReport,
+} from '../proofigReportFiles.js';
 import { proofigDataSchema } from '../schema.js';
-import { currentProofigReportId, shouldPersistProofigReport } from '../proofigReportFiles.js';
-import { PROOFIG_PERSIST_PDF } from './jobs/proofigPersistPdf.constants.js';
+import { patchProofigRunServiceData } from './checkRunColumns.server.js';
+import {
+  PROOFIG_PERSIST_PDF,
+  PROOFIG_PERSIST_PDF_FAILURE_CLEANUP,
+} from './jobs/proofigPersistPdf.constants.js';
 
 type EnqueueResult = { enqueued: true; jobId: string } | { enqueued: false; reason: string };
 
@@ -95,6 +103,11 @@ export async function enqueueProofigPersistPdfIfNeeded(
 
   const reportId = currentProofigReportId(serviceData);
   const jobId = uuid();
+  const failureCleanupJobId = uuid();
+
+  // Clear any prior failure so the UI returns to “Generating…” while the new job runs.
+  await patchProofigRunServiceData(checkServiceRunId, (sd) => clearProofigReportPdfError(sd));
+
   await enqueueAndDispatchJob({
     job_id: jobId,
     job_type: PROOFIG_PERSIST_PDF,
@@ -107,6 +120,17 @@ export async function enqueueProofigPersistPdfIfNeeded(
     invoked_by_id: invokedById,
     activity_type: 'CHECK_STARTED',
     activity_data: { check: { kind: 'proofig' } },
+    dependents: [
+      {
+        job_id: failureCleanupJobId,
+        job_type: PROOFIG_PERSIST_PDF_FAILURE_CLEANUP,
+        payload: {
+          check_service_run_id: checkServiceRunId,
+          ...(reportId ? { report_id: reportId } : {}),
+        },
+        trigger_on: 'failure',
+      },
+    ],
   });
 
   return { enqueued: true, jobId };

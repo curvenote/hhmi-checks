@@ -22,6 +22,8 @@ import {
   PROOFIG_PERSIST_PDF,
   proofigPersistPdfHandler,
 } from './server/jobs/proofig-persist-pdf.server.js';
+import { proofigPersistPdfFailureCleanupHandler } from './server/jobs/proofig-persist-pdf-failure-cleanup.server.js';
+import { PROOFIG_PERSIST_PDF_FAILURE_CLEANUP } from './server/jobs/proofigPersistPdf.constants.js';
 import { ImageIntegrityChecksSection } from './components/ImageIntegrityChecksSection.js';
 import { ProofigUploadCheckOption } from './components/ProofigUploadCheckOption.js';
 import { isProofigUploadEligible, resolveProofigUploadEligibility } from './uploadEligibility.js';
@@ -94,6 +96,10 @@ export const extension: ServerExtension = {
     {
       jobType: PROOFIG_PERSIST_PDF,
       handler: proofigPersistPdfHandler as JobRegistration['handler'],
+    },
+    {
+      jobType: PROOFIG_PERSIST_PDF_FAILURE_CLEANUP,
+      handler: proofigPersistPdfFailureCleanupHandler as JobRegistration['handler'],
     },
   ],
   registerRoutes,

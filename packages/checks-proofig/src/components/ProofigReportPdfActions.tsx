@@ -60,10 +60,15 @@ export function ProofigReportPdfActions({
       const res = await fetch(downloadHref(checkRunId), { credentials: 'same-origin' });
       if (res.status === 409) {
         const body = (await res.json().catch(() => null)) as {
+          status?: string;
           message?: string;
           reason?: string;
         } | null;
-        ui.toastInfo(body?.message ?? 'Report PDF is still generating — try again shortly.');
+        if (body?.status === 'failed') {
+          ui.toastError(body.message ?? 'Report PDF generation failed.');
+        } else {
+          ui.toastInfo(body?.message ?? 'Report PDF is still generating — try again shortly.');
+        }
         // Metadata may have been cleared (e.g. CDN object missing); refresh actions.
         revalidator.revalidate();
         return;
@@ -99,10 +104,12 @@ export function ProofigReportPdfActions({
   if (readiness === 'not-final') return null;
 
   const stored = readiness === 'stored-current';
+  const failed = readiness === 'failed';
   const busy = fetcher.state !== 'idle';
   const canRegenerate = Boolean(
     actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim() && readiness !== 'no-url',
   );
+  const pdfError = proofigData?.proofigReportPdfError?.trim();
 
   const submitRegenerate = () => {
     if (!canRegenerate) return;
@@ -114,33 +121,48 @@ export function ProofigReportPdfActions({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {stored && checkRunId ? (
-        <ui.Button
-          type="button"
-          variant="outline"
-          disabled={downloading}
-          onClick={() => void runDownload()}
-        >
-          <Download className="w-4 h-4 mr-2" />
-          {downloading ? 'Downloading…' : 'Download PDF'}
-        </ui.Button>
-      ) : (
-        <span className="text-sm font-normal opacity-50 animate-pulse text-primary">
-          {busy ? 'Generating report PDF…' : 'Preparing report PDF…'}
-        </span>
-      )}
-      <ui.MaintenanceTooltip enabled={blocked} message={message}>
-        <ui.Button
-          type="button"
-          variant="ghost"
-          disabled={!canRegenerate || blocked || busy}
-          onClick={submitRegenerate}
-        >
-          <RefreshCw className={`w-4 h-4 mr-2 ${busy ? 'animate-spin' : ''}`} />
-          {busy ? 'Generating…' : stored ? 'Regenerate PDF' : 'Generate PDF'}
-        </ui.Button>
-      </ui.MaintenanceTooltip>
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-2">
+        {stored && checkRunId ? (
+          <ui.Button
+            type="button"
+            variant="outline"
+            disabled={downloading}
+            onClick={() => void runDownload()}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            {downloading ? 'Downloading…' : 'Download PDF'}
+          </ui.Button>
+        ) : failed ? (
+          <span className="text-sm font-normal text-destructive">Report PDF generation failed</span>
+        ) : (
+          <span className="text-sm font-normal opacity-50 animate-pulse text-primary">
+            {busy ? 'Generating report PDF…' : 'Preparing report PDF…'}
+          </span>
+        )}
+        <ui.MaintenanceTooltip enabled={blocked} message={message}>
+          <ui.Button
+            type="button"
+            variant="ghost"
+            disabled={!canRegenerate || blocked || busy}
+            onClick={submitRegenerate}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${busy ? 'animate-spin' : ''}`} />
+            {busy
+              ? 'Generating…'
+              : failed
+                ? 'Retry PDF generation'
+                : stored
+                  ? 'Regenerate PDF'
+                  : 'Generate PDF'}
+          </ui.Button>
+        </ui.MaintenanceTooltip>
+      </div>
+      {failed && pdfError ? (
+        <p className="text-xs text-muted-foreground max-w-xl break-words" title={pdfError}>
+          {pdfError}
+        </p>
+      ) : null}
     </div>
   );
 }

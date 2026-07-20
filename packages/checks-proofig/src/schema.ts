@@ -158,6 +158,10 @@ export const proofigDataSchema = z.object({
   proofigReportStored: z.boolean().optional(),
   /** Proofig report id that was persisted to `files` (used for idempotency). */
   storedReportId: z.string().optional(),
+  /** Last PROOFIG_PERSIST_PDF failure message (cleared on enqueue / successful store). */
+  proofigReportPdfError: z.string().optional(),
+  /** ISO timestamp when `proofigReportPdfError` was last set. */
+  proofigReportPdfFailedAt: z.string().optional(),
 });
 
 export type ProofigStageStatus = z.infer<typeof LinearStageStatusSchema>;

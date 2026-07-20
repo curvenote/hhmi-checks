@@ -7,6 +7,8 @@ const mockEnqueueAndDispatchJob = vi.fn();
 const mockGetConfig = vi.fn();
 const mockFindUnique = vi.fn();
 const mockFindFirst = vi.fn();
+const mockPatchProofigRunServiceData = vi.fn();
+let uuidSeq = 0;
 
 vi.mock('@curvenote/scms-server', () => ({
   getPrismaClient: vi.fn(async () => ({
@@ -17,8 +19,15 @@ vi.mock('@curvenote/scms-server', () => ({
   enqueueAndDispatchJob: (...args: unknown[]) => mockEnqueueAndDispatchJob(...args),
 }));
 
+vi.mock('./checkRunColumns.server.js', () => ({
+  patchProofigRunServiceData: (...args: unknown[]) => mockPatchProofigRunServiceData(...args),
+}));
+
 vi.mock('uuidv7', () => ({
-  uuidv7: () => 'job-new-1',
+  uuidv7: () => {
+    uuidSeq += 1;
+    return `job-new-${uuidSeq}`;
+  },
 }));
 
 import {
@@ -51,11 +60,13 @@ function finalReportServiceData(overrides: Record<string, unknown> = {}) {
 describe('enqueueProofigPersistPdfIfNeeded', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    uuidSeq = 0;
     mockGetConfig.mockResolvedValue({
       api: { submissionsServiceAccount: { id: 'svc-1' } },
     });
     mockEnqueueAndDispatchJob.mockResolvedValue(undefined);
     mockFindFirst.mockResolvedValue(null);
+    mockPatchProofigRunServiceData.mockResolvedValue({});
   });
 
   it('skips when a PROOFIG_PERSIST_PDF job is already in flight for the run', async () => {
@@ -98,7 +109,21 @@ describe('enqueueProofigPersistPdfIfNeeded', () => {
     const result = await enqueueProofigPersistPdfIfNeeded('run-1');
 
     expect(result).toEqual({ enqueued: true, jobId: 'job-new-1' });
+    expect(mockPatchProofigRunServiceData).toHaveBeenCalledTimes(1);
     expect(mockEnqueueAndDispatchJob).toHaveBeenCalledTimes(1);
+    expect(mockEnqueueAndDispatchJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        job_id: 'job-new-1',
+        job_type: 'PROOFIG_PERSIST_PDF',
+        dependents: [
+          expect.objectContaining({
+            job_id: 'job-new-2',
+            job_type: 'PROOFIG_PERSIST_PDF_FAILURE_CLEANUP',
+            trigger_on: 'failure',
+          }),
+        ],
+      }),
+    );
   });
 
   it('bypasses the in-flight check when force is true', async () => {

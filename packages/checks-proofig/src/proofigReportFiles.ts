@@ -9,8 +9,42 @@ export type ProofigPdfReadiness =
   | 'not-final'
   | 'no-url'
   | 'pending'
+  | 'failed'
   | 'stored-current'
   | 'stored-stale';
+
+/** Strip query strings and truncate noisy worker/job error text for UI display. */
+export function summarizeProofigPdfError(message: string): string {
+  const withoutQuery = message.replace(/\?[^?\s]*/g, '');
+  const firstLine = withoutQuery.split('\n')[0]?.trim() || withoutQuery.trim();
+  if (firstLine.length <= 280) return firstLine;
+  return `${firstLine.slice(0, 277)}…`;
+}
+
+/** Record a persist/render failure on check-run serviceData for the PDF actions UI. */
+export function markProofigReportPdfError(
+  serviceData: ProofigDataSchema,
+  message: string,
+  failedAt = new Date().toISOString(),
+): ProofigDataSchema {
+  return {
+    ...serviceData,
+    proofigReportPdfError: summarizeProofigPdfError(message),
+    proofigReportPdfFailedAt: failedAt,
+  };
+}
+
+/** Clear PDF persist failure flags (e.g. before retry enqueue or after successful store). */
+export function clearProofigReportPdfError(serviceData: ProofigDataSchema): ProofigDataSchema {
+  if (serviceData.proofigReportPdfError == null && serviceData.proofigReportPdfFailedAt == null) {
+    return serviceData;
+  }
+  return {
+    ...serviceData,
+    proofigReportPdfError: undefined,
+    proofigReportPdfFailedAt: undefined,
+  };
+}
 
 /**
  * Absolute storage object key for the persisted Proofig report PDF for a check run
@@ -84,6 +118,7 @@ export function hasStoredProofigReport(serviceData: ProofigDataSchema | undefine
  * - `not-final` — report stage not reached
  * - `no-url` — final but no report URL to render from
  * - `pending` — final with URL, PDF not yet stored for current report
+ * - `failed` — persist/render failed (and nothing current is stored)
  * - `stored-current` — PDF stored for the current report id
  * - `stored-stale` — PDF metadata present but for a different report id
  */
@@ -102,6 +137,7 @@ export function getProofigPdfReadiness(
   ) {
     return 'stored-stale';
   }
+  if (serviceData?.proofigReportPdfError?.trim()) return 'failed';
   return 'pending';
 }
 
@@ -131,12 +167,12 @@ export function replaceGeneratedProofigReport(
 ): ProofigDataSchema {
   const nextFiles = { ...(withoutGeneratedProofigReportFiles(serviceData.files) ?? {}) };
   nextFiles[fileEntry.path] = fileEntry;
-  return {
+  return clearProofigReportPdfError({
     ...serviceData,
     files: nextFiles,
     proofigReportStored: true,
     storedReportId: storedReportId ?? serviceData.reportId,
-  };
+  });
 }
 
 /**
@@ -144,12 +180,12 @@ export function replaceGeneratedProofigReport(
  * can enqueue again (e.g. after the CDN object was deleted but metadata remained).
  */
 export function clearStoredProofigReport(serviceData: ProofigDataSchema): ProofigDataSchema {
-  return {
+  return clearProofigReportPdfError({
     ...serviceData,
     files: withoutGeneratedProofigReportFiles(serviceData.files),
     proofigReportStored: false,
     storedReportId: undefined,
-  };
+  });
 }
 
 /**

@@ -168,6 +168,47 @@ describe('app.checks-proofig.download-pdf loader', () => {
     expect(body.reason).toBe('stale-stored-report');
   });
 
+  it('returns 409 failed when persist error is recorded and nothing is stored', async () => {
+    mocks.getPrismaClient.mockResolvedValue({
+      checkServiceRun: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: RUN_ID,
+          work_version_id: WV_ID,
+          data: {
+            serviceData: {
+              ...MINIMAL_PROOFIG_SERVICE_DATA,
+              reportId: 'report-1',
+              reportUrl: 'https://proofig.example/r/1',
+              proofigReportPdfError: 'Converter failed: net::ERR_CONNECTION_REFUSED',
+              summary: {
+                state: KnownState.ReportClean,
+                receivedAt: '2025-01-01T00:00:00Z',
+              },
+              stages: {
+                ...MINIMAL_PROOFIG_SERVICE_DATA.stages,
+                resultsReview: {
+                  status: 'completed',
+                  history: [],
+                  timestamp: '2025-01-01T00:00:00Z',
+                  outcome: 'clean',
+                },
+              },
+            },
+          },
+        }),
+      },
+      workVersion: { findUnique: vi.fn() },
+    });
+    const res = await loader(makeArgs());
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body).toEqual({
+      status: 'failed',
+      reason: 'persist-failed',
+      message: 'Converter failed: net::ERR_CONNECTION_REFUSED',
+    });
+  });
+
   it('heals and returns 409 when the CDN object is missing', async () => {
     mocks.fileExists.mockResolvedValue(false);
     const res = await loader(makeArgs());

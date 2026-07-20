@@ -33,6 +33,17 @@ function pdfPendingResponse(reason: string, message?: string) {
   );
 }
 
+function pdfFailedResponse(reason: string, message?: string) {
+  return Response.json(
+    {
+      status: 'failed',
+      reason,
+      message: message ?? 'Proofig report PDF generation failed.',
+    },
+    { status: 409 },
+  );
+}
+
 export async function action() {
   throw error405();
 }
@@ -83,6 +94,12 @@ export async function loader(args: LoaderFunctionArgs) {
   const parsed = proofigDataSchema.safeParse(runData?.serviceData);
   const serviceData = parsed.success ? parsed.data : undefined;
   const readiness = getProofigPdfReadiness(serviceData);
+  if (readiness === 'failed') {
+    return pdfFailedResponse(
+      'persist-failed',
+      serviceData?.proofigReportPdfError?.trim() || 'Proofig report PDF generation failed.',
+    );
+  }
   if (readiness !== 'stored-current') {
     const hasFile = Boolean(getStoredProofigReportFile(serviceData)?.path);
     return pdfPendingResponse(

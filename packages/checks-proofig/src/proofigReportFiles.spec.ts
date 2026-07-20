@@ -3,11 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { KnownState, MINIMAL_PROOFIG_SERVICE_DATA, type ProofigDataSchema } from './schema.js';
 import {
   buildProofigReportFileEntry,
+  clearProofigReportPdfError,
   clearStoredProofigReport,
   getProofigPdfReadiness,
   hasStoredProofigReport,
+  markProofigReportPdfError,
   replaceGeneratedProofigReport,
   shouldPersistProofigReport,
+  summarizeProofigPdfError,
   withoutGeneratedProofigReportFiles,
 } from './proofigReportFiles.js';
 
@@ -70,6 +73,27 @@ describe('getProofigPdfReadiness', () => {
 
   it('returns pending when final with URL but nothing stored yet', () => {
     expect(getProofigPdfReadiness(finalReportData())).toBe('pending');
+  });
+
+  it('returns failed when persist error is recorded and nothing is stored', () => {
+    expect(
+      getProofigPdfReadiness(
+        finalReportData({
+          proofigReportPdfError: 'Converter failed: page.goto net::ERR_CONNECTION_REFUSED',
+          proofigReportPdfFailedAt: '2025-01-01T00:00:00Z',
+        }),
+      ),
+    ).toBe('failed');
+  });
+
+  it('prefers stored-current over a stale error flag', () => {
+    const stored = finalReportData({
+      proofigReportStored: true,
+      storedReportId: 'report-1',
+      files: { [GENERATED_PATH]: storedFileEntry() },
+      proofigReportPdfError: 'old error',
+    });
+    expect(getProofigPdfReadiness(stored)).toBe('stored-current');
   });
 
   it('returns stored-current when a PDF is stored for the current report id', () => {
@@ -168,5 +192,29 @@ describe('clearStoredProofigReport', () => {
     expect(cleared.files).toBeUndefined();
     expect(shouldPersistProofigReport(cleared)).toBe(true);
     expect(getProofigPdfReadiness(cleared)).toBe('pending');
+  });
+});
+
+describe('markProofigReportPdfError / summarizeProofigPdfError', () => {
+  it('strips query strings and records a truncated error', () => {
+    const marked = markProofigReportPdfError(
+      finalReportData(),
+      'Converter failed: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/x?token=abc\nCall log:',
+      '2025-01-02T00:00:00Z',
+    );
+    expect(marked.proofigReportPdfError).toBe(
+      'Converter failed: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/x',
+    );
+    expect(marked.proofigReportPdfFailedAt).toBe('2025-01-02T00:00:00Z');
+    expect(getProofigPdfReadiness(marked)).toBe('failed');
+
+    const cleared = clearProofigReportPdfError(marked);
+    expect(cleared.proofigReportPdfError).toBeUndefined();
+    expect(getProofigPdfReadiness(cleared)).toBe('pending');
+  });
+
+  it('summarizeProofigPdfError truncates long first lines', () => {
+    const long = `error ${'x'.repeat(400)}`;
+    expect(summarizeProofigPdfError(long).length).toBeLessThanOrEqual(280);
   });
 });
