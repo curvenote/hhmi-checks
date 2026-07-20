@@ -92,7 +92,7 @@ function makeArgs(id = RUN_ID): Parameters<typeof loader>[0] {
   return {
     params: { id },
     request: new Request(`http://localhost/app/checks-proofig/download-pdf/${id}`),
-  } as Parameters<typeof loader>[0];
+  } as unknown as Parameters<typeof loader>[0];
 }
 
 async function expectThrownStatus(fn: () => Promise<unknown>, status: number) {

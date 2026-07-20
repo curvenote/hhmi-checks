@@ -3,11 +3,7 @@ import { useFetcher, useRevalidator } from 'react-router';
 import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
 import { Download, RefreshCw } from 'lucide-react';
 import type { ProofigDataSchema } from '../schema.js';
-import {
-  PROOFIG_REPORT_FILENAME,
-  hasStoredProofigReport,
-  isProofigAtFinalReportStage,
-} from '../proofigReportFiles.js';
+import { PROOFIG_REPORT_FILENAME, getProofigPdfReadiness } from '../proofigReportFiles.js';
 
 type RegenerateFetcherData = {
   success?: boolean;
@@ -99,15 +95,13 @@ export function ProofigReportPdfActions({
     }
   }, [checkRunId, revalidator]);
 
-  if (!isProofigAtFinalReportStage(proofigData)) return null;
+  const readiness = getProofigPdfReadiness(proofigData);
+  if (readiness === 'not-final') return null;
 
-  const stored = hasStoredProofigReport(proofigData);
+  const stored = readiness === 'stored-current';
   const busy = fetcher.state !== 'idle';
-  const hasReportUrl = Boolean(
-    proofigData?.reportUrl?.trim() || proofigData?.summary?.reportUrl?.trim(),
-  );
   const canRegenerate = Boolean(
-    actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim() && hasReportUrl,
+    actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim() && readiness !== 'no-url',
   );
 
   const submitRegenerate = () => {

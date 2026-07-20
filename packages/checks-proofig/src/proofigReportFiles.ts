@@ -4,6 +4,14 @@ import { KnownState, type ProofigDataSchema } from './schema.js';
 export const PROOFIG_REPORT_GENERATED_SLOT = 'generated';
 export const PROOFIG_REPORT_FILENAME = 'proofig-report.pdf';
 
+/** UI / enqueue readiness for the persisted Proofig report PDF. */
+export type ProofigPdfReadiness =
+  | 'not-final'
+  | 'no-url'
+  | 'pending'
+  | 'stored-current'
+  | 'stored-stale';
+
 /**
  * Absolute storage object key for the persisted Proofig report PDF for a check run
  * (`{cdn_key}/generated/{checkRunId}/proofig-report.pdf`).
@@ -55,6 +63,11 @@ export function isProofigAtFinalReportStage(serviceData: ProofigDataSchema | und
   return state === KnownState.ReportClean || state === KnownState.ReportFlagged;
 }
 
+function proofigReportUrl(serviceData: ProofigDataSchema | undefined): string | undefined {
+  const url = serviceData?.reportUrl?.trim() || serviceData?.summary?.reportUrl?.trim();
+  return url ? url : undefined;
+}
+
 /** True when a Proofig report PDF is stored for the current report id. */
 export function hasStoredProofigReport(serviceData: ProofigDataSchema | undefined): boolean {
   if (serviceData?.proofigReportStored !== true) return false;
@@ -66,19 +79,74 @@ export function hasStoredProofigReport(serviceData: ProofigDataSchema | undefine
 }
 
 /**
- * Clear generated-slot file metadata and stored-report flags so `shouldPersistProofigReport`
- * can enqueue again (e.g. after the CDN object was deleted but metadata remained).
+ * Single readiness classifier for UI, download, and enqueue decisions.
+ *
+ * - `not-final` — report stage not reached
+ * - `no-url` — final but no report URL to render from
+ * - `pending` — final with URL, PDF not yet stored for current report
+ * - `stored-current` — PDF stored for the current report id
+ * - `stored-stale` — PDF metadata present but for a different report id
  */
-export function clearStoredProofigReport(serviceData: ProofigDataSchema): ProofigDataSchema {
-  const nextFiles = { ...(serviceData.files ?? {}) };
+export function getProofigPdfReadiness(
+  serviceData: ProofigDataSchema | undefined,
+): ProofigPdfReadiness {
+  if (!isProofigAtFinalReportStage(serviceData)) return 'not-final';
+  if (!proofigReportUrl(serviceData)) return 'no-url';
+  if (hasStoredProofigReport(serviceData)) return 'stored-current';
+
+  const reportId = currentProofigReportId(serviceData);
+  if (
+    serviceData?.proofigReportStored === true &&
+    reportId &&
+    serviceData.storedReportId !== reportId
+  ) {
+    return 'stored-stale';
+  }
+  return 'pending';
+}
+
+/** Drop all generated-slot file entries; returns undefined when the map is empty. */
+export function withoutGeneratedProofigReportFiles(
+  files: ProofigDataSchema['files'],
+): ProofigDataSchema['files'] {
+  if (!files || typeof files !== 'object') return undefined;
+  const nextFiles = { ...files };
   for (const key of Object.keys(nextFiles)) {
     if (nextFiles[key]?.slot === PROOFIG_REPORT_GENERATED_SLOT) {
       delete nextFiles[key];
     }
   }
+  return Object.keys(nextFiles).length > 0 ? nextFiles : undefined;
+}
+
+/**
+ * Replace any prior generated-slot PDF entry and mark the report as stored.
+ * When `storedReportId` is omitted, falls back to `serviceData.reportId` (same as the
+ * pdf-stored hook).
+ */
+export function replaceGeneratedProofigReport(
+  serviceData: ProofigDataSchema,
+  fileEntry: FileMetadataSectionItem,
+  storedReportId: string | undefined,
+): ProofigDataSchema {
+  const nextFiles = { ...(withoutGeneratedProofigReportFiles(serviceData.files) ?? {}) };
+  nextFiles[fileEntry.path] = fileEntry;
   return {
     ...serviceData,
-    files: Object.keys(nextFiles).length > 0 ? nextFiles : undefined,
+    files: nextFiles,
+    proofigReportStored: true,
+    storedReportId: storedReportId ?? serviceData.reportId,
+  };
+}
+
+/**
+ * Clear generated-slot file metadata and stored-report flags so `shouldPersistProofigReport`
+ * can enqueue again (e.g. after the CDN object was deleted but metadata remained).
+ */
+export function clearStoredProofigReport(serviceData: ProofigDataSchema): ProofigDataSchema {
+  return {
+    ...serviceData,
+    files: withoutGeneratedProofigReportFiles(serviceData.files),
     proofigReportStored: false,
     storedReportId: undefined,
   };
@@ -87,12 +155,14 @@ export function clearStoredProofigReport(serviceData: ProofigDataSchema): Proofi
 /**
  * True when we should (auto) persist a report PDF: at a final report stage, with a report URL,
  * and either nothing stored yet or the stored PDF is for a different report id.
+ *
+ * Kept independent of `getProofigPdfReadiness` so a stored flag with a matching report id
+ * (even without a file entry) still skips auto-persist — matching prior enqueue behavior.
  */
 export function shouldPersistProofigReport(serviceData: ProofigDataSchema | undefined): boolean {
   if (!serviceData) return false;
   if (!isProofigAtFinalReportStage(serviceData)) return false;
-  const reportUrl = serviceData.reportUrl?.trim() || serviceData.summary?.reportUrl?.trim();
-  if (!reportUrl) return false;
+  if (!proofigReportUrl(serviceData)) return false;
   if (!serviceData.proofigReportStored) return true;
   const reportId = currentProofigReportId(serviceData);
   return Boolean(reportId && serviceData.storedReportId !== reportId);

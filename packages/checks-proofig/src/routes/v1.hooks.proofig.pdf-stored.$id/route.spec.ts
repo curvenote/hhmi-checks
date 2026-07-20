@@ -51,7 +51,7 @@ function makeArgs(init: {
       headers,
       body: init.body === undefined ? JSON.stringify(validBody()) : JSON.stringify(init.body),
     }),
-  } as Parameters<typeof action>[0];
+  } as unknown as Parameters<typeof action>[0];
 }
 
 function validBody(overrides: Record<string, unknown> = {}) {

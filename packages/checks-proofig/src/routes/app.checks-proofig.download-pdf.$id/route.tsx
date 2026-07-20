@@ -11,8 +11,8 @@ import { proofigDataSchema } from '../../schema.js';
 import {
   PROOFIG_REPORT_FILENAME,
   clearStoredProofigReport,
+  getProofigPdfReadiness,
   getStoredProofigReportFile,
-  hasStoredProofigReport,
 } from '../../proofigReportFiles.js';
 import { assertWorkChecksReadForRun } from '../../server/checkWorkScopes.server.js';
 import { patchProofigRunServiceData } from '../../server/checkRunColumns.server.js';
@@ -55,7 +55,7 @@ async function healMissingStoredReport(checkServiceRunId: string): Promise<void>
 
 /**
  * Stream the persisted Proofig report PDF for a check run from work version storage.
- * Only serves when `hasStoredProofigReport` is true (current report id), matching the UI.
+ * Only serves when readiness is `stored-current` (PDF for the current report id), matching the UI.
  */
 export async function loader(args: LoaderFunctionArgs) {
   const ctx = await withAppContext(args);
@@ -82,11 +82,14 @@ export async function loader(args: LoaderFunctionArgs) {
   const runData = run.data as CheckServiceRunData | null;
   const parsed = proofigDataSchema.safeParse(runData?.serviceData);
   const serviceData = parsed.success ? parsed.data : undefined;
-  if (!hasStoredProofigReport(serviceData)) {
+  const readiness = getProofigPdfReadiness(serviceData);
+  if (readiness !== 'stored-current') {
     const hasFile = Boolean(getStoredProofigReportFile(serviceData)?.path);
-    return pdfPendingResponse(hasFile ? 'stale-stored-report' : 'no-stored-file');
+    return pdfPendingResponse(
+      readiness === 'stored-stale' || hasFile ? 'stale-stored-report' : 'no-stored-file',
+    );
   }
-  // Safe: hasStoredProofigReport requires a generated-slot entry with a path.
+  // Safe: stored-current requires a generated-slot entry with a path.
   const storedFile = getStoredProofigReportFile(serviceData)!;
 
   if (!run.work_version_id) {

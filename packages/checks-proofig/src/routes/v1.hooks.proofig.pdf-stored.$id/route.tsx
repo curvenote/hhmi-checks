@@ -6,9 +6,9 @@ import { patchProofigRunServiceData } from '../../server/checkRunColumns.server.
 import { enqueueProofigPersistPdfFollowUpIfNeeded } from '../../server/enqueue-proofig-persist-pdf.server.js';
 import { PROOFIG_PERSIST_PDF } from '../../server/jobs/proofigPersistPdf.constants.js';
 import {
-  PROOFIG_REPORT_GENERATED_SLOT,
   buildProofigReportFileEntry,
   proofigReportStoragePath,
+  replaceGeneratedProofigReport,
 } from '../../proofigReportFiles.js';
 
 const PdfStoredBodySchema = z.object({
@@ -133,21 +133,9 @@ export async function action(args: ActionFunctionArgs) {
   const fileEntry = buildProofigReportFileEntry(body.path, body.size, body.md5, uploadDate);
   const storedReportId = body.report_id ?? jobPayload.data.report_id;
 
-  await patchProofigRunServiceData(id, (sd) => {
-    const nextFiles = { ...(sd.files ?? {}) };
-    for (const key of Object.keys(nextFiles)) {
-      if (nextFiles[key]?.slot === PROOFIG_REPORT_GENERATED_SLOT) {
-        delete nextFiles[key];
-      }
-    }
-    nextFiles[body.path] = fileEntry;
-    return {
-      ...sd,
-      files: nextFiles,
-      proofigReportStored: true,
-      storedReportId: storedReportId ?? sd.reportId,
-    };
-  });
+  await patchProofigRunServiceData(id, (sd) =>
+    replaceGeneratedProofigReport(sd, fileEntry, storedReportId),
+  );
 
   // If reportId advanced while this render was in flight, kick off a persist for the new id.
   try {
