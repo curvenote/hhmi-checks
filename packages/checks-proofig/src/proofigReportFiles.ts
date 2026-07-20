@@ -63,6 +63,25 @@ export function hasStoredProofigReport(serviceData: ProofigDataSchema | undefine
 }
 
 /**
+ * Clear generated-slot file metadata and stored-report flags so `shouldPersistProofigReport`
+ * can enqueue again (e.g. after the CDN object was deleted but metadata remained).
+ */
+export function clearStoredProofigReport(serviceData: ProofigDataSchema): ProofigDataSchema {
+  const nextFiles = { ...(serviceData.files ?? {}) };
+  for (const key of Object.keys(nextFiles)) {
+    if (nextFiles[key]?.slot === PROOFIG_REPORT_GENERATED_SLOT) {
+      delete nextFiles[key];
+    }
+  }
+  return {
+    ...serviceData,
+    files: Object.keys(nextFiles).length > 0 ? nextFiles : undefined,
+    proofigReportStored: false,
+    storedReportId: undefined,
+  };
+}
+
+/**
  * True when we should (auto) persist a report PDF: at a final report stage, with a report URL,
  * and either nothing stored yet or the stored PDF is for a different report id.
  */

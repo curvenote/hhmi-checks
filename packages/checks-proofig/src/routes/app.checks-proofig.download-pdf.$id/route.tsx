@@ -10,21 +10,24 @@ import {
 import { proofigDataSchema } from '../../schema.js';
 import {
   PROOFIG_REPORT_FILENAME,
+  clearStoredProofigReport,
   getStoredProofigReportFile,
   hasStoredProofigReport,
 } from '../../proofigReportFiles.js';
 import { assertWorkChecksReadForRun } from '../../server/checkWorkScopes.server.js';
+import { patchProofigRunServiceData } from '../../server/checkRunColumns.server.js';
+import { enqueueProofigPersistPdfIfNeeded } from '../../server/enqueue-proofig-persist-pdf.server.js';
 
 type CheckServiceRunData = {
   serviceData?: unknown;
 };
 
-function pdfPendingResponse(reason: string) {
+function pdfPendingResponse(reason: string, message?: string) {
   return Response.json(
     {
       status: 'pending',
       reason,
-      message: 'Proofig report PDF is not ready for download yet.',
+      message: message ?? 'Proofig report PDF is not ready for download yet.',
     },
     { status: 409 },
   );
@@ -32,6 +35,22 @@ function pdfPendingResponse(reason: string) {
 
 export async function action() {
   throw error405();
+}
+
+/**
+ * Clear stale stored-report metadata when the CDN object is missing, then best-effort
+ * re-enqueue a persist so `shouldPersistProofigReport` can run again.
+ */
+async function healMissingStoredReport(checkServiceRunId: string): Promise<void> {
+  await patchProofigRunServiceData(checkServiceRunId, (sd) => clearStoredProofigReport(sd));
+  try {
+    await enqueueProofigPersistPdfIfNeeded(checkServiceRunId);
+  } catch (err) {
+    console.error('[proofig] re-enqueue after missing stored PDF failed', {
+      checkServiceRunId,
+      err,
+    });
+  }
 }
 
 /**
@@ -89,7 +108,11 @@ export async function loader(args: LoaderFunctionArgs) {
 
   const file = new File(backend, storedFile.path, bucket);
   if (!(await file.exists())) {
-    return pdfPendingResponse('stored-file-missing');
+    await healMissingStoredReport(id);
+    return pdfPendingResponse(
+      'stored-file-missing',
+      'Report PDF file is missing from storage; regenerating.',
+    );
   }
 
   const stream = await file.readStream();

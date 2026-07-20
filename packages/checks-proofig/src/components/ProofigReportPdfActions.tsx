@@ -63,8 +63,13 @@ export function ProofigReportPdfActions({
     try {
       const res = await fetch(downloadHref(checkRunId), { credentials: 'same-origin' });
       if (res.status === 409) {
-        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        const body = (await res.json().catch(() => null)) as {
+          message?: string;
+          reason?: string;
+        } | null;
         ui.toastInfo(body?.message ?? 'Report PDF is still generating — try again shortly.');
+        // Metadata may have been cleared (e.g. CDN object missing); refresh actions.
+        revalidator.revalidate();
         return;
       }
       if (!res.ok) {
@@ -92,7 +97,7 @@ export function ProofigReportPdfActions({
     } finally {
       setDownloading(false);
     }
-  }, [checkRunId]);
+  }, [checkRunId, revalidator]);
 
   if (!isProofigAtFinalReportStage(proofigData)) return null;
 
