@@ -12,7 +12,7 @@ set -euo pipefail
 
 REPORT_URL="${1:-https://example.com/}"
 TARGET="${TARGET:-http://127.0.0.1:8080/}"
-JOB_URL="${JOB_URL:-http://127.0.0.1:9999/v1/jobs/local-test}"
+JOB_URL="${JOB_URL:-http://127.0.0.1:3031/v1/jobs/local-test}"
 HANDSHAKE="${HANDSHAKE:-local-handshake}"
 USER_ID="${USER_ID:-local-user}"
 

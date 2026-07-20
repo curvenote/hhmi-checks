@@ -25,6 +25,22 @@ export const ProofigPdfPayloadSchema = z.object({
 
 export type ProofigPdfPayload = z.infer<typeof ProofigPdfPayloadSchema>;
 
+/** Minimal body for POST /test-render (render-only local smoke tests). */
+export const RenderOnlyRequestSchema = z.object({
+  reportUrl: z.string().url('reportUrl must be a valid URL'),
+});
+
+export type RenderOnlyRequest = z.infer<typeof RenderOnlyRequestSchema>;
+
+export function validateRenderOnlyRequest(input: unknown): RenderOnlyRequest {
+  const result = RenderOnlyRequestSchema.safeParse(input);
+  if (!result.success) {
+    const message = result.error.issues.map((issue) => issue.message).join('; ');
+    throw new Error(`Invalid render-only request: ${message}`);
+  }
+  return result.data;
+}
+
 export function validateProofigPdfPayload(input: unknown): ProofigPdfPayload {
   const result = ProofigPdfPayloadSchema.safeParse(input);
   if (!result.success) {

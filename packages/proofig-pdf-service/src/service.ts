@@ -14,6 +14,9 @@
  *
  * Job lifecycle + temp folder handling are provided by `withPubSubHandler` from
  * `@curvenote/scms-tasks`.
+ *
+ * When `PROOFIG_PDF_RENDER_ONLY=1`, POST /test-render is also available for local smoke
+ * tests that exercise only the Playwright render path (no job handshake, upload, or hooks).
  */
 
 import { createHash } from 'node:crypto';
@@ -23,9 +26,12 @@ import { withPubSubHandler, type HandlerContext, type SCMSClient } from '@curven
 import {
   proofigReportStoragePath,
   validateProofigPdfPayload,
+  validateRenderOnlyRequest,
   type ProofigPdfPayload,
 } from './payload.js';
 import { renderReportPdf } from './pdf/renderReportPdf.js';
+import { isRenderOnlyTestMode } from './renderOnlyTestMode.js';
+import { runRenderOnly } from './runRenderOnly.js';
 
 function md5OfFile(localPath: string): string {
   const content = fs.readFileSync(localPath);
@@ -68,6 +74,42 @@ async function registerStoredPdf(
   }
 }
 
+async function handleProductionJob(ctx: HandlerContext<unknown>): Promise<void> {
+  const { client, payload, tmpFolder, res, attributes } = ctx;
+
+  const data = validateProofigPdfPayload(payload);
+  console.log('Rendering Proofig report to PDF', {
+    check_service_run_id: data.check_service_run_id,
+    work_version_id: data.work_version_id,
+  });
+
+  const { localPath, size } = await renderReportPdf({
+    reportUrl: data.reportUrl,
+    outputDir: tmpFolder,
+  });
+
+  const storagePath = proofigReportStoragePath(data.check_service_run_id);
+  const md5 = md5OfFile(localPath);
+  const upload = await client.uploads.uploadSingleFileToCdn({
+    cdn: data.cdn,
+    cdnKey: data.cdn_key,
+    localPath,
+    storagePath,
+  });
+
+  await registerStoredPdf(client, attributes.handshake, data, {
+    path: upload.path,
+    size,
+    md5,
+  });
+
+  await client.jobs.completed(res, 'Proofig report PDF stored on work version CDN', {
+    check_service_run_id: data.check_service_run_id,
+    path: upload.path,
+    size,
+  });
+}
+
 /**
  * Creates and configures the Express service.
  */
@@ -76,47 +118,27 @@ export function createService() {
   app.use(express.json());
 
   app.get('/', (_req, res) => {
-    return res.send('Curvenote Proofig PDF Service');
+    const mode = isRenderOnlyTestMode() ? ' (render-only test mode enabled)' : '';
+    return res.send(`Curvenote Proofig PDF Service${mode}`);
   });
 
-  app.post(
-    '/',
-    withPubSubHandler<unknown>(async (ctx: HandlerContext<unknown>) => {
-      const { client, payload, tmpFolder, res, attributes } = ctx;
+  if (isRenderOnlyTestMode()) {
+    app.post('/test-render', async (req, res) => {
+      try {
+        const { reportUrl } = validateRenderOnlyRequest(req.body);
+        console.log('[test-render] Rendering Proofig report to PDF', { reportUrl });
+        const result = await runRenderOnly(reportUrl);
+        console.log('[test-render] Render complete', result);
+        return res.status(200).json({ ok: true, ...result });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('[test-render] Render failed', message);
+        return res.status(400).json({ ok: false, error: message });
+      }
+    });
+  }
 
-      const data = validateProofigPdfPayload(payload);
-      console.log('Rendering Proofig report to PDF', {
-        check_service_run_id: data.check_service_run_id,
-        work_version_id: data.work_version_id,
-      });
-
-      const { localPath, size } = await renderReportPdf({
-        reportUrl: data.reportUrl,
-        outputDir: tmpFolder,
-      });
-
-      const storagePath = proofigReportStoragePath(data.check_service_run_id);
-      const md5 = md5OfFile(localPath);
-      const upload = await client.uploads.uploadSingleFileToCdn({
-        cdn: data.cdn,
-        cdnKey: data.cdn_key,
-        localPath,
-        storagePath,
-      });
-
-      await registerStoredPdf(client, attributes.handshake, data, {
-        path: upload.path,
-        size,
-        md5,
-      });
-
-      await client.jobs.completed(res, 'Proofig report PDF stored on work version CDN', {
-        check_service_run_id: data.check_service_run_id,
-        path: upload.path,
-        size,
-      });
-    }),
-  );
+  app.post('/', withPubSubHandler<unknown>(handleProductionJob));
 
   return app;
 }

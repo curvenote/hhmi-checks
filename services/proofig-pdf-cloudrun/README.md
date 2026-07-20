@@ -18,7 +18,8 @@ contains only the Docker image definition, deploy scripts, and a pre-bundled
 | `deploy.sh` | `gcloud run deploy` |
 | `local.sh` | Build the bundle + Docker image and run locally |
 | `run.sh` | Run the already-built local image |
-| `scripts/post-message.sh` | POST a Pub/Sub-shaped message to a local container |
+| `scripts/post-message.sh` | POST a Pub/Sub-shaped message to a local container (full job envelope) |
+| `scripts/post-test-render.sh` | POST `/test-render` for render-only smoke tests (requires `PROOFIG_PDF_RENDER_ONLY=1`) |
 | `pubsub/pubsub.sh` | Idempotent topic + push subscription + IAM setup |
 
 The service source lives in
@@ -55,16 +56,34 @@ On success the service:
 ```bash
 cp .env.sample .env   # set GCP_PROJECT, GCP_REGION
 
+# Optional: enable render-only smoke tests (no SCMS callbacks)
+# PROOFIG_PDF_RENDER_ONLY=1
+# RENDER_OUTPUT_DIR=./output
+
 # Build the bundle + image and run
 ./local.sh
 
-# In another shell, send a test message
+# Render-only smoke test (Playwright only — recommended when validating a report URL)
+./scripts/post-test-render.sh "https://your-report-url?token=..."
+
+# Full Pub/Sub-shaped envelope (exercises production POST / handler)
 ./scripts/post-message.sh "https://your-report-url?token=..."
 ```
 
-Job callbacks (`jobUrl`) and the registration hook point at real SCMS APIs; against
-loopback stubs they will fail after the PDF renders — that is expected for a pure
-render smoke test.
+### Render-only test mode
+
+Set `PROOFIG_PDF_RENDER_ONLY=1` in `.env` before `./local.sh`. The container exposes
+`POST /test-render` with body `{ "reportUrl": "..." }`. It renders the report to PDF
+and returns `{ ok, size, md5, outputPath? }` without patching jobs, uploading to CDN,
+or calling the pdf-stored hook.
+
+When `RENDER_OUTPUT_DIR=./output` is set, the PDF is copied to `./output/proofig-report.pdf`
+on the host (the directory is mounted automatically by `local.sh`).
+
+Do **not** set `PROOFIG_PDF_RENDER_ONLY` on deployed Cloud Run services.
+
+For the full pipeline (upload + hooks + job completion), use `post-message.sh` against
+`POST /` with real SCMS job attributes, or trigger `PROOFIG_PERSIST_PDF` from the app.
 
 ## Deploy
 
