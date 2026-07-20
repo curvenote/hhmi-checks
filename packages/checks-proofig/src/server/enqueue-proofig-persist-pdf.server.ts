@@ -86,6 +86,9 @@ export async function enqueueProofigPersistPdfIfNeeded(
     return { enqueued: false, reason: 'already-in-flight' };
   }
 
+  // Best-effort check-then-act: concurrent notify applies can both pass the in-flight
+  // guard and enqueue duplicate PROOFIG_PERSIST_PDF jobs. That is acceptable — both
+  // converge on the same CDN object path — but is not atomically serialized.
   const appConfig = await getConfig();
   const invokedById =
     options.invokedById ?? appConfig.api.submissionsServiceAccount?.id ?? 'system-cron';

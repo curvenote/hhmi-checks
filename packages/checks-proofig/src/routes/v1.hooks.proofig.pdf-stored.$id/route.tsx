@@ -123,6 +123,8 @@ export async function action(args: ActionFunctionArgs) {
     throw httpError(422, 'Work version has no cdn_key');
   }
   const expectedPath = proofigReportStoragePath(workVersion.cdn_key, id);
+  // Must match the absolute key returned by scms-tasks `uploadSingleFileToCdn`
+  // (`${cdnKey}/${relativeStoragePath}`), not the worker's relative `storagePath`.
   if (body.path !== expectedPath) {
     throw httpError(403, 'Registered path does not match expected report PDF location');
   }

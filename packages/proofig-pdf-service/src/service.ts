@@ -90,6 +90,8 @@ async function handleProductionJob(ctx: HandlerContext<unknown>): Promise<void> 
 
   const storagePath = proofigReportStoragePath(data.check_service_run_id);
   const md5 = md5OfFile(localPath);
+  // `storagePath` is relative to cdn_key; uploadSingleFileToCdn returns the absolute
+  // object key (`${cdnKey}/${storagePath}`), which the pdf-stored hook validates.
   const upload = await client.uploads.uploadSingleFileToCdn({
     cdn: data.cdn,
     cdnKey: data.cdn_key,

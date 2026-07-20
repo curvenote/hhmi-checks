@@ -6,8 +6,11 @@ export const PROOFIG_REPORT_FILENAME = 'proofig-report.pdf';
 
 /**
  * Absolute storage object key for the persisted Proofig report PDF for a check run
- * (`{cdn_key}/generated/{checkRunId}/proofig-report.pdf`). This matches the path the
- * Cloud Run worker reports back after upload and is what the download route reads.
+ * (`{cdn_key}/generated/{checkRunId}/proofig-report.pdf`).
+ *
+ * Contract: the Cloud Run worker passes a *relative* path to `uploadSingleFileToCdn`,
+ * which returns this absolute key; the pdf-stored hook and download loader both expect
+ * that absolute form (see scms-tasks `uploadSingleFileToCdn` return value).
  */
 export function proofigReportStoragePath(cdnKey: string, checkRunId: string): string {
   const prefix = cdnKey.replace(/\/$/, '');
