@@ -1,38 +1,28 @@
 #!/usr/bin/env bash
 #
-# Set up GCP Pub/Sub for the proofig-pdf-service Cloud Run service.
+# Set up GCP Pub/Sub topic + push subscription for the proofig-pdf Cloud Run service.
 #
-# This script:
-#   1. Uses a shared workspace SA (default: workspace-storage-checks) — must already exist
-#   2. Grants that account roles/run.invoker on the Cloud Run service
-#   3. Grants that account roles/pubsub.publisher on the project
-#   4. Grants the GCP Pub/Sub service agent roles/iam.serviceAccountTokenCreator (required for push auth)
-#   5. Creates a Pub/Sub topic and a push subscription that delivers to your Cloud Run URL (or uses existing)
-#   6. Updates push endpoint + push auth on existing subscriptions (idempotent re-run after redeploy)
-#   7. Sets the subscription expiration policy to 'never'.
+# Creates / updates only:
+#   1. Pub/Sub topic
+#   2. Push subscription (endpoint + OIDC auth as an existing converter SA)
 #
-# Idempotent: safe to re-run; uses existing topic and subscription if present.
+# Also grants roles/run.invoker on the proofig-pdf Cloud Run service to that SA
+# (required for authenticated push). Does NOT create service accounts or grant
+# project-level pubsub.publisher / tokenCreator — those must already exist from
+# the task-converter Pub/Sub setup.
+#
+# Idempotent: safe to re-run after redeploy (updates push endpoint + auth).
 #
 # Prerequisites:
-#   - gcloud CLI installed and authenticated (gcloud auth login)
-#   - The service account (SERVICE_ACCOUNT_NAME) must already exist in the project
-#   - The Cloud Run service must already be deployed (you need its URL for the push endpoint)
-#   - Cloud Run and Pub/Sub APIs enabled on the project
+#   - gcloud CLI authenticated
+#   - Cloud Run service already deployed (need PUSH_ENDPOINT)
+#   - SERVICE_ACCOUNT_NAME already exists (converter / workspace SA)
 #
-# Required environment variables (or set in .env in this pubsub/ dir):
-#   PROJECT_ID        - GCP project ID
-#   PROJECT_NUMBER    - GCP project number (gcloud projects describe PROJECT_ID --format='value(projectNumber)')
-#   REGION            - Cloud Run region (e.g. us-central1)
-#   SERVICE_NAME      - Cloud Run service name (default: proofig-pdf-service)
-#   PUSH_ENDPOINT     - Full URL of the Cloud Run service
-#   TOPIC_NAME        - Pub/Sub topic (e.g. proofigPdfServiceTopic)
-#   SUBSCRIPTION_NAME - Push subscription (e.g. proofigPdfServiceSub)
-#
-# Optional (defaults shown):
-#   SERVICE_ACCOUNT_NAME - Shared workspace SA (default: workspace-storage-checks)
-#   ACK_DEADLINE         - Subscription ack deadline in seconds (default: 600)
-#
-# Run from services/proofig-pdf-cloudrun/pubsub/: ./pubsub.sh
+# Usage:
+#   cd scripts/pubsub
+#   cp env.sample.staging .env    # or env.sample.production
+#   # set PUSH_ENDPOINT to the deployed Cloud Run URL
+#   ./pubsub.sh
 #
 set -euo pipefail
 
@@ -45,48 +35,41 @@ if [[ -f "${SCRIPT_DIR}/.env" ]]; then
 fi
 
 PROJECT_ID="${PROJECT_ID:-}"
-PROJECT_NUMBER="${PROJECT_NUMBER:-}"
-REGION="${REGION:-}"
+REGION="${REGION:-us-central1}"
 SERVICE_NAME="${SERVICE_NAME:-proofig-pdf-service}"
 PUSH_ENDPOINT="${PUSH_ENDPOINT:-}"
 TOPIC_NAME="${TOPIC_NAME:-proofigPdfServiceTopic}"
 SUBSCRIPTION_NAME="${SUBSCRIPTION_NAME:-proofigPdfServiceSub}"
-SERVICE_ACCOUNT_NAME="${SERVICE_ACCOUNT_NAME:-workspace-storage-checks}"
+SERVICE_ACCOUNT_NAME="${SERVICE_ACCOUNT_NAME:-}"
 ACK_DEADLINE="${ACK_DEADLINE:-600}"
 
 missing=()
-[[ -z "$PROJECT_ID" ]]     && missing+=(PROJECT_ID)
-[[ -z "$PROJECT_NUMBER" ]] && missing+=(PROJECT_NUMBER)
-[[ -z "$REGION" ]]         && missing+=(REGION)
-[[ -z "$SERVICE_NAME" ]]   && missing+=(SERVICE_NAME)
-[[ -z "$PUSH_ENDPOINT" ]]  && missing+=(PUSH_ENDPOINT)
-[[ -z "$TOPIC_NAME" ]]     && missing+=(TOPIC_NAME)
-[[ -z "$SUBSCRIPTION_NAME" ]] && missing+=(SUBSCRIPTION_NAME)
+[[ -z "$PROJECT_ID" ]]            && missing+=(PROJECT_ID)
+[[ -z "$REGION" ]]                && missing+=(REGION)
+[[ -z "$SERVICE_NAME" ]]          && missing+=(SERVICE_NAME)
+[[ -z "$PUSH_ENDPOINT" ]]         && missing+=(PUSH_ENDPOINT)
+[[ -z "$TOPIC_NAME" ]]            && missing+=(TOPIC_NAME)
+[[ -z "$SUBSCRIPTION_NAME" ]]     && missing+=(SUBSCRIPTION_NAME)
+[[ -z "$SERVICE_ACCOUNT_NAME" ]]  && missing+=(SERVICE_ACCOUNT_NAME)
 
 if [[ ${#missing[@]} -gt 0 ]]; then
   echo "Missing required environment variables: ${missing[*]}"
   echo ""
-  echo "Example (after deploying your Cloud Run service):"
-  echo "  export PROJECT_ID=my-gcp-project"
-  echo "  export PROJECT_NUMBER=\$(gcloud projects describe \$PROJECT_ID --format='value(projectNumber)')"
-  echo "  export REGION=us-central1"
-  echo "  export SERVICE_NAME=proofig-pdf-service"
-  echo "  export PUSH_ENDPOINT=https://proofig-pdf-service-xxxxx-uc.a.run.app"
-  echo "  export TOPIC_NAME=proofigPdfServiceTopic"
-  echo "  export SUBSCRIPTION_NAME=proofigPdfServiceSub"
+  echo "Copy an env sample and set PUSH_ENDPOINT after deploy:"
+  echo "  cp env.sample.staging .env      # or env.sample.production"
+  echo "  # edit PUSH_ENDPOINT"
   echo "  ./pubsub.sh"
   exit 1
 fi
 
 SA_EMAIL="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-PUBSUB_SA_EMAIL="service-${PROJECT_NUMBER}@gcp-sa-pubsub.iam.gserviceaccount.com"
 
 if ! gcloud iam service-accounts describe "${SA_EMAIL}" --project "${PROJECT_ID}" &>/dev/null; then
   echo "Error: service account ${SA_EMAIL} not found."
-  echo "Create it in GCP or set SERVICE_ACCOUNT_NAME to an existing shared workspace SA."
+  echo "Reuse the existing task-converter / workspace SA (do not create a new one)."
   exit 1
 fi
-echo "Using service account: ${SERVICE_ACCOUNT_NAME}"
+echo "Reusing service account: ${SA_EMAIL}"
 
 echo "Granting run.invoker on Cloud Run service: ${SERVICE_NAME}"
 gcloud run services add-iam-policy-binding "${SERVICE_NAME}" \
@@ -94,16 +77,6 @@ gcloud run services add-iam-policy-binding "${SERVICE_NAME}" \
   --role=roles/run.invoker \
   --region "${REGION}" \
   --project "${PROJECT_ID}"
-
-echo "Granting pubsub.publisher on project"
-gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-  --member="serviceAccount:${SA_EMAIL}" \
-  --role=roles/pubsub.publisher
-
-echo "Granting Pub/Sub service agent roles/iam.serviceAccountTokenCreator (required for push auth)"
-gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-  --member="serviceAccount:${PUBSUB_SA_EMAIL}" \
-  --role=roles/iam.serviceAccountTokenCreator
 
 if gcloud pubsub topics describe "${TOPIC_NAME}" --project "${PROJECT_ID}" &>/dev/null; then
   echo "Using existing Pub/Sub topic: ${TOPIC_NAME}"
@@ -133,7 +106,11 @@ else
 fi
 
 echo ""
-echo "Done. Configure the checks-proofig extension pdfService block:"
-echo "  pdfService.projectId: ${PROJECT_ID}"
-echo "  pdfService.topic:     projects/${PROJECT_ID}/topics/${TOPIC_NAME}"
-echo "  pdfService.credentialsJson: SA key JSON for ${SA_EMAIL}"
+echo "Done. Set checks-proofig extension config (credentials/project come from api.*):"
+echo "  pdfService:"
+echo "    topic: ${TOPIC_NAME}"
+echo "    # or: projects/${PROJECT_ID}/topics/${TOPIC_NAME}"
+echo ""
+echo "Publisher SA (already used for converter): ${SA_EMAIL}"
+echo "Test publish (optional):"
+echo "  gcloud pubsub topics publish ${TOPIC_NAME} --project ${PROJECT_ID} --message '{\"test\":true}'"
