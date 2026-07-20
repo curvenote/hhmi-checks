@@ -170,6 +170,18 @@ describe('enqueueProofigPersistPdfIfNeeded', () => {
         payload: expect.objectContaining({ force: true }),
       }),
     );
+    // Force regenerate clears stored metadata so the UI shows Generating… instead of Download.
+    expect(mockPatchProofigRunServiceData).toHaveBeenCalledTimes(1);
+    const patcher = mockPatchProofigRunServiceData.mock.calls[0][1] as (sd: {
+      proofigReportStored?: boolean;
+      storedReportId?: string;
+    }) => { proofigReportStored?: boolean; storedReportId?: string };
+    const cleared = patcher({
+      proofigReportStored: true,
+      storedReportId: 'report-1',
+    });
+    expect(cleared.proofigReportStored).toBe(false);
+    expect(cleared.storedReportId).toBeUndefined();
   });
 
   it('stamps report_id on the job payload when known', async () => {

@@ -141,9 +141,12 @@ export function ProofigReportPdfActions({
   const refreshBusy = refreshFetcher.state !== 'idle';
   const canRegenerate = Boolean(actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim());
   const pdfError = proofigData?.proofigReportPdfError?.trim();
+  // While regenerate is in flight (or after force clears stored → pending), show status
+  // text in place of Download.
+  const showGenerating = regenBusy || readiness === 'pending' || readiness === 'stored-stale';
 
   const submitRegenerate = () => {
-    if (!canRegenerate || blocked || regenBusy) return;
+    if (!canRegenerate || blocked || regenBusy || showGenerating) return;
     const fd = new FormData();
     fd.set('intent', 'regenerate-pdf');
     fd.set('workVersionId', workVersionId!.trim());
@@ -178,14 +181,20 @@ export function ProofigReportPdfActions({
   if (canRegenerate) {
     menuItems.push({
       id: 'regenerate-pdf',
-      label: regenBusy ? 'Generating…' : regenerateLabel,
+      label: regenBusy || showGenerating ? 'Generating…' : regenerateLabel,
       onSelect: submitRegenerate,
-      disabled: blocked || regenBusy,
+      disabled: blocked || regenBusy || showGenerating,
     });
   }
 
   let primary: ReactNode;
-  if (stored && checkRunId) {
+  if (showGenerating) {
+    primary = (
+      <span className="text-sm font-normal whitespace-nowrap opacity-50 animate-pulse text-primary">
+        Generating report PDF…
+      </span>
+    );
+  } else if (stored && checkRunId) {
     primary = (
       <ui.Button
         type="button"
@@ -210,11 +219,8 @@ export function ProofigReportPdfActions({
       failedLabel
     );
   } else {
-    primary = (
-      <span className="text-sm font-normal whitespace-nowrap opacity-50 animate-pulse text-primary">
-        Generating report PDF…
-      </span>
-    );
+    // Defensive fallback (readiness should already be covered above).
+    primary = null;
   }
 
   return (

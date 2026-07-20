@@ -3,6 +3,7 @@ import { JobStatus } from '@curvenote/scms-db';
 import { enqueueAndDispatchJob, getConfig, getPrismaClient } from '@curvenote/scms-server';
 import {
   clearProofigReportPdfError,
+  clearStoredProofigReport,
   currentProofigReportId,
   shouldPersistProofigReport,
 } from '../proofigReportFiles.js';
@@ -112,8 +113,11 @@ export async function enqueueProofigPersistPdfIfNeeded(
   const jobId = uuid();
   const failureCleanupJobId = uuid();
 
-  // Clear any prior failure so the UI returns to “Generating…” while the new job runs.
-  await patchProofigRunServiceData(checkServiceRunId, (sd) => clearProofigReportPdfError(sd));
+  // Clear prior failure so the UI returns to “Generating…”. On force regenerate, also
+  // clear stored PDF metadata so Download is replaced by the generating state.
+  await patchProofigRunServiceData(checkServiceRunId, (sd) =>
+    options.force ? clearStoredProofigReport(sd) : clearProofigReportPdfError(sd),
+  );
 
   await enqueueAndDispatchJob({
     job_id: jobId,
