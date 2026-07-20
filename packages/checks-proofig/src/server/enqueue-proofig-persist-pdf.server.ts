@@ -58,11 +58,12 @@ export async function hasInFlightProofigPersistPdfJob(
 /**
  * Enqueue a PROOFIG_PERSIST_PDF job for a check run when it has reached a final report
  * outcome and no PDF has been stored for the current report id yet. Idempotent: safe to
- * call after every notify apply — it no-ops unless a fresh PDF is needed, and skips when
- * a persist job for this run is already in flight (unless `force`).
+ * call after every notify apply — it no-ops unless a fresh PDF is needed, skips when a
+ * persist job for this run is already in flight, and skips when a prior PDF failure is
+ * recorded on the run (unless `force`).
  *
- * When `force` is true (manual regenerate), the stored-report and in-flight checks are
- * bypassed so the user can recover from a failed/stuck first render.
+ * When `force` is true (manual regenerate), the stored-report, prior-failure, and in-flight
+ * checks are bypassed so the user can recover from a failed/stuck first render.
  */
 export async function enqueueProofigPersistPdfIfNeeded(
   checkServiceRunId: string,
@@ -83,6 +84,12 @@ export async function enqueueProofigPersistPdfIfNeeded(
 
   if (!options.force && !shouldPersistProofigReport(serviceData)) {
     return { enqueued: false, reason: 'not-needed' };
+  }
+
+  // A prior persist/render failure for this run must not auto-retry on notify/refresh.
+  // Manual Retry / Regenerate passes `force: true` to clear the error and try again.
+  if (!options.force && serviceData?.proofigReportPdfError?.trim()) {
+    return { enqueued: false, reason: 'prior-failure' };
   }
 
   if (

@@ -126,6 +126,27 @@ describe('enqueueProofigPersistPdfIfNeeded', () => {
     );
   });
 
+  it('skips when a prior PDF failure is recorded (unless force)', async () => {
+    mockFindUnique.mockResolvedValue({
+      id: 'run-1',
+      kind: 'proofig',
+      work_version_id: '11111111-1111-4111-8111-111111111111',
+      data: {
+        serviceData: finalReportServiceData({
+          proofigReportPdfError: 'Converter failed: net::ERR_CONNECTION_REFUSED',
+        }),
+      },
+    });
+
+    const skipped = await enqueueProofigPersistPdfIfNeeded('run-1');
+    expect(skipped).toEqual({ enqueued: false, reason: 'prior-failure' });
+    expect(mockEnqueueAndDispatchJob).not.toHaveBeenCalled();
+
+    const forced = await enqueueProofigPersistPdfIfNeeded('run-1', { force: true });
+    expect(forced).toEqual({ enqueued: true, jobId: 'job-new-1' });
+    expect(mockEnqueueAndDispatchJob).toHaveBeenCalledTimes(1);
+  });
+
   it('bypasses the in-flight check when force is true', async () => {
     mockFindUnique.mockResolvedValue({
       id: 'run-1',
