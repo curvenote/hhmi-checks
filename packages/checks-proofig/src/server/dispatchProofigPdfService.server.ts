@@ -1,14 +1,10 @@
-import { sendJobPubSubMessage } from '@curvenote/scms-server';
+import { getConfig, sendJobPubSubMessage } from '@curvenote/scms-server';
 
 /**
- * Extension configuration for the Proofig PDF Cloud Run service (Pub/Sub target).
- * Lives entirely within the extension config — core scms-server has no Proofig knowledge.
+ * Extension-only `pdfService` settings. Project id and publisher credentials come from
+ * main app-config (`api.pubsubProjectId`, `api.converterSASecretKeyfile`).
  */
 export type PdfServiceConfig = {
-  /** GCP project id that owns the Pub/Sub topic. */
-  projectId: string;
-  /** Service-account key JSON with pubsub.publisher on the project. */
-  credentialsJson: string;
   /** Pub/Sub topic name (id or full resource name). */
   topic: string;
   /** Optional local HTTP stub URL for development pushes (defaults to loopback:8088). */
@@ -17,7 +13,7 @@ export type PdfServiceConfig = {
 
 /**
  * Read the `pdfService` block from the merged checks-proofig extension config.
- * Returns undefined when not configured (dispatch should be skipped/soft-failed).
+ * Returns undefined when `topic` is not set (dispatch should be skipped/soft-failed).
  */
 export function readPdfServiceConfig(
   config: Record<string, unknown> | undefined,
@@ -25,13 +21,9 @@ export function readPdfServiceConfig(
   const raw = config?.pdfService;
   if (!raw || typeof raw !== 'object') return undefined;
   const r = raw as Record<string, unknown>;
-  const projectId = typeof r.projectId === 'string' ? r.projectId.trim() : '';
-  const credentialsJson = typeof r.credentialsJson === 'string' ? r.credentialsJson : '';
   const topic = typeof r.topic === 'string' ? r.topic.trim() : '';
-  if (!projectId || !credentialsJson || !topic) return undefined;
+  if (!topic) return undefined;
   return {
-    projectId,
-    credentialsJson,
     topic,
     devLocalPushUrl:
       typeof r.devLocalPushUrl === 'string' && r.devLocalPushUrl.trim()
@@ -44,18 +36,27 @@ export function readPdfServiceConfig(
  * Publish a Proofig PDF render job to the Cloud Run worker via Pub/Sub.
  * Thin wrapper over the generic `sendJobPubSubMessage` helper exported by scms-server;
  * all routing (test / dev stub / production) is handled there.
+ *
+ * Uses the same GCP project + converter SA as converter jobs; only the topic (and optional
+ * local push URL) come from the extension `pdfService` block.
  */
 export async function dispatchProofigPdfService(
   attributes: Record<string, string>,
   data: Record<string, unknown>,
   pdfService: PdfServiceConfig,
 ): Promise<string> {
+  // Match converter: avoid loading/validating Pub/Sub config when we never publish.
+  if (process.env.NODE_ENV === 'test' || process.env.APP_CONFIG_ENV === 'test') {
+    return 'testPubSubId';
+  }
+
+  const config = await getConfig();
   return sendJobPubSubMessage({
     attributes,
     data,
     pubSub: {
-      projectId: pdfService.projectId,
-      credentialsJson: pdfService.credentialsJson,
+      projectId: config.api.pubsubProjectId ?? 'curvenote-dev-1',
+      credentialsJson: config.api.converterSASecretKeyfile ?? '{}',
       topicName: pdfService.topic,
     },
     devLocalPush: { url: pdfService.devLocalPushUrl ?? 'http://127.0.0.1:8088/' },

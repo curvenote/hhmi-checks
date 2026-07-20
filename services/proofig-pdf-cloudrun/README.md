@@ -106,5 +106,7 @@ export PROJECT_ID=... PROJECT_NUMBER=... REGION=... \
 ./pubsub.sh
 ```
 
-Then set the `checks-proofig` extension `pdfService` config (`projectId`, `topic`,
-`credentialsJson`) to the topic + SA key printed by `pubsub.sh`.
+Then set the `checks-proofig` extension `pdfService.topic` (and optional `devLocalPushUrl`
+for local stub pushes). GCP `api.pubsubProjectId` and publisher credentials
+(`api.converterSASecretKeyfile`) come from main app-config — the same values used for
+converter Pub/Sub.

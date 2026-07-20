@@ -140,7 +140,7 @@ export async function proofigPersistPdfHandler(ctx: Context, data: CreateJob) {
     return failPersistPdfJob(
       job.id,
       payload.check_service_run_id,
-      'checks-proofig pdfService config missing; cannot dispatch PDF render',
+      'checks-proofig pdfService.topic not configured; cannot dispatch PDF render',
       targetedReportId,
     );
   }
