@@ -25,7 +25,7 @@ const PDF_MAGIC = Buffer.from('%PDF-', 'utf-8');
  * but a 1280px viewport made Chromium shrink-to-fit the layout onto A4, which
  * looks like a low zoom. Prefer an A4-ish viewport and a slight explicit scale.
  */
-const PDF_SCALE = 1.15;
+const PDF_SCALE = 1.25;
 /** ~A4 width at 96dpi is ~794px; stay a bit wider for app chrome without heavy shrink. */
 const PRINT_VIEWPORT = { width: 900, height: 1270 } as const;
 
