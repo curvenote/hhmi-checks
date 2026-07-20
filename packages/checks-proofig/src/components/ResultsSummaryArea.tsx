@@ -172,7 +172,6 @@ export function ResultsSummaryArea({
                     workVersionId={workVersionId}
                     checkRunId={checkRunId}
                     disabled={!reportUrl}
-                    proofigData={proofigData}
                     followUpDialogTitle="Proofig was opened for results review"
                     followUpDialogDescription="Your report was opened in a new tab at Proofig. When you have finished reviewing there, press Continue below to close this dialog and fetch the latest status."
                   >
