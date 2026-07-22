@@ -78,6 +78,29 @@ vi.mock('./retryCheckRun.server.js', () => ({
   retryTextIntegrityCheckRun: vi.fn(),
 }));
 
+const relayStatusMocks = vi.hoisted(() => ({
+  applyRelayCheckStatusEnvelopes: vi.fn(async () => ({ ok: true as const })),
+  enqueuePersistPdfAfterRelayStatusIfNeeded: vi.fn(async () => undefined),
+}));
+
+vi.mock('./relay-status-apply.server.js', () => ({
+  applyRelayCheckStatusEnvelopes: relayStatusMocks.applyRelayCheckStatusEnvelopes,
+}));
+
+vi.mock('./relay-status-persist-enqueue.server.js', () => ({
+  enqueuePersistPdfAfterRelayStatusIfNeeded:
+    relayStatusMocks.enqueuePersistPdfAfterRelayStatusIfNeeded,
+}));
+
+vi.mock('./slackNotify.server.js', () => ({
+  notifyTextIntegrityActionError: vi.fn(),
+  notifyTextIntegrityEulaAccepted: vi.fn(),
+}));
+
+vi.mock('@hhmi/checks-shared/analytics/server', () => ({
+  trackChecksEvent: vi.fn(),
+}));
+
 import { handleTextIntegrityAction } from './actions.js';
 
 type CheckServiceRunData = {
@@ -212,6 +235,119 @@ describe('handleTextIntegrityAction restart-similarity-pdf', () => {
       },
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleTextIntegrityAction relay-status PDF claim', () => {
+  const checkRunId = 'run-1';
+  let runData: CheckServiceRunData;
+  let findCheckRun: ReturnType<typeof vi.fn>;
+
+  function relayStatusArgs() {
+    const formData = new FormData();
+    formData.set('checkRunId', checkRunId);
+    return {
+      intent: 'relay-status',
+      workVersionId: 'wv-1',
+      formData,
+      ctx: {
+        user: { id: 'user-1' },
+        $config: {
+          app: {
+            checks: {
+              relayBaseUrl: 'https://relay.example.com/',
+              relayApiKey: 'secret',
+            },
+            extensions: {
+              'checks-text-integrity': {},
+            },
+          },
+        },
+      },
+    } as Parameters<typeof handleTextIntegrityAction>[0];
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.unstubAllGlobals();
+    relayStatusMocks.applyRelayCheckStatusEnvelopes.mockResolvedValue({ ok: true });
+    relayStatusMocks.enqueuePersistPdfAfterRelayStatusIfNeeded.mockResolvedValue(undefined);
+
+    runData = {
+      serviceData: {
+        externalId: 'external-check-1',
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'pending',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      },
+    };
+
+    findCheckRun = vi.fn(async () => ({
+      id: checkRunId,
+      work_version_id: 'wv-1',
+      kind: 'checks-text-integrity',
+      data: runData,
+    }));
+    scmsServerMocks.getPrismaClient.mockResolvedValue({
+      checkServiceRun: {
+        findFirst: findCheckRun,
+      },
+    });
+    checkRunColumnMocks.safeCheckServiceRunPatch.mockImplementation(
+      async (_id: string, update: (data?: Prisma.JsonValue) => Prisma.JsonObject | null) => {
+        const next = update(runData as Prisma.JsonValue);
+        if (next) runData = next as CheckServiceRunData;
+        return { id: checkRunId, data: runData };
+      },
+    );
+  });
+
+  it('starts PDF once under claim when similarity is done and no reportPdfId', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/status')) {
+        return Response.json({ envelopes: [] });
+      }
+      return Response.json({ result: { pdf_id: 'pdf-new' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(handleTextIntegrityAction(relayStatusArgs())).resolves.toEqual({ success: true });
+    await expect(handleTextIntegrityAction(relayStatusArgs())).resolves.toEqual({ success: true });
+
+    const pdfStartCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes('/report/pdf/start'),
+    );
+    expect(pdfStartCalls).toHaveLength(1);
+    expect(runData.serviceData.reportPdfId).toBe('pdf-new');
+    expect(runData.serviceData.stages.reportGeneration?.status).toBe('processing');
+  });
+
+  it('does not start PDF when reportPdfId is already known (status poll only)', async () => {
+    runData.serviceData.reportPdfId = 'pdf-existing';
+    runData.serviceData.stages.reportGeneration = {
+      status: 'processing',
+      history: [],
+      timestamp: '2025-01-01T00:00:00Z',
+    };
+
+    const fetchMock = vi.fn(async () => Response.json({ envelopes: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(handleTextIntegrityAction(relayStatusArgs())).resolves.toEqual({ success: true });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [statusUrl, statusInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(statusUrl).toContain('/status');
+    expect(JSON.parse(String(statusInit.body))).toEqual({
+      client_id: checkRunId,
+      pdf_id: 'pdf-existing',
+    });
   });
 });
 
