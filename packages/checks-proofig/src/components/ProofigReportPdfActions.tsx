@@ -53,7 +53,7 @@ export function ProofigReportPdfActions({
       return;
     }
     if (d.success === true) {
-      ui.toastSuccess('Regenerating report PDF — it will be available shortly.');
+      ui.toastSuccess('Regenerating Report PDF — it will be available shortly.');
       revalidator.revalidate();
     }
   }, [regenerateFetcher.state, regenerateFetcher.data, revalidator]);
@@ -200,7 +200,7 @@ export function ProofigReportPdfActions({
   if (showGenerating) {
     primary = (
       <span className="text-sm font-normal whitespace-nowrap opacity-50 animate-pulse text-primary">
-        Generating report PDF…
+        Generating Report PDF…
       </span>
     );
   } else if (showGeneratePrimary) {
