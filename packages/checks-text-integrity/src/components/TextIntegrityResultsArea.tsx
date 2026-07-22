@@ -55,6 +55,7 @@ export function TextIntegrityResultsArea({
           checkRunId={checkRunId}
           workVersionId={workVersionId}
           actionPath={actionPath}
+          includeRemoteRefresh
         />
       </div>
     </div>

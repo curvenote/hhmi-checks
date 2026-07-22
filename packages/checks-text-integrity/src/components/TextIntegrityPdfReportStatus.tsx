@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useFetcher, useRevalidator } from 'react-router';
 import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
 import { TextIntegrityEulaDialog } from './TextIntegrityEulaDialog.js';
 import { useTextIntegrityEulaEnable } from './useTextIntegrityEulaEnable.js';
+import {
+  TextIntegrityActionOverflow,
+  type TextIntegrityOverflowMenuItem,
+} from './TextIntegrityActionOverflow.js';
 
 export interface TextIntegrityPdfReportStatusProps {
   reportGenerationComplete: boolean;
@@ -13,12 +17,18 @@ export interface TextIntegrityPdfReportStatusProps {
   checkRunId?: string;
   workVersionId?: string;
   actionPath?: string;
+  /** When true, integrate remote-status Refresh into the primary/kebab layout. */
+  includeRemoteRefresh?: boolean;
 }
 
-type RetryFetcherData = {
+type ActionFetcherData = {
   success?: boolean;
-  error?: { message?: string };
+  error?: { type?: string; message?: string };
+  recovery?: { ok: false; message: string; status: number };
 };
+
+const RELAY_STATUS_INTENT = 'checks-text-integrity:relay-status';
+const RESTART_PDF_INTENT = 'restart-similarity-pdf';
 
 const PDF_DOWNLOAD_DEBUG_LABEL = '[checks-text-integrity:pdf-download]';
 
@@ -30,6 +40,12 @@ function logPdfDownloadError(message: string, details?: Record<string, unknown>)
   console.error(PDF_DOWNLOAD_DEBUG_LABEL, message, details ?? {});
 }
 
+/**
+ * Results toolbar for similarity report PDF + optional remote Refresh.
+ *
+ * Shows one primary control (status, download, or regenerate). Additional actions
+ * move into a kebab menu on the right when more than one control is needed.
+ */
 export function TextIntegrityPdfReportStatus({
   reportGenerationComplete,
   reportGenerationFailed,
@@ -39,10 +55,13 @@ export function TextIntegrityPdfReportStatus({
   checkRunId,
   workVersionId,
   actionPath,
+  includeRemoteRefresh = false,
 }: TextIntegrityPdfReportStatusProps) {
   const revalidator = useRevalidator();
-  const retryFetcher = useFetcher<RetryFetcherData>();
-  const lastRetryRef = useRef<unknown>(undefined);
+  const restartFetcher = useFetcher<ActionFetcherData>();
+  const refreshFetcher = useFetcher<ActionFetcherData>();
+  const lastRestartRef = useRef<unknown>(undefined);
+  const lastRefreshRef = useRef<unknown>(undefined);
   const retryReachedWaitingRef = useRef(false);
   const [retried, setRetried] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -54,13 +73,14 @@ export function TextIntegrityPdfReportStatus({
     acceptEula,
     busy: eulaBusy,
   } = useTextIntegrityEulaEnable(workVersionId ?? '');
-  const { blocked, message } = useCheckMaintenanceBlocked('checks-text-integrity');
+  const { blocked, message: maintenanceMessage } =
+    useCheckMaintenanceBlocked('checks-text-integrity');
 
   useEffect(() => {
-    if (retryFetcher.state !== 'idle' || !retryFetcher.data) return;
-    if (lastRetryRef.current === retryFetcher.data) return;
-    lastRetryRef.current = retryFetcher.data;
-    const d = retryFetcher.data;
+    if (restartFetcher.state !== 'idle' || !restartFetcher.data) return;
+    if (lastRestartRef.current === restartFetcher.data) return;
+    lastRestartRef.current = restartFetcher.data;
+    const d = restartFetcher.data;
     if (d.error?.message) {
       ui.toastError(d.error.message);
       return;
@@ -69,7 +89,26 @@ export function TextIntegrityPdfReportStatus({
       setRetried(true);
       revalidator.revalidate();
     }
-  }, [retryFetcher.state, retryFetcher.data, revalidator]);
+  }, [restartFetcher.state, restartFetcher.data, revalidator]);
+
+  useEffect(() => {
+    if (refreshFetcher.state !== 'idle' || !refreshFetcher.data) return;
+    if (lastRefreshRef.current === refreshFetcher.data) return;
+    lastRefreshRef.current = refreshFetcher.data;
+    const d = refreshFetcher.data;
+    if (d.error?.message) {
+      ui.toastError(d.error.message);
+      return;
+    }
+    if (d.success === true) {
+      revalidator.revalidate();
+      if (d.recovery?.ok === false) {
+        ui.toastWarning('Status refreshed, but recovery did not start', {
+          description: d.recovery.message,
+        });
+      }
+    }
+  }, [refreshFetcher.state, refreshFetcher.data, revalidator]);
 
   useEffect(() => {
     setRetried(false);
@@ -95,24 +134,26 @@ export function TextIntegrityPdfReportStatus({
     ? `/app/checks-text-integrity/download-pdf/${encodeURIComponent(checkRunId)}`
     : undefined;
   const canDownload = reportPdfAvailable && Boolean(downloadUrl);
+  const canRestart =
+    Boolean(actionPath?.trim()) && Boolean(checkRunId?.trim()) && Boolean(workVersionId?.trim());
   const canRegenerate =
     similarityReportPdfInvalidated &&
     !waitingForReport &&
     !reportGenerationFailed &&
-    Boolean(actionPath?.trim()) &&
-    Boolean(checkRunId?.trim()) &&
+    canRestart &&
     !blocked;
-  const canRetry =
-    reportGenerationFailed &&
-    Boolean(actionPath?.trim()) &&
-    Boolean(checkRunId?.trim()) &&
-    !blocked;
+  const canRetry = reportGenerationFailed && canRestart && !blocked;
   const showGeneratedText =
     reportGenerationComplete &&
     !canDownload &&
     !waitingForReport &&
     !similarityReportPdfInvalidated;
-  const retryBusy = retryFetcher.state !== 'idle';
+  const showWaiting = waitingForReport || retried;
+  const restartBusy = restartFetcher.state !== 'idle';
+  const refreshBusy = refreshFetcher.state !== 'idle';
+  const canRefresh = Boolean(
+    includeRemoteRefresh && actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim(),
+  );
 
   const runDownload = useCallback(async () => {
     if (!downloadUrl) return;
@@ -218,47 +259,127 @@ export function TextIntegrityPdfReportStatus({
     });
   }, [checkRunId, downloadUrl, requestEnable, runDownload, workVersionId]);
 
+  const submitRestart = () => {
+    if (!canRestart || blocked || restartBusy || showWaiting) return;
+    const fd = new FormData();
+    fd.set('intent', RESTART_PDF_INTENT);
+    fd.set('workVersionId', workVersionId!.trim());
+    fd.set('checkRunId', checkRunId!.trim());
+    restartFetcher.submit(fd, { method: 'post', action: actionPath!.trim() });
+  };
+
+  const submitRefresh = () => {
+    if (!canRefresh || blocked || refreshBusy) return;
+    if (!checkRunId?.trim()) {
+      ui.toastError('Check run is not ready yet.');
+      return;
+    }
+    const fd = new FormData();
+    fd.set('intent', RELAY_STATUS_INTENT);
+    fd.set('workVersionId', workVersionId!.trim());
+    fd.set('checkRunId', checkRunId.trim());
+    refreshFetcher.submit(fd, { method: 'post', action: actionPath!.trim() });
+  };
+
+  const showPdfChrome =
+    canDownload ||
+    showGeneratedText ||
+    showWaiting ||
+    (canRegenerate && !retried) ||
+    (canRetry && !retried);
+
+  if (!showPdfChrome && !canRefresh) return null;
+
+  // Refresh alone — no kebab (matches progress-area Refresh when PDF chrome is absent).
+  if (!showPdfChrome) {
+    return (
+      <ui.MaintenanceTooltip enabled={blocked} message={maintenanceMessage}>
+        <ui.StatefulButton
+          variant="link"
+          busy={refreshBusy}
+          disabled={blocked}
+          onClick={submitRefresh}
+          overlayBusy
+        >
+          Refresh
+        </ui.StatefulButton>
+      </ui.MaintenanceTooltip>
+    );
+  }
+
+  // Regenerate is the primary CTA when the stored PDF was invalidated (no download yet).
+  const showRegeneratePrimary = canRegenerate && !retried && !showWaiting && !canDownload;
+  // Retry stays in the kebab; failure message is primary (aligned with Proofig).
+  const showRetryInMenu = canRetry && !retried && !showWaiting;
+
+  const menuItems: TextIntegrityOverflowMenuItem[] = [];
+  if (canRefresh) {
+    menuItems.push({
+      id: 'refresh',
+      label: refreshBusy ? 'Refreshing…' : 'Refresh',
+      onSelect: submitRefresh,
+      disabled: blocked || refreshBusy,
+    });
+  }
+  if (showRetryInMenu) {
+    menuItems.push({
+      id: 'retry-pdf',
+      label: restartBusy ? 'Retrying…' : 'Retry PDF generation',
+      onSelect: submitRestart,
+      disabled: blocked || restartBusy || showWaiting,
+    });
+  }
+
+  let primary: ReactNode;
+  if (showWaiting) {
+    primary = (
+      <span className="text-sm font-normal whitespace-nowrap opacity-50 animate-pulse text-primary">
+        Waiting for PDF Report…
+      </span>
+    );
+  } else if (showRegeneratePrimary) {
+    primary = (
+      <ui.Button
+        type="button"
+        variant="link"
+        disabled={blocked || restartBusy}
+        onClick={submitRestart}
+      >
+        {restartBusy ? 'Regenerating…' : 'Regenerate PDF'}
+      </ui.Button>
+    );
+  } else if (canDownload) {
+    primary = (
+      <ui.Button
+        type="button"
+        variant="link"
+        disabled={downloading || eulaBusy}
+        onClick={handleDownload}
+      >
+        {downloading ? 'Downloading…' : 'Download PDF report'}
+      </ui.Button>
+    );
+  } else if (reportGenerationFailed) {
+    primary = (
+      <span className="text-sm font-normal whitespace-nowrap text-destructive">
+        PDF Generation Failed
+      </span>
+    );
+  } else if (showGeneratedText) {
+    primary = (
+      <span className="text-sm font-normal text-muted-foreground">
+        Similarity PDF report generated
+      </span>
+    );
+  } else {
+    primary = null;
+  }
+
   return (
-    <div>
-      {canDownload && (
-        <ui.Button variant="link" disabled={downloading || eulaBusy} onClick={handleDownload}>
-          {downloading ? 'Downloading…' : 'Download PDF report'}
-        </ui.Button>
-      )}
-      {showGeneratedText && (
-        <span className="text-sm font-normal text-muted-foreground">
-          Similarity PDF report generated
-        </span>
-      )}
-      {canRegenerate && !retried && (
-        <ui.MaintenanceTooltip enabled={blocked} message={message}>
-          <retryFetcher.Form method="post" action={actionPath}>
-            <input type="hidden" name="intent" value="restart-similarity-pdf" />
-            <input type="hidden" name="workVersionId" value={workVersionId ?? ''} />
-            <input type="hidden" name="checkRunId" value={checkRunId ?? ''} />
-            <ui.Button type="submit" variant="link" disabled={retryBusy || blocked}>
-              {retryBusy ? 'Regenerating…' : 'Regenerate PDF report'}
-            </ui.Button>
-          </retryFetcher.Form>
-        </ui.MaintenanceTooltip>
-      )}
-      {canRetry && !retried && (
-        <ui.MaintenanceTooltip enabled={blocked} message={message}>
-          <retryFetcher.Form method="post" action={actionPath}>
-            <input type="hidden" name="intent" value="restart-similarity-pdf" />
-            <input type="hidden" name="workVersionId" value={workVersionId ?? ''} />
-            <input type="hidden" name="checkRunId" value={checkRunId ?? ''} />
-            <ui.Button type="submit" variant="link" disabled={retryBusy || blocked}>
-              {retryBusy ? 'Retrying…' : 'Retry PDF generation'}
-            </ui.Button>
-          </retryFetcher.Form>
-        </ui.MaintenanceTooltip>
-      )}
-      {(waitingForReport || retried) && (
-        <span className="text-sm font-normal opacity-50 animate-pulse text-primary">
-          Waiting for PDF report…
-        </span>
-      )}
+    <>
+      <ui.MaintenanceTooltip enabled={blocked} message={maintenanceMessage}>
+        <TextIntegrityActionOverflow primary={primary} menuItems={menuItems} />
+      </ui.MaintenanceTooltip>
       {eulaPresentation ? (
         <TextIntegrityEulaDialog
           open={dialogOpen}
@@ -270,6 +391,6 @@ export function TextIntegrityPdfReportStatus({
           onAccept={acceptEula}
         />
       ) : null}
-    </div>
+    </>
   );
 }
