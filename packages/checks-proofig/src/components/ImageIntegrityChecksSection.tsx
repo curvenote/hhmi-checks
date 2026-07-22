@@ -20,6 +20,9 @@ import {
 // Note: ProofigDataSchema is exported from schema.js, so we don't re-export it here to avoid duplicates
 export type { ChecksMetadataSection } from './types.js';
 
+/** Release busy if CTA→progress never arrives (thrown action, empty settle, stalled success). */
+const HOLDING_BUSY_TIMEOUT_MS = 15_000;
+
 type ImageIntegrityChecksSectionProps = ExtensionCheckSectionActivityProps & {
   metadata: ProofigDataSchema | undefined;
 };
@@ -34,7 +37,7 @@ export function ImageIntegrityChecksSection({
   const pingEvent = useChecksPingEvent({ checkKind: 'proofig', workVersionId });
   const lastTrackedCheckRunIdRef = useRef<string | undefined>(undefined);
   const { blocked, message } = useCheckMaintenanceBlocked('proofig');
-  // Stay busy after submit until the CTA swaps to progress (or an error clears it).
+  // Stay busy after submit until the CTA swaps to progress (or settle/timeout clears it).
   const [holdingBusy, setHoldingBusy] = useState(false);
 
   // Check if we need to dispatch the initial POST
@@ -49,6 +52,11 @@ export function ImageIntegrityChecksSection({
     if (fetcher.state !== 'idle') setHoldingBusy(true);
   }, [fetcher.state]);
 
+  // Parent stays mounted across CTA→progress; drop the latch once progress is shown.
+  useEffect(() => {
+    if (checkedAvailableOrInProgress) setHoldingBusy(false);
+  }, [checkedAvailableOrInProgress]);
+
   // Poll when we have check data, while waiting for CTA→progress after submit, or during DOCX prep
   useRevalidateOnInterval({
     enabled: checkedAvailableOrInProgress || isBusy || awaitingDocumentPreparation,
@@ -56,15 +64,28 @@ export function ImageIntegrityChecksSection({
       isBusy && !checkedAvailableOrInProgress ? 1000 : awaitingDocumentPreparation ? 2000 : 3000,
   });
 
-  // Show toast on initial fetcher error when still on CTA (no check data yet)
+  // Settle: structured error / empty response releases busy; success keeps hold until progress/timeout.
   useEffect(() => {
-    if (fetcher.state !== 'idle' || checkedAvailableOrInProgress || !fetcher.data) return;
+    if (fetcher.state !== 'idle' || checkedAvailableOrInProgress) return;
+    if (!holdingBusy) return;
+
+    if (!fetcher.data) {
+      setHoldingBusy(false);
+      return;
+    }
+
     const err = (fetcher.data as { error?: { message?: string } }).error;
     if (err?.message) {
       ui.toastError(err.message);
       setHoldingBusy(false);
     }
-  }, [fetcher.state, fetcher.data, checkedAvailableOrInProgress]);
+  }, [fetcher.state, fetcher.data, checkedAvailableOrInProgress, holdingBusy]);
+
+  useEffect(() => {
+    if (!holdingBusy) return;
+    const to = setTimeout(() => setHoldingBusy(false), HOLDING_BUSY_TIMEOUT_MS);
+    return () => clearTimeout(to);
+  }, [holdingBusy]);
 
   useEffect(() => {
     const reportState = metadata?.summary?.state;

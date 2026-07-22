@@ -6,6 +6,9 @@ import { ui, useCheckMaintenanceBlocked, useRevalidateOnInterval } from '@curven
 import { TextIntegrityEulaDialog } from './TextIntegrityEulaDialog.js';
 import { useTextIntegrityEulaEnable } from './useTextIntegrityEulaEnable.js';
 
+/** Release busy if CTA→progress never arrives (thrown action, empty settle, stalled success). */
+const HOLDING_BUSY_TIMEOUT_MS = 15_000;
+
 type TextIntegrityRunChecksButtonProps = {
   actionPath?: string;
   workVersionId: string;
@@ -19,7 +22,7 @@ export function TextIntegrityRunChecksButton({
   const { blocked, message } = useCheckMaintenanceBlocked('checks-text-integrity');
   const { dialogOpen, setDialogOpen, eulaPresentation, requestEnable, acceptEula, busy } =
     useTextIntegrityEulaEnable(workVersionId);
-  // Stay busy after execute until the CTA panel unmounts (or an error clears it).
+  // Stay busy after execute until the CTA panel unmounts (or settle/timeout clears it).
   const [holdingBusy, setHoldingBusy] = useState(false);
   const isBusy = busy || executeFetcher.state !== 'idle' || holdingBusy;
 
@@ -38,13 +41,28 @@ export function TextIntegrityRunChecksButton({
   }, [executeFetcher.state]);
 
   useEffect(() => {
-    if (executeFetcher.state !== 'idle' || !executeFetcher.data) return;
+    if (executeFetcher.state !== 'idle') return;
+    if (!holdingBusy) return;
+
+    if (!executeFetcher.data) {
+      // Thrown action / empty settle — allow retry.
+      setHoldingBusy(false);
+      return;
+    }
+
     const err = (executeFetcher.data as { error?: { message?: string } }).error;
     if (err?.message) {
       ui.toastError(err.message);
       setHoldingBusy(false);
     }
-  }, [executeFetcher.state, executeFetcher.data]);
+    // success: keep holding until parent unmounts (CTA→progress) or timeout.
+  }, [executeFetcher.state, executeFetcher.data, holdingBusy]);
+
+  useEffect(() => {
+    if (!holdingBusy) return;
+    const to = setTimeout(() => setHoldingBusy(false), HOLDING_BUSY_TIMEOUT_MS);
+    return () => clearTimeout(to);
+  }, [holdingBusy]);
 
   // Keep revalidating while holding busy so the parent can swap CTA → progress.
   useRevalidateOnInterval({
