@@ -31,6 +31,7 @@ export function markProofigReportPdfError(
     ...serviceData,
     proofigReportPdfError: summarizeProofigPdfError(message),
     proofigReportPdfFailedAt: failedAt,
+    proofigReportPdfRequestedAt: undefined,
   };
 }
 
@@ -43,6 +44,26 @@ export function clearProofigReportPdfError(serviceData: ProofigDataSchema): Proo
     ...serviceData,
     proofigReportPdfError: undefined,
     proofigReportPdfFailedAt: undefined,
+  };
+}
+
+/** Mark that a PROOFIG_PERSIST_PDF job was enqueued (UI “Generating…” signal). */
+export function markProofigReportPdfRequested(
+  serviceData: ProofigDataSchema,
+  requestedAt = new Date().toISOString(),
+): ProofigDataSchema {
+  return {
+    ...serviceData,
+    proofigReportPdfRequestedAt: requestedAt,
+  };
+}
+
+/** Clear the enqueue stamp once generation has terminated (stored or failed). */
+export function clearProofigReportPdfRequested(serviceData: ProofigDataSchema): ProofigDataSchema {
+  if (serviceData.proofigReportPdfRequestedAt == null) return serviceData;
+  return {
+    ...serviceData,
+    proofigReportPdfRequestedAt: undefined,
   };
 }
 
@@ -167,12 +188,14 @@ export function replaceGeneratedProofigReport(
 ): ProofigDataSchema {
   const nextFiles = { ...(withoutGeneratedProofigReportFiles(serviceData.files) ?? {}) };
   nextFiles[fileEntry.path] = fileEntry;
-  return clearProofigReportPdfError({
-    ...serviceData,
-    files: nextFiles,
-    proofigReportStored: true,
-    storedReportId: storedReportId ?? serviceData.reportId,
-  });
+  return clearProofigReportPdfRequested(
+    clearProofigReportPdfError({
+      ...serviceData,
+      files: nextFiles,
+      proofigReportStored: true,
+      storedReportId: storedReportId ?? serviceData.reportId,
+    }),
+  );
 }
 
 /**

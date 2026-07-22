@@ -170,18 +170,48 @@ describe('enqueueProofigPersistPdfIfNeeded', () => {
         payload: expect.objectContaining({ force: true }),
       }),
     );
-    // Force regenerate clears stored metadata so the UI shows Generating… instead of Download.
+    // Force regenerate clears stored metadata and stamps requestedAt so the UI shows Generating…
     expect(mockPatchProofigRunServiceData).toHaveBeenCalledTimes(1);
     const patcher = mockPatchProofigRunServiceData.mock.calls[0][1] as (sd: {
       proofigReportStored?: boolean;
       storedReportId?: string;
-    }) => { proofigReportStored?: boolean; storedReportId?: string };
+      proofigReportPdfRequestedAt?: string;
+    }) => {
+      proofigReportStored?: boolean;
+      storedReportId?: string;
+      proofigReportPdfRequestedAt?: string;
+    };
     const cleared = patcher({
       proofigReportStored: true,
       storedReportId: 'report-1',
     });
     expect(cleared.proofigReportStored).toBe(false);
     expect(cleared.storedReportId).toBeUndefined();
+    expect(cleared.proofigReportPdfRequestedAt).toEqual(expect.any(String));
+  });
+
+  it('stamps proofigReportPdfRequestedAt on enqueue (non-force)', async () => {
+    mockFindUnique.mockResolvedValue({
+      id: 'run-1',
+      kind: 'proofig',
+      work_version_id: '11111111-1111-4111-8111-111111111111',
+      data: { serviceData: finalReportServiceData() },
+    });
+
+    await enqueueProofigPersistPdfIfNeeded('run-1');
+
+    const patcher = mockPatchProofigRunServiceData.mock.calls[0][1] as (sd: {
+      proofigReportPdfError?: string;
+      proofigReportPdfRequestedAt?: string;
+    }) => {
+      proofigReportPdfError?: string;
+      proofigReportPdfRequestedAt?: string;
+    };
+    const patched = patcher({
+      proofigReportPdfError: 'old',
+    });
+    expect(patched.proofigReportPdfError).toBeUndefined();
+    expect(patched.proofigReportPdfRequestedAt).toEqual(expect.any(String));
   });
 
   it('stamps report_id on the job payload when known', async () => {

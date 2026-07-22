@@ -141,9 +141,17 @@ export function ProofigReportPdfActions({
   const refreshBusy = refreshFetcher.state !== 'idle';
   const canRegenerate = Boolean(actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim());
   const pdfError = proofigData?.proofigReportPdfError?.trim();
-  // While regenerate is in flight (or after force clears stored → pending), show status
-  // text in place of Download.
-  const showGenerating = regenBusy || readiness === 'pending' || readiness === 'stored-stale';
+  const pdfRequested = Boolean(proofigData?.proofigReportPdfRequestedAt?.trim());
+  // “Generating…” only when a job was enqueued (stamp) or the regenerate fetcher is busy.
+  // Idle `pending` / `stored-stale` without a stamp = legacy / never-requested → Generate link.
+  const showGenerating =
+    regenBusy || ((readiness === 'pending' || readiness === 'stored-stale') && pdfRequested);
+  const showGeneratePrimary =
+    !showGenerating &&
+    !stored &&
+    !failed &&
+    (readiness === 'pending' || readiness === 'stored-stale') &&
+    canRegenerate;
 
   const submitRegenerate = () => {
     if (!canRegenerate || blocked || regenBusy || showGenerating) return;
@@ -178,10 +186,11 @@ export function ProofigReportPdfActions({
       disabled: blocked || refreshBusy,
     });
   }
-  if (canRegenerate) {
+  // Omit Generate from the kebab when it is already the primary control.
+  if (canRegenerate && !showGeneratePrimary) {
     menuItems.push({
       id: 'regenerate-pdf',
-      label: regenBusy || showGenerating ? 'Generating…' : regenerateLabel,
+      label: regenerateLabel,
       onSelect: submitRegenerate,
       disabled: blocked || regenBusy || showGenerating,
     });
@@ -193,6 +202,17 @@ export function ProofigReportPdfActions({
       <span className="text-sm font-normal whitespace-nowrap opacity-50 animate-pulse text-primary">
         Generating report PDF…
       </span>
+    );
+  } else if (showGeneratePrimary) {
+    primary = (
+      <ui.Button
+        type="button"
+        variant="link"
+        disabled={blocked || regenBusy}
+        onClick={submitRegenerate}
+      >
+        Generate PDF
+      </ui.Button>
     );
   } else if (stored && checkRunId) {
     primary = (

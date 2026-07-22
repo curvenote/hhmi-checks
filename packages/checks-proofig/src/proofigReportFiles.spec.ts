@@ -4,10 +4,12 @@ import { KnownState, MINIMAL_PROOFIG_SERVICE_DATA, type ProofigDataSchema } from
 import {
   buildProofigReportFileEntry,
   clearProofigReportPdfError,
+  clearProofigReportPdfRequested,
   clearStoredProofigReport,
   getProofigPdfReadiness,
   hasStoredProofigReport,
   markProofigReportPdfError,
+  markProofigReportPdfRequested,
   replaceGeneratedProofigReport,
   shouldPersistProofigReport,
   summarizeProofigPdfError,
@@ -142,6 +144,7 @@ describe('withoutGeneratedProofigReportFiles / replaceGeneratedProofigReport', (
     const prior = finalReportData({
       proofigReportStored: true,
       storedReportId: 'report-old',
+      proofigReportPdfRequestedAt: '2025-01-01T00:00:00Z',
       files: {
         'cdn/old/proofig-report.pdf': storedFileEntry('cdn/old/proofig-report.pdf'),
         'cdn/other.pdf': {
@@ -156,6 +159,7 @@ describe('withoutGeneratedProofigReportFiles / replaceGeneratedProofigReport', (
 
     expect(next.proofigReportStored).toBe(true);
     expect(next.storedReportId).toBe('report-1');
+    expect(next.proofigReportPdfRequestedAt).toBeUndefined();
     expect(next.files?.[GENERATED_PATH]).toEqual(entry);
     expect(next.files?.['cdn/old/proofig-report.pdf']).toBeUndefined();
     expect(next.files?.['cdn/other.pdf']).toBeDefined();
@@ -198,7 +202,7 @@ describe('clearStoredProofigReport', () => {
 describe('markProofigReportPdfError / summarizeProofigPdfError', () => {
   it('strips query strings and records a truncated error', () => {
     const marked = markProofigReportPdfError(
-      finalReportData(),
+      finalReportData({ proofigReportPdfRequestedAt: '2025-01-01T00:00:00Z' }),
       'Converter failed: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/x?token=abc\nCall log:',
       '2025-01-02T00:00:00Z',
     );
@@ -206,6 +210,7 @@ describe('markProofigReportPdfError / summarizeProofigPdfError', () => {
       'Converter failed: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/x',
     );
     expect(marked.proofigReportPdfFailedAt).toBe('2025-01-02T00:00:00Z');
+    expect(marked.proofigReportPdfRequestedAt).toBeUndefined();
     expect(getProofigPdfReadiness(marked)).toBe('failed');
 
     const cleared = clearProofigReportPdfError(marked);
@@ -216,5 +221,13 @@ describe('markProofigReportPdfError / summarizeProofigPdfError', () => {
   it('summarizeProofigPdfError truncates long first lines', () => {
     const long = `error ${'x'.repeat(400)}`;
     expect(summarizeProofigPdfError(long).length).toBeLessThanOrEqual(280);
+  });
+});
+
+describe('markProofigReportPdfRequested / clearProofigReportPdfRequested', () => {
+  it('stamps and clears the enqueue request timestamp', () => {
+    const stamped = markProofigReportPdfRequested(finalReportData(), '2025-03-01T12:00:00Z');
+    expect(stamped.proofigReportPdfRequestedAt).toBe('2025-03-01T12:00:00Z');
+    expect(clearProofigReportPdfRequested(stamped).proofigReportPdfRequestedAt).toBeUndefined();
   });
 });

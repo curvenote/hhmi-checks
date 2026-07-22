@@ -162,6 +162,12 @@ export const proofigDataSchema = z.object({
   proofigReportPdfError: z.string().optional(),
   /** ISO timestamp when `proofigReportPdfError` was last set. */
   proofigReportPdfFailedAt: z.string().optional(),
+  /**
+   * ISO timestamp when a PROOFIG_PERSIST_PDF job was last enqueued for this run.
+   * Distinguishes “never requested” (legacy / idle) from in-flight generation for the UI.
+   * Cleared when the PDF is stored or a persist failure is recorded.
+   */
+  proofigReportPdfRequestedAt: z.string().optional(),
 });
 
 export type ProofigStageStatus = z.infer<typeof LinearStageStatusSchema>;

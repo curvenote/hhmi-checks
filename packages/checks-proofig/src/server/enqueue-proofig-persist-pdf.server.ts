@@ -5,6 +5,7 @@ import {
   clearProofigReportPdfError,
   clearStoredProofigReport,
   currentProofigReportId,
+  markProofigReportPdfRequested,
   shouldPersistProofigReport,
 } from '../proofigReportFiles.js';
 import { proofigDataSchema } from '../schema.js';
@@ -113,10 +114,13 @@ export async function enqueueProofigPersistPdfIfNeeded(
   const jobId = uuid();
   const failureCleanupJobId = uuid();
 
-  // Clear prior failure so the UI returns to “Generating…”. On force regenerate, also
-  // clear stored PDF metadata so Download is replaced by the generating state.
+  // Clear prior failure / stored metadata, then stamp `proofigReportPdfRequestedAt` so the
+  // UI shows “Generating…” (distinct from legacy idle `pending` with no stamp). On force
+  // regenerate, also clear stored PDF metadata so Download is replaced by generating state.
   await patchProofigRunServiceData(checkServiceRunId, (sd) =>
-    options.force ? clearStoredProofigReport(sd) : clearProofigReportPdfError(sd),
+    markProofigReportPdfRequested(
+      options.force ? clearStoredProofigReport(sd) : clearProofigReportPdfError(sd),
+    ),
   );
 
   await enqueueAndDispatchJob({
