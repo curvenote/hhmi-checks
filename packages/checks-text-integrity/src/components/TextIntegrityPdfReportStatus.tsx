@@ -58,8 +58,8 @@ export function TextIntegrityPdfReportStatus({
   includeRemoteRefresh = false,
 }: TextIntegrityPdfReportStatusProps) {
   const revalidator = useRevalidator();
-  const restartFetcher = useFetcher<ActionFetcherData>();
-  const refreshFetcher = useFetcher<ActionFetcherData>();
+  const restartFetcher = useFetcher<ActionFetcherData>({ key: 'text-integrity-restart-pdf' });
+  const refreshFetcher = useFetcher<ActionFetcherData>({ key: 'text-integrity-refresh-status' });
   const lastRestartRef = useRef<unknown>(undefined);
   const lastRefreshRef = useRef<unknown>(undefined);
   const retryReachedWaitingRef = useRef(false);

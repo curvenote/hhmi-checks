@@ -13,6 +13,8 @@ import {
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 const routerMocks = vi.hoisted(() => {
+  const RESTART_FETCHER_KEY = 'text-integrity-restart-pdf';
+  const REFRESH_FETCHER_KEY = 'text-integrity-refresh-status';
   const restartFetcher = {
     state: 'idle' as 'idle' | 'submitting' | 'loading',
     data: undefined as { success?: boolean; error?: { message?: string } } | undefined,
@@ -30,23 +32,29 @@ const routerMocks = vi.hoisted(() => {
     submit: vi.fn(),
   };
   return {
+    RESTART_FETCHER_KEY,
+    REFRESH_FETCHER_KEY,
     restartFetcher,
     refreshFetcher,
     revalidate: vi.fn(),
-    fetcherCalls: 0,
   };
 });
 
+const uiMocks = vi.hoisted(() => ({
+  toastError: vi.fn(),
+  toastWarning: vi.fn(),
+}));
+
 vi.mock('react-router', () => ({
-  useFetcher: () => {
-    routerMocks.fetcherCalls += 1;
-    // Odd calls = restart fetcher, even = refresh (component call order).
-    return routerMocks.fetcherCalls % 2 === 1
-      ? routerMocks.restartFetcher
-      : routerMocks.refreshFetcher;
+  useFetcher: (opts?: { key?: string }) => {
+    if (opts?.key === routerMocks.RESTART_FETCHER_KEY) return routerMocks.restartFetcher;
+    if (opts?.key === routerMocks.REFRESH_FETCHER_KEY) return routerMocks.refreshFetcher;
+    throw new Error(`unexpected useFetcher key: ${String(opts?.key)}`);
   },
   useRevalidator: () => ({ revalidate: routerMocks.revalidate }),
 }));
+
+const RELAY_STATUS_INTENT = 'checks-text-integrity:relay-status';
 
 vi.mock('@curvenote/scms-core', () => ({
   ui: {
@@ -85,8 +93,8 @@ vi.mock('@curvenote/scms-core', () => ({
         {children}
       </button>
     ),
-    toastError: vi.fn(),
-    toastWarning: vi.fn(),
+    toastError: uiMocks.toastError,
+    toastWarning: uiMocks.toastWarning,
   },
   useCheckMaintenanceBlocked: () => ({ blocked: false, message: undefined }),
 }));
@@ -120,12 +128,23 @@ function defaultProps(): TextIntegrityPdfReportStatusProps {
   };
 }
 
-describe('TextIntegrityPdfReportStatus retry latch', () => {
+/** No PDF chrome — only remote Refresh should render. */
+function refreshOnlyProps(): Partial<TextIntegrityPdfReportStatusProps> {
+  return {
+    reportGenerationComplete: false,
+    reportGenerationFailed: false,
+    waitingForReport: false,
+    similarityReportPdfInvalidated: false,
+    reportPdfAvailable: false,
+    includeRemoteRefresh: true,
+  };
+}
+
+describe('TextIntegrityPdfReportStatus', () => {
   let container: HTMLDivElement;
   let root: Root;
 
   beforeEach(() => {
-    routerMocks.fetcherCalls = 0;
     routerMocks.restartFetcher.state = 'idle';
     routerMocks.restartFetcher.data = undefined;
     routerMocks.restartFetcher.submit.mockReset();
@@ -133,6 +152,8 @@ describe('TextIntegrityPdfReportStatus retry latch', () => {
     routerMocks.refreshFetcher.data = undefined;
     routerMocks.refreshFetcher.submit.mockReset();
     routerMocks.revalidate.mockReset();
+    uiMocks.toastError.mockReset();
+    uiMocks.toastWarning.mockReset();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -146,7 +167,6 @@ describe('TextIntegrityPdfReportStatus retry latch', () => {
   });
 
   function renderStatus(props: Partial<TextIntegrityPdfReportStatusProps> = {}) {
-    routerMocks.fetcherCalls = 0;
     act(() => {
       root.render(<TextIntegrityPdfReportStatus {...defaultProps()} {...props} />);
     });
@@ -156,54 +176,130 @@ describe('TextIntegrityPdfReportStatus retry latch', () => {
     return container.textContent ?? '';
   }
 
-  it('keeps regenerate hidden during the race before waiting state arrives, then resets after failure', () => {
-    renderStatus();
-    expect(text()).toContain('Regenerate PDF');
-    expect(text()).toContain('Refresh');
+  function clickButtonNamed(label: string) {
+    const button = Array.from(container.querySelectorAll('button')).find(
+      (el) => el.textContent?.trim() === label,
+    );
+    expect(button).toBeTruthy();
+    act(() => {
+      button!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+  }
 
-    routerMocks.restartFetcher.data = { success: true };
-    renderStatus();
+  describe('retry latch', () => {
+    it('keeps regenerate hidden during the race before waiting state arrives, then resets after failure', () => {
+      renderStatus();
+      expect(text()).toContain('Regenerate PDF');
+      expect(text()).toContain('Refresh');
 
-    expect(routerMocks.revalidate).toHaveBeenCalledTimes(1);
-    expect(text()).toContain('Waiting for PDF Report');
-    expect(text()).not.toContain('Regenerate PDF');
+      routerMocks.restartFetcher.data = { success: true };
+      renderStatus();
 
-    renderStatus({ waitingForReport: true });
-    expect(text()).toContain('Waiting for PDF Report');
+      expect(routerMocks.revalidate).toHaveBeenCalledTimes(1);
+      expect(text()).toContain('Waiting for PDF Report');
+      expect(text()).not.toContain('Regenerate PDF');
 
-    renderStatus({
-      reportGenerationComplete: false,
-      reportGenerationFailed: true,
-      waitingForReport: false,
-      similarityReportPdfInvalidated: false,
+      renderStatus({ waitingForReport: true });
+      expect(text()).toContain('Waiting for PDF Report');
+
+      renderStatus({
+        reportGenerationComplete: false,
+        reportGenerationFailed: true,
+        waitingForReport: false,
+        similarityReportPdfInvalidated: false,
+      });
+
+      expect(text()).toContain('PDF Generation Failed');
+      expect(text()).toContain('Retry PDF generation');
+      expect(text()).not.toContain('Waiting for PDF Report');
     });
 
-    expect(text()).toContain('PDF Generation Failed');
-    expect(text()).toContain('Retry PDF generation');
-    expect(text()).not.toContain('Waiting for PDF Report');
+    it('arms and resets for invalidated regeneration once loader data reports waiting', () => {
+      renderStatus();
+
+      routerMocks.restartFetcher.data = { success: true };
+      renderStatus();
+
+      expect(text()).toContain('Waiting for PDF Report');
+      expect(text()).not.toContain('Regenerate PDF');
+
+      renderStatus({ waitingForReport: true, similarityReportPdfInvalidated: true });
+      expect(text()).toContain('Waiting for PDF Report');
+
+      renderStatus({
+        waitingForReport: false,
+        similarityReportPdfInvalidated: false,
+        reportGenerationComplete: true,
+        reportPdfAvailable: true,
+      });
+
+      expect(text()).toContain('Download PDF report');
+      expect(text()).toContain('Refresh');
+      expect(text()).not.toContain('Waiting for PDF Report');
+    });
   });
 
-  it('arms and resets for invalidated regeneration once loader data reports waiting', () => {
-    renderStatus();
+  describe('remote refresh', () => {
+    it('submits relay-status from the kebab Refresh item', () => {
+      renderStatus({
+        similarityReportPdfInvalidated: false,
+        reportPdfAvailable: true,
+      });
 
-    routerMocks.restartFetcher.data = { success: true };
-    renderStatus();
+      clickButtonNamed('Refresh');
 
-    expect(text()).toContain('Waiting for PDF Report');
-    expect(text()).not.toContain('Regenerate PDF');
-
-    renderStatus({ waitingForReport: true, similarityReportPdfInvalidated: true });
-    expect(text()).toContain('Waiting for PDF Report');
-
-    renderStatus({
-      waitingForReport: false,
-      similarityReportPdfInvalidated: false,
-      reportGenerationComplete: true,
-      reportPdfAvailable: true,
+      expect(routerMocks.refreshFetcher.submit).toHaveBeenCalledTimes(1);
+      const [formData, opts] = routerMocks.refreshFetcher.submit.mock.calls[0] as [
+        FormData,
+        { method: string; action: string },
+      ];
+      expect(formData.get('intent')).toBe(RELAY_STATUS_INTENT);
+      expect(formData.get('workVersionId')).toBe('wv-1');
+      expect(formData.get('checkRunId')).toBe('run-1');
+      expect(opts).toEqual({ method: 'post', action: '/actions' });
+      expect(routerMocks.restartFetcher.submit).not.toHaveBeenCalled();
     });
 
-    expect(text()).toContain('Download PDF report');
-    expect(text()).toContain('Refresh');
-    expect(text()).not.toContain('Waiting for PDF Report');
+    it('revalidates and toastWarns when refresh succeeds with recovery.ok === false', () => {
+      renderStatus({
+        similarityReportPdfInvalidated: false,
+        reportPdfAvailable: true,
+      });
+
+      routerMocks.refreshFetcher.data = {
+        success: true,
+        recovery: { ok: false, message: 'lease held', status: 409 },
+      };
+      renderStatus({
+        similarityReportPdfInvalidated: false,
+        reportPdfAvailable: true,
+      });
+
+      expect(routerMocks.revalidate).toHaveBeenCalledTimes(1);
+      expect(uiMocks.toastWarning).toHaveBeenCalledWith(
+        'Status refreshed, but recovery did not start',
+        { description: 'lease held' },
+      );
+      expect(uiMocks.toastError).not.toHaveBeenCalled();
+    });
+
+    it('renders a standalone Refresh button when only canRefresh is true and submits relay-status', () => {
+      renderStatus(refreshOnlyProps());
+
+      expect(text()).toBe('Refresh');
+      expect(text()).not.toContain('Regenerate PDF');
+      expect(text()).not.toContain('Download PDF report');
+      expect(text()).not.toContain('Waiting for PDF Report');
+
+      clickButtonNamed('Refresh');
+
+      expect(routerMocks.refreshFetcher.submit).toHaveBeenCalledTimes(1);
+      const [formData, opts] = routerMocks.refreshFetcher.submit.mock.calls[0] as [
+        FormData,
+        { method: string; action: string },
+      ];
+      expect(formData.get('intent')).toBe(RELAY_STATUS_INTENT);
+      expect(opts).toEqual({ method: 'post', action: '/actions' });
+    });
   });
 });
