@@ -142,7 +142,6 @@ export function TextIntegrityPdfReportStatus({
     !reportGenerationFailed &&
     canRestart &&
     !blocked;
-  const canRetry = reportGenerationFailed && canRestart && !blocked;
   const showGeneratedText =
     reportGenerationComplete &&
     !canDownload &&
@@ -286,7 +285,7 @@ export function TextIntegrityPdfReportStatus({
     showGeneratedText ||
     showWaiting ||
     (canRegenerate && !retried) ||
-    (canRetry && !retried);
+    (reportGenerationFailed && canRestart && !retried);
 
   if (!showPdfChrome && !canRefresh) return null;
 
@@ -309,8 +308,12 @@ export function TextIntegrityPdfReportStatus({
 
   // Regenerate is the primary CTA when the stored PDF was invalidated (no download yet).
   const showRegeneratePrimary = canRegenerate && !retried && !showWaiting && !canDownload;
-  // Retry stays in the kebab; failure message is primary (aligned with Proofig).
-  const showRetryInMenu = canRetry && !retried && !showWaiting;
+  // Claim allows start when stale (invalidated) or reportGeneration error — mirror that in the UI.
+  const claimAllowsRestart =
+    (similarityReportPdfInvalidated || reportGenerationFailed) && !showWaiting && !retried;
+  // Keep a Regenerate/Retry item in the kebab whenever restart is wired, except when it is
+  // already the primary control (Proofig-aligned). Disabled when the claim would no-op.
+  const showRegenerateInMenu = canRestart && !showRegeneratePrimary;
 
   const menuItems: TextIntegrityOverflowMenuItem[] = [];
   if (canRefresh) {
@@ -321,12 +324,19 @@ export function TextIntegrityPdfReportStatus({
       disabled: blocked || refreshBusy,
     });
   }
-  if (showRetryInMenu) {
+  if (showRegenerateInMenu) {
+    const regenerateLabel = reportGenerationFailed
+      ? restartBusy
+        ? 'Retrying…'
+        : 'Retry PDF generation'
+      : restartBusy
+        ? 'Regenerating…'
+        : 'Regenerate PDF';
     menuItems.push({
-      id: 'retry-pdf',
-      label: restartBusy ? 'Retrying…' : 'Retry PDF generation',
+      id: 'regenerate-pdf',
+      label: regenerateLabel,
       onSelect: submitRestart,
-      disabled: blocked || restartBusy || showWaiting,
+      disabled: blocked || restartBusy || showWaiting || !claimAllowsRestart,
     });
   }
 

@@ -186,6 +186,12 @@ describe('TextIntegrityPdfReportStatus', () => {
     });
   }
 
+  function buttonNamed(label: string) {
+    return Array.from(container.querySelectorAll('button')).find(
+      (el) => el.textContent?.trim() === label,
+    );
+  }
+
   describe('retry latch', () => {
     it('keeps regenerate hidden during the race before waiting state arrives, then resets after failure', () => {
       renderStatus();
@@ -197,10 +203,11 @@ describe('TextIntegrityPdfReportStatus', () => {
 
       expect(routerMocks.revalidate).toHaveBeenCalledTimes(1);
       expect(text()).toContain('Waiting for PDF Report');
-      expect(text()).not.toContain('Regenerate PDF');
+      expect(buttonNamed('Regenerate PDF')?.disabled).toBe(true);
 
       renderStatus({ waitingForReport: true });
       expect(text()).toContain('Waiting for PDF Report');
+      expect(buttonNamed('Regenerate PDF')?.disabled).toBe(true);
 
       renderStatus({
         reportGenerationComplete: false,
@@ -221,10 +228,11 @@ describe('TextIntegrityPdfReportStatus', () => {
       renderStatus();
 
       expect(text()).toContain('Waiting for PDF Report');
-      expect(text()).not.toContain('Regenerate PDF');
+      expect(buttonNamed('Regenerate PDF')?.disabled).toBe(true);
 
       renderStatus({ waitingForReport: true, similarityReportPdfInvalidated: true });
       expect(text()).toContain('Waiting for PDF Report');
+      expect(buttonNamed('Regenerate PDF')?.disabled).toBe(true);
 
       renderStatus({
         waitingForReport: false,
@@ -235,6 +243,8 @@ describe('TextIntegrityPdfReportStatus', () => {
 
       expect(text()).toContain('Download PDF report');
       expect(text()).toContain('Refresh');
+      expect(text()).toContain('Regenerate PDF');
+      expect(buttonNamed('Regenerate PDF')?.disabled).toBe(true);
       expect(text()).not.toContain('Waiting for PDF Report');
     });
   });
@@ -258,6 +268,38 @@ describe('TextIntegrityPdfReportStatus', () => {
       expect(formData.get('checkRunId')).toBe('run-1');
       expect(opts).toEqual({ method: 'post', action: '/actions' });
       expect(routerMocks.restartFetcher.submit).not.toHaveBeenCalled();
+    });
+
+    it('shows Regenerate PDF disabled in the kebab when the PDF is not stale', () => {
+      renderStatus({
+        similarityReportPdfInvalidated: false,
+        reportPdfAvailable: true,
+      });
+
+      expect(text()).toContain('Download PDF report');
+      expect(text()).toContain('Regenerate PDF');
+      expect(buttonNamed('Regenerate PDF')?.disabled).toBe(true);
+
+      clickButtonNamed('Regenerate PDF');
+      expect(routerMocks.restartFetcher.submit).not.toHaveBeenCalled();
+    });
+
+    it('enables Regenerate PDF in the kebab when stale and download is still the primary', () => {
+      // Defensive: if download+stale ever coexist, regenerate stays in menu and is enabled.
+      renderStatus({
+        similarityReportPdfInvalidated: true,
+        reportPdfAvailable: true,
+        reportGenerationFailed: false,
+      });
+
+      expect(text()).toContain('Download PDF report');
+      const regen = buttonNamed('Regenerate PDF');
+      expect(regen?.disabled).toBe(false);
+
+      clickButtonNamed('Regenerate PDF');
+      expect(routerMocks.restartFetcher.submit).toHaveBeenCalledTimes(1);
+      const [formData] = routerMocks.restartFetcher.submit.mock.calls[0] as [FormData];
+      expect(formData.get('intent')).toBe('restart-similarity-pdf');
     });
 
     it('revalidates and toastWarns when refresh succeeds with recovery.ok === false', () => {
