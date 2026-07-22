@@ -732,6 +732,8 @@ export async function handleTextIntegrityAction(
       };
     }
 
+    const knownPdfId = serviceData?.reportPdfId ?? serviceData?.latest?.reportPdfId;
+
     const baseExt =
       (ctx.$config?.app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};
     const mergedConfig = await getTextIntegrityConfigWithOverrides(baseExt, prisma);
@@ -764,7 +766,10 @@ export async function handleTextIntegrityAction(
           'Content-Type': 'application/json',
           Authorization: `Bearer ${relayApiKey}`,
         },
-        body: JSON.stringify({ client_id: checkRunId }),
+        body: JSON.stringify({
+          client_id: checkRunId,
+          ...(knownPdfId ? { pdf_id: knownPdfId } : {}),
+        }),
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to contact checks-relay';

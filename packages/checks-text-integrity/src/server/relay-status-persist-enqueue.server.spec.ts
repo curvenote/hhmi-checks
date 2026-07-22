@@ -36,6 +36,14 @@ describe('enqueuePersistPdfAfterRelayStatusIfNeeded', () => {
     mockFindUnique.mockResolvedValue(
       runWithServiceData({
         ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+        stages: {
+          ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA.stages,
+          reportGeneration: {
+            status: 'completed',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
         reportPdfId: 'pdf-1',
       }),
     );
@@ -50,6 +58,14 @@ describe('enqueuePersistPdfAfterRelayStatusIfNeeded', () => {
     mockFindUnique.mockResolvedValue(
       runWithServiceData({
         ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+        stages: {
+          ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA.stages,
+          reportGeneration: {
+            status: 'completed',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
         reportPdfId: 'pdf-2',
         similarityReportStored: true,
         storedReportPdfId: 'pdf-1',
@@ -62,10 +78,40 @@ describe('enqueuePersistPdfAfterRelayStatusIfNeeded', () => {
     expect(mockEnqueue).toHaveBeenCalledWith('wv-1', 'run-1', 'user-1');
   });
 
+  it('does not enqueue while report generation is still processing', async () => {
+    mockFindUnique.mockResolvedValue(
+      runWithServiceData({
+        ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+        stages: {
+          ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA.stages,
+          reportGeneration: {
+            status: 'processing',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+        reportPdfId: 'pdf-1',
+      }),
+    );
+
+    await expect(enqueuePersistPdfAfterRelayStatusIfNeeded('run-1')).resolves.toEqual({
+      enqueued: false,
+    });
+    expect(mockEnqueue).not.toHaveBeenCalled();
+  });
+
   it('does not enqueue when the current PDF id is already stored', async () => {
     mockFindUnique.mockResolvedValue(
       runWithServiceData({
         ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+        stages: {
+          ...MINIMAL_TEXT_INTEGRITY_SERVICE_DATA.stages,
+          reportGeneration: {
+            status: 'completed',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
         reportPdfId: 'pdf-1',
         similarityReportStored: true,
         storedReportPdfId: 'pdf-1',

@@ -17,8 +17,24 @@ function readServiceDataFromRunData(runData: unknown): TextIntegrityDataSchema {
 }
 
 /**
+ * After a successful relay-status refresh, enqueue TEXT_INTEGRITY_PERSIST_PDF when report
+ * generation is complete and the PDF id is not yet stored (or differs from the stored id).
+ *
+ * Requires `reportGeneration.status === 'completed'` so we do not enqueue while TCA is still
+ * PENDING after a REPORT_GENERATION_STARTED envelope.
+ */
+export function shouldEnqueuePersistPdfAfterRelayStatus(
+  serviceData: TextIntegrityDataSchema,
+): boolean {
+  return (
+    serviceData.stages?.reportGeneration?.status === 'completed' &&
+    shouldPersistSimilarityReport(serviceData)
+  );
+}
+
+/**
  * After a successful relay-status refresh, enqueue TEXT_INTEGRITY_PERSIST_PDF when the run
- * has a PDF id that is not yet stored (or differs from the stored id).
+ * has a completed PDF id that is not yet stored (or differs from the stored id).
  *
  * This covers missed REPORT_GENERATION_COMPLETE notifies: Refresh may apply envelopes (or
  * already have reportPdfId) without going through the notify webhook persist path.
@@ -37,7 +53,7 @@ export async function enqueuePersistPdfAfterRelayStatusIfNeeded(
   }
 
   const serviceData = readServiceDataFromRunData(run.data);
-  if (!shouldPersistSimilarityReport(serviceData)) {
+  if (!shouldEnqueuePersistPdfAfterRelayStatus(serviceData)) {
     return { enqueued: false };
   }
 
