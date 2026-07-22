@@ -46,6 +46,7 @@ import {
   resolveRelayInstanceId,
 } from './relay-urls.server.js';
 import { applyRelayCheckStatusEnvelopes } from './relay-status-apply.server.js';
+import { enqueuePersistPdfAfterRelayStatusIfNeeded } from './relay-status-persist-enqueue.server.js';
 import {
   acceptEulaAtProvider,
   assertSubmitterEulaAccepted,
@@ -838,6 +839,10 @@ export async function handleTextIntegrityAction(
       void notifyTextIntegrityActionError(ctx, checkRunId, 'relay-status', applied.message);
       return { error: { type: 'general', message: applied.message }, status: 400 };
     }
+
+    // Missed notify / status-only COMPLETE: pull+store PDF when id needs persisting.
+    // Run before recovery so an existing pdf_id is still enqueued even if recovery restarts generation.
+    await enqueuePersistPdfAfterRelayStatusIfNeeded(checkRunId, ctx.user?.id);
 
     const recovery = isRelayRecoveryHint(relayStatus.recovery) ? relayStatus.recovery : undefined;
     if (recovery) {
