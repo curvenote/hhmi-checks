@@ -38,29 +38,40 @@ export function shouldEnqueuePersistPdfAfterRelayStatus(
  *
  * This covers missed REPORT_GENERATION_COMPLETE notifies: Refresh may apply envelopes (or
  * already have reportPdfId) without going through the notify webhook persist path.
+ *
+ * Errors are logged and swallowed so a failed DB read / enqueue cannot fail a Refresh whose
+ * status envelopes already applied (same fire-and-forget posture as notify persist enqueue).
  */
 export async function enqueuePersistPdfAfterRelayStatusIfNeeded(
   checkRunId: string,
   invokedById?: string,
 ): Promise<{ enqueued: boolean }> {
-  const prisma = await getPrismaClient();
-  const run = await prisma.checkServiceRun.findUnique({
-    where: { id: checkRunId },
-    select: { work_version_id: true, created_by_id: true, data: true },
-  });
-  if (!run?.work_version_id) {
+  try {
+    const prisma = await getPrismaClient();
+    const run = await prisma.checkServiceRun.findUnique({
+      where: { id: checkRunId },
+      select: { work_version_id: true, created_by_id: true, data: true },
+    });
+    if (!run?.work_version_id) {
+      return { enqueued: false };
+    }
+
+    const serviceData = readServiceDataFromRunData(run.data);
+    if (!shouldEnqueuePersistPdfAfterRelayStatus(serviceData)) {
+      return { enqueued: false };
+    }
+
+    await enqueueTextIntegrityPersistPdfJob(
+      run.work_version_id,
+      checkRunId,
+      invokedById ?? run.created_by_id ?? undefined,
+    );
+    return { enqueued: true };
+  } catch (err) {
+    console.error('[checks-text-integrity] persist enqueue after relay-status failed', {
+      checkRunId,
+      err,
+    });
     return { enqueued: false };
   }
-
-  const serviceData = readServiceDataFromRunData(run.data);
-  if (!shouldEnqueuePersistPdfAfterRelayStatus(serviceData)) {
-    return { enqueued: false };
-  }
-
-  await enqueueTextIntegrityPersistPdfJob(
-    run.work_version_id,
-    checkRunId,
-    invokedById ?? run.created_by_id ?? undefined,
-  );
-  return { enqueued: true };
 }

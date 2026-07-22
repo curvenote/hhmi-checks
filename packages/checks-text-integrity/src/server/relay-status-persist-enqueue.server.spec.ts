@@ -141,4 +141,16 @@ describe('enqueuePersistPdfAfterRelayStatusIfNeeded', () => {
     });
     expect(mockEnqueue).not.toHaveBeenCalled();
   });
+
+  it('swallows DB errors and returns enqueued: false so Refresh is not failed', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFindUnique.mockRejectedValue(new Error('pool exhausted'));
+
+    await expect(enqueuePersistPdfAfterRelayStatusIfNeeded('run-1')).resolves.toEqual({
+      enqueued: false,
+    });
+    expect(mockEnqueue).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
 });
