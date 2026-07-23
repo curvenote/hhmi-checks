@@ -280,6 +280,7 @@ export function TextIntegrityPdfReportStatus({
     refreshFetcher.submit(fd, { method: 'post', action: actionPath!.trim() });
   };
 
+  // Keep failure chrome visible during maintenance (Retry/Refresh stay disabled via blocked).
   const showPdfChrome =
     canDownload ||
     showGeneratedText ||

@@ -45,6 +45,11 @@ const uiMocks = vi.hoisted(() => ({
   toastWarning: vi.fn(),
 }));
 
+const maintenanceMocks = vi.hoisted(() => ({
+  blocked: false,
+  message: undefined as string | undefined,
+}));
+
 vi.mock('react-router', () => ({
   useFetcher: (opts?: { key?: string }) => {
     if (opts?.key === routerMocks.RESTART_FETCHER_KEY) return routerMocks.restartFetcher;
@@ -96,7 +101,10 @@ vi.mock('@curvenote/scms-core', () => ({
     toastError: uiMocks.toastError,
     toastWarning: uiMocks.toastWarning,
   },
-  useCheckMaintenanceBlocked: () => ({ blocked: false, message: undefined }),
+  useCheckMaintenanceBlocked: () => ({
+    blocked: maintenanceMocks.blocked,
+    message: maintenanceMocks.message,
+  }),
 }));
 
 vi.mock('./TextIntegrityEulaDialog.js', () => ({
@@ -145,6 +153,8 @@ describe('TextIntegrityPdfReportStatus', () => {
   let root: Root;
 
   beforeEach(() => {
+    maintenanceMocks.blocked = false;
+    maintenanceMocks.message = undefined;
     routerMocks.restartFetcher.state = 'idle';
     routerMocks.restartFetcher.data = undefined;
     routerMocks.restartFetcher.submit.mockReset();
@@ -297,6 +307,27 @@ describe('TextIntegrityPdfReportStatus', () => {
       expect(buttonNamed('Regenerate PDF')?.disabled).toBe(true);
 
       clickButtonNamed('Regenerate PDF');
+      expect(routerMocks.restartFetcher.submit).not.toHaveBeenCalled();
+    });
+
+    it('keeps PDF failure chrome during maintenance with Retry disabled', () => {
+      maintenanceMocks.blocked = true;
+      maintenanceMocks.message = 'Maintenance';
+
+      renderStatus({
+        reportGenerationComplete: false,
+        reportGenerationFailed: true,
+        waitingForReport: false,
+        similarityReportPdfInvalidated: false,
+        reportPdfAvailable: false,
+      });
+
+      expect(text()).toContain('PDF Generation Failed');
+      expect(text()).toContain('Retry PDF generation');
+      expect(buttonNamed('Retry PDF generation')?.disabled).toBe(true);
+      expect(buttonNamed('Refresh')?.disabled).toBe(true);
+
+      clickButtonNamed('Retry PDF generation');
       expect(routerMocks.restartFetcher.submit).not.toHaveBeenCalled();
     });
 
