@@ -334,9 +334,24 @@ function hasKnownReportPdfId(serviceData: TextIntegrityDataSchema): boolean {
   return typeof id === 'string' && id.trim() !== '';
 }
 
+/** Wait for webhook STARTED before treating missing reportPdfId as a missed start. */
+const SIMILARITY_PDF_START_GRACE_MS = 10_000;
+
+function processingCompletedBeyondGrace(
+  serviceData: TextIntegrityDataSchema,
+  nowMs: number = Date.now(),
+): boolean {
+  const doneAt = serviceData.stages?.processing?.timestamp;
+  if (typeof doneAt !== 'string' || doneAt.trim() === '') return false;
+  const parsed = Date.parse(doneAt);
+  if (Number.isNaN(parsed)) return false;
+  return nowMs - parsed >= SIMILARITY_PDF_START_GRACE_MS;
+}
+
 /**
  * Auto recovery (Refresh): start PDF only when missing/failed/stale — never force-replace a
- * healthy completed PDF on every status poll.
+ * healthy completed PDF on every status poll. The pending/no-id path waits a short grace
+ * window so Refresh does not race webhook-initiated PDF start.
  */
 function shouldStartSimilarityPdf(serviceData: TextIntegrityDataSchema): boolean {
   if (similarityPdfStartIsAlreadyPending(serviceData)) return false;
@@ -347,7 +362,7 @@ function shouldStartSimilarityPdf(serviceData: TextIntegrityDataSchema): boolean
     !hasKnownReportPdfId(serviceData)
   ) {
     const rg = serviceData.stages?.reportGeneration?.status;
-    return rg === undefined || rg === 'pending';
+    return (rg === undefined || rg === 'pending') && processingCompletedBeyondGrace(serviceData);
   }
   return false;
 }

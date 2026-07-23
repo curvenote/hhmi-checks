@@ -349,7 +349,7 @@ describe('handleTextIntegrityAction relay-status PDF claim', () => {
     );
   });
 
-  it('starts PDF once under claim when similarity is done and no reportPdfId', async () => {
+  it('starts PDF once under claim when similarity is done, aged past grace, and no reportPdfId', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (String(url).includes('/status')) {
         return Response.json({ envelopes: [] });
@@ -367,6 +367,25 @@ describe('handleTextIntegrityAction relay-status PDF claim', () => {
     expect(pdfStartCalls).toHaveLength(1);
     expect(runData.serviceData.reportPdfId).toBe('pdf-new');
     expect(runData.serviceData.stages.reportGeneration?.status).toBe('processing');
+  });
+
+  it('does not start PDF during the post-processing grace window', async () => {
+    runData.serviceData.stages!.processing = {
+      status: 'completed',
+      history: [],
+      timestamp: new Date().toISOString(),
+    };
+
+    const fetchMock = vi.fn(async () => Response.json({ envelopes: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(handleTextIntegrityAction(relayStatusArgs())).resolves.toEqual({ success: true });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [statusUrl] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(statusUrl).toContain('/status');
+    expect(runData.serviceData.reportPdfId).toBeUndefined();
+    expect(runData.serviceData.stages?.reportGeneration?.status).toBe('pending');
   });
 
   it('does not start PDF when reportPdfId is already known (status poll only)', async () => {
