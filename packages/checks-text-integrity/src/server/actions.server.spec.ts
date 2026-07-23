@@ -213,6 +213,47 @@ describe('handleTextIntegrityAction restart-similarity-pdf', () => {
     expect(runData.serviceData.reportPdfId).toBe('pdf-new');
   });
 
+  it('force-restarts a completed non-stale PDF from the menu path', async () => {
+    runData = {
+      serviceData: {
+        externalId: 'external-check-1',
+        reportPdfId: 'pdf-old',
+        similarityReportStored: true,
+        storedReportPdfId: 'pdf-old',
+        stages: {
+          submission: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          processing: { status: 'completed', history: [], timestamp: '2025-01-01T00:00:00Z' },
+          reportGeneration: {
+            status: 'completed',
+            history: [],
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+        },
+      },
+    };
+    findCheckRun.mockImplementation(async () => ({
+      id: checkRunId,
+      work_version_id: 'wv-1',
+      kind: 'checks-text-integrity',
+      data: runData,
+    }));
+
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        result: { pdf_id: 'pdf-forced' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(handleTextIntegrityAction(restartArgs(checkRunId))).resolves.toEqual({
+      success: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(runData.serviceData.reportPdfId).toBe('pdf-forced');
+    expect(runData.serviceData.stages.reportGeneration?.status).toBe('processing');
+  });
+
   it('requires the run to belong to the authorized work version', async () => {
     const fetchMock = vi.fn(async () =>
       Response.json({

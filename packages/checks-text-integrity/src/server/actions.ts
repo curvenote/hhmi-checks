@@ -335,9 +335,8 @@ function hasKnownReportPdfId(serviceData: TextIntegrityDataSchema): boolean {
 }
 
 /**
- * Whether SCMS may call relay pdf/start under claim.
- * Includes regenerate (error/invalidated) and Refresh recovery when similarity
- * is done but STARTED was never stored (no reportPdfId, reportGeneration still pending).
+ * Auto recovery (Refresh): start PDF only when missing/failed/stale — never force-replace a
+ * healthy completed PDF on every status poll.
  */
 function shouldStartSimilarityPdf(serviceData: TextIntegrityDataSchema): boolean {
   if (similarityPdfStartIsAlreadyPending(serviceData)) return false;
@@ -353,13 +352,35 @@ function shouldStartSimilarityPdf(serviceData: TextIntegrityDataSchema): boolean
   return false;
 }
 
-async function claimSimilarityPdfStart(checkRunId: string): Promise<boolean> {
+/**
+ * Manual Regenerate / Retry: allow whenever similarity is ready enough, except while a
+ * generate is already in progress (claim held).
+ */
+function shouldForceRestartSimilarityPdf(serviceData: TextIntegrityDataSchema): boolean {
+  if (similarityPdfStartIsAlreadyPending(serviceData)) return false;
+  if (serviceData.similarityReportPdfInvalidated === true) return true;
+  if (serviceData.stages?.reportGeneration?.status === 'error') return true;
+  if (hasKnownReportPdfId(serviceData)) return true;
+  return linearStageIsDone(serviceData.stages?.processing?.status);
+}
+
+function canClaimSimilarityPdfStart(serviceData: TextIntegrityDataSchema, force: boolean): boolean {
+  return force
+    ? shouldForceRestartSimilarityPdf(serviceData)
+    : shouldStartSimilarityPdf(serviceData);
+}
+
+async function claimSimilarityPdfStart(
+  checkRunId: string,
+  options: { force?: boolean } = {},
+): Promise<boolean> {
+  const force = options.force === true;
   const didClaim = { current: false };
   await safeCheckServiceRunPatch(checkRunId, (data?: Prisma.JsonValue) => {
     didClaim.current = false;
     const current = (data ?? {}) as CheckServiceRunData;
     const serviceData = readServiceDataFromRunData(current) ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
-    if (!shouldStartSimilarityPdf(serviceData)) return null;
+    if (!canClaimSimilarityPdfStart(serviceData, force)) return null;
     didClaim.current = true;
     return {
       ...current,
@@ -409,13 +430,19 @@ async function startSimilarityPdfUnderClaimIfNeeded(args: {
   intent: string;
   /** Prefix for user-facing / stored error messages. */
   errorLabel?: string;
+  /**
+   * Manual regenerate: allow replacing a non-stale PDF. Auto Refresh recovery leaves this
+   * false so status polls do not churn PDFs.
+   */
+  force?: boolean;
 }): Promise<StartSimilarityPdfUnderClaimResult> {
   const errorLabel = args.errorLabel ?? 'Failed to start PDF regeneration';
-  if (!shouldStartSimilarityPdf(args.serviceData)) {
+  const force = args.force === true;
+  if (!canClaimSimilarityPdfStart(args.serviceData, force)) {
     return { ok: true, started: false };
   }
 
-  const didClaim = await claimSimilarityPdfStart(args.checkRunId);
+  const didClaim = await claimSimilarityPdfStart(args.checkRunId, { force });
   if (!didClaim) {
     return { ok: true, started: false };
   }
@@ -1160,6 +1187,7 @@ export async function handleTextIntegrityAction(
       serviceName,
       relayInstanceId,
       intent,
+      force: true,
     });
     if (!pdfStart.ok) {
       return {

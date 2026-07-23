@@ -308,11 +308,10 @@ export function TextIntegrityPdfReportStatus({
 
   // Regenerate is the primary CTA when the stored PDF was invalidated (no download yet).
   const showRegeneratePrimary = canRegenerate && !retried && !showWaiting && !canDownload;
-  // Claim allows start when stale (invalidated) or reportGeneration error — mirror that in the UI.
-  const claimAllowsRestart =
-    (similarityReportPdfInvalidated || reportGenerationFailed) && !showWaiting && !retried;
+  // Manual regenerate is allowed anytime except while a generate is already in progress.
+  const regenerateInProgress = showWaiting || restartBusy;
   // Keep a Regenerate/Retry item in the kebab whenever restart is wired, except when it is
-  // already the primary control (Proofig-aligned). Disabled when the claim would no-op.
+  // already the primary control (Proofig-aligned).
   const showRegenerateInMenu = canRestart && !showRegeneratePrimary;
 
   const menuItems: TextIntegrityOverflowMenuItem[] = [];
@@ -336,7 +335,7 @@ export function TextIntegrityPdfReportStatus({
       id: 'regenerate-pdf',
       label: regenerateLabel,
       onSelect: submitRestart,
-      disabled: blocked || restartBusy || showWaiting || !claimAllowsRestart,
+      disabled: blocked || regenerateInProgress,
     });
   }
 

@@ -244,7 +244,7 @@ describe('TextIntegrityPdfReportStatus', () => {
       expect(text()).toContain('Download PDF report');
       expect(text()).toContain('Refresh');
       expect(text()).toContain('Regenerate PDF');
-      expect(buttonNamed('Regenerate PDF')?.disabled).toBe(true);
+      expect(buttonNamed('Regenerate PDF')?.disabled).toBe(false);
       expect(text()).not.toContain('Waiting for PDF Report');
     });
   });
@@ -270,7 +270,7 @@ describe('TextIntegrityPdfReportStatus', () => {
       expect(routerMocks.restartFetcher.submit).not.toHaveBeenCalled();
     });
 
-    it('shows Regenerate PDF disabled in the kebab when the PDF is not stale', () => {
+    it('allows Regenerate PDF from the kebab when the PDF is not stale', () => {
       renderStatus({
         similarityReportPdfInvalidated: false,
         reportPdfAvailable: true,
@@ -278,6 +278,22 @@ describe('TextIntegrityPdfReportStatus', () => {
 
       expect(text()).toContain('Download PDF report');
       expect(text()).toContain('Regenerate PDF');
+      expect(buttonNamed('Regenerate PDF')?.disabled).toBe(false);
+
+      clickButtonNamed('Regenerate PDF');
+      expect(routerMocks.restartFetcher.submit).toHaveBeenCalledTimes(1);
+      const [formData] = routerMocks.restartFetcher.submit.mock.calls[0] as [FormData];
+      expect(formData.get('intent')).toBe('restart-similarity-pdf');
+    });
+
+    it('disables Regenerate PDF in the kebab while waiting for a PDF', () => {
+      renderStatus({
+        similarityReportPdfInvalidated: false,
+        reportPdfAvailable: true,
+        waitingForReport: true,
+      });
+
+      expect(text()).toContain('Waiting for PDF Report');
       expect(buttonNamed('Regenerate PDF')?.disabled).toBe(true);
 
       clickButtonNamed('Regenerate PDF');
