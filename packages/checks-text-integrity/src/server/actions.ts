@@ -47,6 +47,10 @@ import {
   resolveRelayInstanceId,
 } from './relay-urls.server.js';
 import { applyRelayCheckStatusEnvelopes } from './relay-status-apply.server.js';
+import {
+  relayStatusLearnedProcessingComplete,
+  processingCompletedBeyondGrace,
+} from './similarityPdfStartGrace.server.js';
 import { enqueuePersistPdfAfterRelayStatusIfNeeded } from './relay-status-persist-enqueue.server.js';
 import {
   acceptEulaAtProvider,
@@ -334,32 +338,6 @@ function hasKnownReportPdfId(serviceData: TextIntegrityDataSchema): boolean {
   return typeof id === 'string' && id.trim() !== '';
 }
 
-/** Wait for webhook STARTED before treating missing reportPdfId as a missed start. */
-const SIMILARITY_PDF_START_GRACE_MS = 10_000;
-
-function processingCompletedBeyondGrace(
-  serviceData: TextIntegrityDataSchema,
-  nowMs: number = Date.now(),
-): boolean {
-  const doneAt = serviceData.stages?.processing?.timestamp;
-  if (typeof doneAt !== 'string' || doneAt.trim() === '') return false;
-  const parsed = Date.parse(doneAt);
-  if (Number.isNaN(parsed)) return false;
-  return nowMs - parsed >= SIMILARITY_PDF_START_GRACE_MS;
-}
-
-/** Status catch-up in this Refresh: processing was not done before envelopes were applied. */
-function relayStatusLearnedProcessingComplete(
-  envelopes: unknown[],
-  processingDoneBeforeStatus: boolean,
-): boolean {
-  if (processingDoneBeforeStatus) return false;
-  return envelopes.some((envelope) => {
-    if (!envelope || typeof envelope !== 'object') return false;
-    return (envelope as { event?: string }).event === 'PROCESSING_PHASE_COMPLETE';
-  });
-}
-
 type SimilarityPdfStartOptions = {
   /** Skip post-processing grace when status catch-up stamped processing completed now. */
   skipProcessingGrace?: boolean;
@@ -384,7 +362,8 @@ function shouldStartSimilarityPdf(
   ) {
     const rg = serviceData.stages?.reportGeneration?.status;
     const graceOk =
-      options.skipProcessingGrace === true || processingCompletedBeyondGrace(serviceData);
+      options.skipProcessingGrace === true ||
+      processingCompletedBeyondGrace(serviceData, Date.now());
     return (rg === undefined || rg === 'pending') && graceOk;
   }
   return false;
@@ -1133,6 +1112,7 @@ export async function handleTextIntegrityAction(
     }
 
     // Missed REPORT_GENERATION_STARTED: status is read-only for PDF; start once under claim.
+    // Recovery start is automatic — do not emit CHECKS_PDF_REGENERATION_REQUESTED (manual path only).
     const runAfterStatus = await prisma.checkServiceRun.findFirst({
       where: {
         id: checkRunId,
@@ -1166,10 +1146,7 @@ export async function handleTextIntegrityAction(
         'relay-status-pdf-start',
         pdfStart.message,
       );
-      return {
-        error: { type: 'general', message: pdfStart.message },
-        status: pdfStart.status,
-      };
+      return relayRecoveryWarningResult(pdfStart.message, pdfStart.status);
     }
 
     return { success: true };

@@ -1,9 +1,10 @@
 'use client';
 
 import { useFetcher } from 'react-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ExtensionCheckSectionActivityProps } from '@curvenote/scms-core';
 import { ui, useCheckMaintenanceBlocked, useRevalidateOnInterval } from '@curvenote/scms-core';
+import { useHoldingBusy } from '@hhmi/checks-shared/useHoldingBusy';
 import { ImageIntegrityTrackEvent } from '../analytics.catalog.js';
 import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 import { Logos } from '../client.js';
@@ -20,9 +21,6 @@ import {
 // Note: ProofigDataSchema is exported from schema.js, so we don't re-export it here to avoid duplicates
 export type { ChecksMetadataSection } from './types.js';
 
-/** Release busy if CTA→progress never arrives (thrown action, empty settle, stalled success). */
-const HOLDING_BUSY_TIMEOUT_MS = 15_000;
-
 type ImageIntegrityChecksSectionProps = ExtensionCheckSectionActivityProps & {
   metadata: ProofigDataSchema | undefined;
 };
@@ -37,25 +35,16 @@ export function ImageIntegrityChecksSection({
   const pingEvent = useChecksPingEvent({ checkKind: 'proofig', workVersionId });
   const lastTrackedCheckRunIdRef = useRef<string | undefined>(undefined);
   const { blocked, message } = useCheckMaintenanceBlocked('proofig');
-  // Stay busy after submit until the CTA swaps to progress (or settle/timeout clears it).
-  const [holdingBusy, setHoldingBusy] = useState(false);
-
-  // Check if we need to dispatch the initial POST
-  // If proofig is enabled and has a status object, show progress
   const checkedAvailableOrInProgress = !!metadata;
+  const holdingBusy = useHoldingBusy({
+    fetcher,
+    releaseWhen: checkedAvailableOrInProgress,
+    onSettledError: (message) => ui.toastError(message),
+  });
   const isBusy = fetcher.state !== 'idle' || holdingBusy;
   const stages = metadata?.stages ? { ...ALL_PENDING_STAGES, ...metadata.stages } : null;
   const awaitingDocumentPreparation =
     stages != null && isProofigAwaitingDocumentPreparationInUi(stages);
-
-  useEffect(() => {
-    if (fetcher.state !== 'idle') setHoldingBusy(true);
-  }, [fetcher.state]);
-
-  // Parent stays mounted across CTA→progress; drop the latch once progress is shown.
-  useEffect(() => {
-    if (checkedAvailableOrInProgress) setHoldingBusy(false);
-  }, [checkedAvailableOrInProgress]);
 
   // Poll when we have check data, while waiting for CTA→progress after submit, or during DOCX prep
   useRevalidateOnInterval({
@@ -63,29 +52,6 @@ export function ImageIntegrityChecksSection({
     interval:
       isBusy && !checkedAvailableOrInProgress ? 1000 : awaitingDocumentPreparation ? 2000 : 3000,
   });
-
-  // Settle: structured error / empty response releases busy; success keeps hold until progress/timeout.
-  useEffect(() => {
-    if (fetcher.state !== 'idle' || checkedAvailableOrInProgress) return;
-    if (!holdingBusy) return;
-
-    if (!fetcher.data) {
-      setHoldingBusy(false);
-      return;
-    }
-
-    const err = (fetcher.data as { error?: { message?: string } }).error;
-    if (err?.message) {
-      ui.toastError(err.message);
-      setHoldingBusy(false);
-    }
-  }, [fetcher.state, fetcher.data, checkedAvailableOrInProgress, holdingBusy]);
-
-  useEffect(() => {
-    if (!holdingBusy) return;
-    const to = setTimeout(() => setHoldingBusy(false), HOLDING_BUSY_TIMEOUT_MS);
-    return () => clearTimeout(to);
-  }, [holdingBusy]);
 
   useEffect(() => {
     const reportState = metadata?.summary?.state;

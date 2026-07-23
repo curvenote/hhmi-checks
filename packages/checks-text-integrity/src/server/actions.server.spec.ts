@@ -436,6 +436,55 @@ describe('handleTextIntegrityAction relay-status PDF claim', () => {
     expect(runData.serviceData.stages.reportGeneration?.status).toBe('processing');
   });
 
+  it('starts PDF once under claim after the grace window elapses', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-01-01T00:00:00Z'));
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/status')) {
+        return Response.json({ envelopes: [] });
+      }
+      return Response.json({ result: { pdf_id: 'pdf-aged' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(handleTextIntegrityAction(relayStatusArgs())).resolves.toEqual({ success: true });
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).includes('/report/pdf/start')),
+    ).toHaveLength(0);
+
+    vi.setSystemTime(new Date('2025-01-01T00:00:11Z'));
+    await expect(handleTextIntegrityAction(relayStatusArgs())).resolves.toEqual({ success: true });
+
+    const pdfStartCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes('/report/pdf/start'),
+    );
+    expect(pdfStartCalls).toHaveLength(1);
+    expect(runData.serviceData.reportPdfId).toBe('pdf-aged');
+
+    vi.useRealTimers();
+  });
+
+  it('returns a recovery warning when proactive PDF start fails', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/status')) {
+        return Response.json({ envelopes: [] });
+      }
+      return new Response('relay down', { status: 502 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await handleTextIntegrityAction(relayStatusArgs());
+    expect(result).toEqual({
+      success: true,
+      recovery: {
+        ok: false,
+        message: expect.stringContaining('502'),
+        status: 502,
+      },
+    });
+  });
+
   it('does not start PDF when reportPdfId is already known (status poll only)', async () => {
     runData.serviceData.reportPdfId = 'pdf-existing';
     runData.serviceData.stages.reportGeneration = {
