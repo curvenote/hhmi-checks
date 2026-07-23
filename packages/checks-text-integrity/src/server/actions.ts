@@ -10,6 +10,7 @@ import {
 import type { Prisma } from '@curvenote/scms-db';
 import {
   MINIMAL_TEXT_INTEGRITY_SERVICE_DATA,
+  linearStageIsDone,
   parseServiceManifestSnapshot,
   textIntegrityDataSchema,
 } from '../schema.js';
@@ -46,6 +47,11 @@ import {
   resolveRelayInstanceId,
 } from './relay-urls.server.js';
 import { applyRelayCheckStatusEnvelopes } from './relay-status-apply.server.js';
+import {
+  relayStatusLearnedProcessingComplete,
+  processingCompletedBeyondGrace,
+} from './similarityPdfStartGrace.server.js';
+import { enqueuePersistPdfAfterRelayStatusIfNeeded } from './relay-status-persist-enqueue.server.js';
 import {
   acceptEulaAtProvider,
   assertSubmitterEulaAccepted,
@@ -327,19 +333,75 @@ function similarityPdfStartIsAlreadyPending(serviceData: TextIntegrityDataSchema
   return serviceData.stages?.reportGeneration?.status === 'processing';
 }
 
-function shouldStartSimilarityPdf(serviceData: TextIntegrityDataSchema): boolean {
-  if (similarityPdfStartIsAlreadyPending(serviceData)) return false;
-  if (serviceData.similarityReportPdfInvalidated === true) return true;
-  return serviceData.stages?.reportGeneration?.status === 'error';
+function hasKnownReportPdfId(serviceData: TextIntegrityDataSchema): boolean {
+  const id = serviceData.reportPdfId ?? serviceData.latest?.reportPdfId;
+  return typeof id === 'string' && id.trim() !== '';
 }
 
-async function claimSimilarityPdfStart(checkRunId: string): Promise<boolean> {
+type SimilarityPdfStartOptions = {
+  /** Skip post-processing grace when status catch-up stamped processing completed now. */
+  skipProcessingGrace?: boolean;
+};
+
+/**
+ * Auto recovery (Refresh): start PDF only when missing/failed/stale — never force-replace a
+ * healthy completed PDF on every status poll. The pending/no-id path waits a short grace
+ * window so Refresh does not race webhook-initiated PDF start, except when processing
+ * completion is learned from status envelopes in the same request (timestamp is local receipt).
+ */
+function shouldStartSimilarityPdf(
+  serviceData: TextIntegrityDataSchema,
+  options: SimilarityPdfStartOptions = {},
+): boolean {
+  if (similarityPdfStartIsAlreadyPending(serviceData)) return false;
+  if (serviceData.similarityReportPdfInvalidated === true) return true;
+  if (serviceData.stages?.reportGeneration?.status === 'error') return true;
+  if (
+    linearStageIsDone(serviceData.stages?.processing?.status) &&
+    !hasKnownReportPdfId(serviceData)
+  ) {
+    const rg = serviceData.stages?.reportGeneration?.status;
+    const graceOk =
+      options.skipProcessingGrace === true ||
+      processingCompletedBeyondGrace(serviceData, Date.now());
+    return (rg === undefined || rg === 'pending') && graceOk;
+  }
+  return false;
+}
+
+/**
+ * Manual Regenerate / Retry: allow whenever similarity is ready enough, except while a
+ * generate is already in progress (claim held).
+ */
+function shouldForceRestartSimilarityPdf(serviceData: TextIntegrityDataSchema): boolean {
+  if (similarityPdfStartIsAlreadyPending(serviceData)) return false;
+  if (serviceData.similarityReportPdfInvalidated === true) return true;
+  if (serviceData.stages?.reportGeneration?.status === 'error') return true;
+  if (hasKnownReportPdfId(serviceData)) return true;
+  return linearStageIsDone(serviceData.stages?.processing?.status);
+}
+
+function canClaimSimilarityPdfStart(
+  serviceData: TextIntegrityDataSchema,
+  force: boolean,
+  options: SimilarityPdfStartOptions = {},
+): boolean {
+  return force
+    ? shouldForceRestartSimilarityPdf(serviceData)
+    : shouldStartSimilarityPdf(serviceData, options);
+}
+
+async function claimSimilarityPdfStart(
+  checkRunId: string,
+  options: { force?: boolean; skipProcessingGrace?: boolean } = {},
+): Promise<boolean> {
+  const force = options.force === true;
   const didClaim = { current: false };
   await safeCheckServiceRunPatch(checkRunId, (data?: Prisma.JsonValue) => {
     didClaim.current = false;
     const current = (data ?? {}) as CheckServiceRunData;
     const serviceData = readServiceDataFromRunData(current) ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
-    if (!shouldStartSimilarityPdf(serviceData)) return null;
+    if (!canClaimSimilarityPdfStart(serviceData, force, options)) return null;
     didClaim.current = true;
     return {
       ...current,
@@ -367,6 +429,113 @@ async function recordSimilarityPdfStartAccepted(
     const next = markSimilarityPdfJobRestarted(serviceData, newPdfId);
     return { ...current, serviceData: next } as Prisma.JsonObject;
   });
+}
+
+type StartSimilarityPdfUnderClaimResult =
+  | { ok: true; started: boolean }
+  | { ok: false; message: string; status: number };
+
+/**
+ * Claim reportGeneration→processing then POST relay pdf/start once.
+ * Concurrent callers lose the claim and return started:false.
+ */
+async function startSimilarityPdfUnderClaimIfNeeded(args: {
+  checkRunId: string;
+  workVersionId?: string;
+  serviceData: TextIntegrityDataSchema;
+  externalCheckId: string;
+  relayBaseUrl: string;
+  relayApiKey: string;
+  serviceName: string;
+  relayInstanceId: string;
+  intent: string;
+  /** Prefix for user-facing / stored error messages. */
+  errorLabel?: string;
+  /**
+   * Manual regenerate: allow replacing a non-stale PDF. Auto Refresh recovery leaves this
+   * false so status polls do not churn PDFs.
+   */
+  force?: boolean;
+  /** Refresh status catch-up: processing completed via envelopes in this request. */
+  skipProcessingGrace?: boolean;
+}): Promise<StartSimilarityPdfUnderClaimResult> {
+  const errorLabel = args.errorLabel ?? 'Failed to start PDF regeneration';
+  const force = args.force === true;
+  const startOptions: SimilarityPdfStartOptions = {
+    skipProcessingGrace: args.skipProcessingGrace,
+  };
+  if (!canClaimSimilarityPdfStart(args.serviceData, force, startOptions)) {
+    return { ok: true, started: false };
+  }
+
+  const didClaim = await claimSimilarityPdfStart(args.checkRunId, {
+    force,
+    skipProcessingGrace: args.skipProcessingGrace,
+  });
+  if (!didClaim) {
+    return { ok: true, started: false };
+  }
+
+  let startRes: Response;
+  try {
+    startRes = await relaySimilarityPdfStart(
+      args.relayBaseUrl,
+      args.relayApiKey,
+      args.serviceName,
+      args.relayInstanceId,
+      args.externalCheckId,
+    );
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Failed to contact checks-relay';
+    logRelayError('similarity PDF start request threw', {
+      intent: args.intent,
+      checkRunId: args.checkRunId,
+      workVersionId: args.workVersionId,
+      serviceName: args.serviceName,
+      relayInstanceId: args.relayInstanceId,
+      externalCheckId: args.externalCheckId,
+      error: relayErrorDetails(e),
+    });
+    await markSimilarityPdfStartError(args.checkRunId, `${errorLabel}: ${message}`);
+    return { ok: false, message, status: 502 };
+  }
+
+  if (!startRes.ok) {
+    const text = await startRes.text().catch(() => '');
+    const message =
+      `Checks relay could not restart similarity PDF (${startRes.status}): ${text}`.trim();
+    logRelayError('similarity PDF start request returned non-OK response', {
+      intent: args.intent,
+      checkRunId: args.checkRunId,
+      workVersionId: args.workVersionId,
+      serviceName: args.serviceName,
+      relayInstanceId: args.relayInstanceId,
+      externalCheckId: args.externalCheckId,
+      status: startRes.status,
+      statusText: startRes.statusText,
+      contentType: startRes.headers.get('content-type'),
+      bodyText: text,
+    });
+    await markSimilarityPdfStartError(args.checkRunId, `${errorLabel}: ${message}`);
+    return {
+      ok: false,
+      message,
+      status: startRes.status >= 400 && startRes.status < 600 ? startRes.status : 502,
+    };
+  }
+
+  const startResult = (await startRes.json().catch(() => null)) as {
+    result?: { pdf_id?: string };
+  } | null;
+  const newPdfId = startResult?.result?.pdf_id;
+  if (!newPdfId || typeof newPdfId !== 'string') {
+    const message = 'Checks relay did not return a similarity PDF id; cannot restart';
+    await markSimilarityPdfStartError(args.checkRunId, `${errorLabel}: ${message}`);
+    return { ok: false, message, status: 502 };
+  }
+
+  await recordSimilarityPdfStartAccepted(args.checkRunId, newPdfId);
+  return { ok: true, started: true };
 }
 
 // TODO: these viewer defaults should come from database / stored service settings in future
@@ -721,6 +890,7 @@ export async function handleTextIntegrityAction(
 
     const serviceData = readServiceDataFromRunData(run.data);
     const externalCheckId = resolveRelayExternalCheckId(serviceData);
+    const processingDoneBeforeStatus = linearStageIsDone(serviceData?.stages?.processing?.status);
     if (!externalCheckId) {
       return {
         error: {
@@ -730,6 +900,8 @@ export async function handleTextIntegrityAction(
         status: 400,
       };
     }
+
+    const knownPdfId = serviceData?.reportPdfId ?? serviceData?.latest?.reportPdfId;
 
     const baseExt =
       (ctx.$config?.app?.extensions?.['checks-text-integrity'] as Record<string, unknown>) ?? {};
@@ -763,7 +935,10 @@ export async function handleTextIntegrityAction(
           'Content-Type': 'application/json',
           Authorization: `Bearer ${relayApiKey}`,
         },
-        body: JSON.stringify({ client_id: checkRunId }),
+        body: JSON.stringify({
+          client_id: checkRunId,
+          ...(knownPdfId ? { pdf_id: knownPdfId } : {}),
+        }),
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to contact checks-relay';
@@ -838,6 +1013,10 @@ export async function handleTextIntegrityAction(
       void notifyTextIntegrityActionError(ctx, checkRunId, 'relay-status', applied.message);
       return { error: { type: 'general', message: applied.message }, status: 400 };
     }
+
+    // Missed notify / status-only COMPLETE: pull+store PDF when id needs persisting.
+    // Run before recovery so an existing pdf_id is still enqueued even if recovery restarts generation.
+    await enqueuePersistPdfAfterRelayStatusIfNeeded(checkRunId, ctx.user?.id);
 
     const recovery = isRelayRecoveryHint(relayStatus.recovery) ? relayStatus.recovery : undefined;
     if (recovery) {
@@ -932,6 +1111,44 @@ export async function handleTextIntegrityAction(
       }
     }
 
+    // Missed REPORT_GENERATION_STARTED: status is read-only for PDF; start once under claim.
+    // Recovery start is automatic — do not emit CHECKS_PDF_REGENERATION_REQUESTED (manual path only).
+    const runAfterStatus = await prisma.checkServiceRun.findFirst({
+      where: {
+        id: checkRunId,
+        work_version_id: workVersionId,
+        kind: TEXT_INTEGRITY_KIND,
+      },
+    });
+    const serviceDataAfter =
+      readServiceDataFromRunData(runAfterStatus?.data) ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+    const skipProcessingGrace = relayStatusLearnedProcessingComplete(
+      envelopes,
+      processingDoneBeforeStatus,
+    );
+    const pdfStart = await startSimilarityPdfUnderClaimIfNeeded({
+      checkRunId,
+      workVersionId,
+      serviceData: serviceDataAfter,
+      externalCheckId,
+      relayBaseUrl,
+      relayApiKey,
+      serviceName,
+      relayInstanceId,
+      intent,
+      errorLabel: 'Failed to start similarity PDF after status refresh',
+      skipProcessingGrace,
+    });
+    if (!pdfStart.ok) {
+      void notifyTextIntegrityActionError(
+        ctx,
+        checkRunId,
+        'relay-status-pdf-start',
+        pdfStart.message,
+      );
+      return relayRecoveryWarningResult(pdfStart.message, pdfStart.status);
+    }
+
     return { success: true };
   }
 
@@ -993,94 +1210,32 @@ export async function handleTextIntegrityAction(
     const serviceName = resolveServiceName(mergedConfig);
     const relayInstanceId = resolveRelayInstanceId(mergedConfig);
 
-    if (!shouldStartSimilarityPdf(serviceData)) {
-      return { success: true };
-    }
-
-    const didClaim = await claimSimilarityPdfStart(checkRunId);
-    if (!didClaim) {
-      return { success: true };
-    }
-
-    let startRes: Response;
-    try {
-      startRes = await relaySimilarityPdfStart(
-        relayBaseUrl,
-        relayApiKey,
-        serviceName,
-        relayInstanceId,
-        externalCheckId,
-      );
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Failed to contact checks-relay';
-      logRelayError('similarity PDF start request threw', {
-        intent,
-        checkRunId,
-        workVersionId,
-        serviceName,
-        relayInstanceId,
-        externalCheckId,
-        error: relayErrorDetails(e),
-      });
-      await markSimilarityPdfStartError(checkRunId, `Failed to start PDF regeneration: ${message}`);
-      return {
-        error: {
-          type: 'general',
-          message,
-        },
-        status: 502,
-      };
-    }
-
-    if (!startRes.ok) {
-      const text = await startRes.text().catch(() => '');
-      const message =
-        `Checks relay could not restart similarity PDF (${startRes.status}): ${text}`.trim();
-      logRelayError('similarity PDF start request returned non-OK response', {
-        intent,
-        checkRunId,
-        workVersionId,
-        serviceName,
-        relayInstanceId,
-        externalCheckId,
-        status: startRes.status,
-        statusText: startRes.statusText,
-        contentType: startRes.headers.get('content-type'),
-        bodyText: text,
-      });
-      await markSimilarityPdfStartError(checkRunId, `Failed to start PDF regeneration: ${message}`);
-      return {
-        error: {
-          type: 'general',
-          message,
-        },
-        status: startRes.status >= 400 && startRes.status < 600 ? startRes.status : 502,
-      };
-    }
-
-    const startResult = (await startRes.json().catch(() => null)) as {
-      result?: { pdf_id?: string };
-    } | null;
-    const newPdfId = startResult?.result?.pdf_id;
-    if (!newPdfId || typeof newPdfId !== 'string') {
-      const message = 'Checks relay did not return a similarity PDF id; cannot restart';
-      await markSimilarityPdfStartError(checkRunId, `Failed to start PDF regeneration: ${message}`);
-      return {
-        error: {
-          type: 'general',
-          message,
-        },
-        status: 502,
-      };
-    }
-
-    await recordSimilarityPdfStartAccepted(checkRunId, newPdfId);
-
-    void trackChecksEvent(ctx, TextIntegrityTrackEvent.CHECKS_PDF_REGENERATION_REQUESTED, {
-      checkKind: 'checks-text-integrity',
-      workVersionId,
+    const pdfStart = await startSimilarityPdfUnderClaimIfNeeded({
       checkRunId,
+      workVersionId,
+      serviceData,
+      externalCheckId,
+      relayBaseUrl,
+      relayApiKey,
+      serviceName,
+      relayInstanceId,
+      intent,
+      force: true,
     });
+    if (!pdfStart.ok) {
+      return {
+        error: { type: 'general', message: pdfStart.message },
+        status: pdfStart.status,
+      };
+    }
+
+    if (pdfStart.started) {
+      void trackChecksEvent(ctx, TextIntegrityTrackEvent.CHECKS_PDF_REGENERATION_REQUESTED, {
+        checkKind: 'checks-text-integrity',
+        workVersionId,
+        checkRunId,
+      });
+    }
 
     return { success: true };
   }

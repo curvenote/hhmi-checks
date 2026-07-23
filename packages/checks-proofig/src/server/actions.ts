@@ -24,6 +24,7 @@ import { checkRunCoarseStatus } from './checkRunColumns.server.js';
 import { retryProofigCheckRun } from './retryCheckRun.server.js';
 import { startProofigCheckRun } from './startCheckRun.server.js';
 import { guardProofigWorkCheckScopes, PROOFIG_DISPATCH_INTENTS } from './checkWorkScopes.server.js';
+import { handleRegenerateProofigPdfAction } from './regenerateProofigPdf.server.js';
 
 async function findProofigRunForWorkVersion(
   workVersionId: string,
@@ -527,6 +528,15 @@ export async function handleProofigAction(
       };
     }
     return { success: true };
+  }
+
+  // ----- Regenerate the report PDF (force overwrite the stored PDF) -----
+  if (intent === 'regenerate-pdf') {
+    return handleRegenerateProofigPdfAction({
+      ctx,
+      workVersionId,
+      formData: args.formData,
+    });
   }
 
   return {

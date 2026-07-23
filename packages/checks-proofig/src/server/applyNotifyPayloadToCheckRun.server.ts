@@ -5,6 +5,7 @@ import { MINIMAL_PROOFIG_SERVICE_DATA, ProofigNotifyPayloadSchema } from '../sch
 import { updateStagesAndServiceDataFromValidatedNotifyPayload } from './stateMachine.server.js';
 import { patchProofigRunServiceData } from './checkRunColumns.server.js';
 import { notifyProofigWebhookMilestone, readProofigLatestState } from './slackNotify.server.js';
+import { enqueueProofigPersistPdfIfNeeded } from './enqueue-proofig-persist-pdf.server.js';
 
 export type ApplyNotifyResult =
   | { ok: true }
@@ -70,6 +71,14 @@ export async function applyNotifyPayloadToCheckRun(
       kind: 'persist',
       message: err instanceof Error ? err.message : 'Failed to persist payload',
     };
+  }
+
+  // Best-effort: when the run has reached a final report outcome, auto-generate the report PDF.
+  // Never fail the notify apply because of PDF dispatch problems.
+  try {
+    await enqueueProofigPersistPdfIfNeeded(checkServiceRunId);
+  } catch (err) {
+    console.error('[proofig] failed to enqueue report PDF persist', err);
   }
 
   return { ok: true };

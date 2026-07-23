@@ -4,6 +4,7 @@ import { useFetcher } from 'react-router';
 import { useEffect, useRef } from 'react';
 import type { ExtensionCheckSectionActivityProps } from '@curvenote/scms-core';
 import { ui, useCheckMaintenanceBlocked, useRevalidateOnInterval } from '@curvenote/scms-core';
+import { useHoldingBusy } from '@hhmi/checks-shared/useHoldingBusy';
 import { ImageIntegrityTrackEvent } from '../analytics.catalog.js';
 import { useChecksPingEvent } from '@hhmi/checks-shared/analytics/client';
 import { Logos } from '../client.js';
@@ -34,32 +35,23 @@ export function ImageIntegrityChecksSection({
   const pingEvent = useChecksPingEvent({ checkKind: 'proofig', workVersionId });
   const lastTrackedCheckRunIdRef = useRef<string | undefined>(undefined);
   const { blocked, message } = useCheckMaintenanceBlocked('proofig');
-
-  // Check if we need to dispatch the initial POST
-  // If proofig is enabled and has a status object, show progress
   const checkedAvailableOrInProgress = !!metadata;
-  const isSubmitting = fetcher.state === 'submitting';
+  const holdingBusy = useHoldingBusy({
+    fetcher,
+    releaseWhen: checkedAvailableOrInProgress,
+    onSettledError: (message) => ui.toastError(message),
+  });
+  const isBusy = fetcher.state !== 'idle' || holdingBusy;
   const stages = metadata?.stages ? { ...ALL_PENDING_STAGES, ...metadata.stages } : null;
   const awaitingDocumentPreparation =
     stages != null && isProofigAwaitingDocumentPreparationInUi(stages);
 
-  // Poll when we have check data, while waiting for first response after submit, or during DOCX prep
+  // Poll when we have check data, while waiting for CTA→progress after submit, or during DOCX prep
   useRevalidateOnInterval({
-    enabled: checkedAvailableOrInProgress || isSubmitting || awaitingDocumentPreparation,
+    enabled: checkedAvailableOrInProgress || isBusy || awaitingDocumentPreparation,
     interval:
-      isSubmitting && !checkedAvailableOrInProgress
-        ? 1000
-        : awaitingDocumentPreparation
-          ? 2000
-          : 3000,
+      isBusy && !checkedAvailableOrInProgress ? 1000 : awaitingDocumentPreparation ? 2000 : 3000,
   });
-
-  // Show toast on initial fetcher error when still on CTA (no check data yet)
-  useEffect(() => {
-    if (fetcher.state !== 'idle' || checkedAvailableOrInProgress || !fetcher.data) return;
-    const err = (fetcher.data as { error?: { message?: string } }).error;
-    if (err?.message) ui.toastError(err.message);
-  }, [fetcher.state, fetcher.data, checkedAvailableOrInProgress]);
 
   useEffect(() => {
     const reportState = metadata?.summary?.state;
@@ -100,7 +92,7 @@ export function ImageIntegrityChecksSection({
                     variant="default"
                     name="intent"
                     value="execute"
-                    busy={isSubmitting}
+                    busy={isBusy}
                     disabled={blocked}
                   >
                     Run checks now

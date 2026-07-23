@@ -14,6 +14,7 @@ export const PROOFIG_DISPATCH_INTENTS = new Set([
   'refresh-report-url',
   'hydrate-subimage-approval-status',
   'apply-notify-payload',
+  'regenerate-pdf',
 ]);
 
 export const guardProofigWorkCheckScopes = createWorkCheckScopeGuard(PROOFIG_DISPATCH_INTENTS);

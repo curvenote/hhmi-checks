@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useFetcher } from 'react-router';
-import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
+import { ui, useCheckMaintenanceBlocked, useRevalidateOnInterval } from '@curvenote/scms-core';
+import { useHoldingBusy } from '@hhmi/checks-shared/useHoldingBusy';
 import { TextIntegrityEulaDialog } from './TextIntegrityEulaDialog.js';
 import { useTextIntegrityEulaEnable } from './useTextIntegrityEulaEnable.js';
 
@@ -19,6 +19,11 @@ export function TextIntegrityRunChecksButton({
   const { blocked, message } = useCheckMaintenanceBlocked('checks-text-integrity');
   const { dialogOpen, setDialogOpen, eulaPresentation, requestEnable, acceptEula, busy } =
     useTextIntegrityEulaEnable(workVersionId);
+  const holdingBusy = useHoldingBusy({
+    fetcher: executeFetcher,
+    onSettledError: (message) => ui.toastError(message),
+  });
+  const isBusy = busy || executeFetcher.state !== 'idle' || holdingBusy;
 
   const canSubmit = Boolean(actionPath?.trim());
   const runExecute = () => {
@@ -30,11 +35,11 @@ export function TextIntegrityRunChecksButton({
     executeFetcher.submit(formData, { method: 'post', action: actionPath });
   };
 
-  useEffect(() => {
-    if (executeFetcher.state !== 'idle' || !executeFetcher.data) return;
-    const err = (executeFetcher.data as { error?: { message?: string } }).error;
-    if (err?.message) ui.toastError(err.message);
-  }, [executeFetcher.state, executeFetcher.data]);
+  // Keep revalidating while holding busy so the parent can swap CTA → progress.
+  useRevalidateOnInterval({
+    enabled: holdingBusy && executeFetcher.state === 'idle',
+    interval: 1000,
+  });
 
   return (
     <>
@@ -42,7 +47,7 @@ export function TextIntegrityRunChecksButton({
         <ui.StatefulButton
           type="button"
           variant="default"
-          busy={busy || executeFetcher.state === 'submitting'}
+          busy={isBusy}
           disabled={blocked || !canSubmit}
           onClick={() => requestEnable(runExecute)}
         >

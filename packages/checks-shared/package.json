@@ -42,6 +42,11 @@
       "development": "./src/analytics/trigger.server.ts",
       "types": "./dist/analytics/trigger.server.d.ts",
       "default": "./dist/analytics/trigger.server.js"
+    },
+    "./useHoldingBusy": {
+      "development": "./src/useHoldingBusy.ts",
+      "types": "./dist/useHoldingBusy.d.ts",
+      "default": "./dist/useHoldingBusy.js"
     }
   },
   "types": "./dist/index.d.ts",

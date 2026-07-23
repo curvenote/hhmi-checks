@@ -4,8 +4,8 @@ import { getProofigResultDisplayState } from '../utils/proofigSummary.js';
 import { plural, ui } from '@curvenote/scms-core';
 import { MissingReportUrlIcon } from './MissingReportUrlIcon.js';
 import { ReportNoLongerAvailable } from './ReportNoLongerAvailable.js';
-import { ProofigRefreshRemoteStatusButton } from './ProofigRefreshRemoteStatusButton.js';
 import { ProofigSubimageApprovalReportLink } from './ProofigSubimageApprovalReportLink.js';
+import { ProofigReportPdfActions } from './ProofigReportPdfActions.js';
 import { CheckItemHeadline } from './CheckItemHeadline.js';
 
 const COLORS = {
@@ -187,13 +187,13 @@ export function ResultsSummaryArea({
             </div>
             <div className="flex-1 min-h-px min-w-4 basis-4" aria-hidden />
             <div className="flex flex-wrap gap-2 justify-end items-center">
-              {remoteStatusActionPath && workVersionId ? (
-                <ProofigRefreshRemoteStatusButton
-                  actionPath={remoteStatusActionPath}
-                  workVersionId={workVersionId}
-                  checkRunId={checkRunId}
-                />
-              ) : null}
+              <ProofigReportPdfActions
+                proofigData={proofigData}
+                workVersionId={workVersionId}
+                checkRunId={checkRunId}
+                actionPath={remoteStatusActionPath}
+                includeRemoteRefresh
+              />
             </div>
           </>
         )}

@@ -21,6 +21,10 @@ export async function registerRoutes(_appConfig: Config): Promise<RouteRegistrat
             'proofig/notify/:id',
             resolveRoutePath(import.meta.url, 'routes/v1.hooks.proofig.notify.$id/route.tsx'),
           ),
+          route(
+            'proofig/pdf-stored/:id',
+            resolveRoutePath(import.meta.url, 'routes/v1.hooks.proofig.pdf-stored.$id/route.tsx'),
+          ),
         ] satisfies RouteConfigEntry[],
     },
     {
@@ -28,6 +32,13 @@ export async function registerRoutes(_appConfig: Config): Promise<RouteRegistrat
       register: () =>
         [
           route('integrity', resolveRoutePath(import.meta.url, 'routes/integrity/route.tsx')),
+          route(
+            'checks-proofig/download-pdf/:id',
+            resolveRoutePath(
+              import.meta.url,
+              'routes/app.checks-proofig.download-pdf.$id/route.tsx',
+            ),
+          ),
         ] satisfies RouteConfigEntry[],
     },
     {
