@@ -348,12 +348,33 @@ function processingCompletedBeyondGrace(
   return nowMs - parsed >= SIMILARITY_PDF_START_GRACE_MS;
 }
 
+/** Status catch-up in this Refresh: processing was not done before envelopes were applied. */
+function relayStatusLearnedProcessingComplete(
+  envelopes: unknown[],
+  processingDoneBeforeStatus: boolean,
+): boolean {
+  if (processingDoneBeforeStatus) return false;
+  return envelopes.some((envelope) => {
+    if (!envelope || typeof envelope !== 'object') return false;
+    return (envelope as { event?: string }).event === 'PROCESSING_PHASE_COMPLETE';
+  });
+}
+
+type SimilarityPdfStartOptions = {
+  /** Skip post-processing grace when status catch-up stamped processing completed now. */
+  skipProcessingGrace?: boolean;
+};
+
 /**
  * Auto recovery (Refresh): start PDF only when missing/failed/stale — never force-replace a
  * healthy completed PDF on every status poll. The pending/no-id path waits a short grace
- * window so Refresh does not race webhook-initiated PDF start.
+ * window so Refresh does not race webhook-initiated PDF start, except when processing
+ * completion is learned from status envelopes in the same request (timestamp is local receipt).
  */
-function shouldStartSimilarityPdf(serviceData: TextIntegrityDataSchema): boolean {
+function shouldStartSimilarityPdf(
+  serviceData: TextIntegrityDataSchema,
+  options: SimilarityPdfStartOptions = {},
+): boolean {
   if (similarityPdfStartIsAlreadyPending(serviceData)) return false;
   if (serviceData.similarityReportPdfInvalidated === true) return true;
   if (serviceData.stages?.reportGeneration?.status === 'error') return true;
@@ -362,7 +383,9 @@ function shouldStartSimilarityPdf(serviceData: TextIntegrityDataSchema): boolean
     !hasKnownReportPdfId(serviceData)
   ) {
     const rg = serviceData.stages?.reportGeneration?.status;
-    return (rg === undefined || rg === 'pending') && processingCompletedBeyondGrace(serviceData);
+    const graceOk =
+      options.skipProcessingGrace === true || processingCompletedBeyondGrace(serviceData);
+    return (rg === undefined || rg === 'pending') && graceOk;
   }
   return false;
 }
@@ -379,15 +402,19 @@ function shouldForceRestartSimilarityPdf(serviceData: TextIntegrityDataSchema): 
   return linearStageIsDone(serviceData.stages?.processing?.status);
 }
 
-function canClaimSimilarityPdfStart(serviceData: TextIntegrityDataSchema, force: boolean): boolean {
+function canClaimSimilarityPdfStart(
+  serviceData: TextIntegrityDataSchema,
+  force: boolean,
+  options: SimilarityPdfStartOptions = {},
+): boolean {
   return force
     ? shouldForceRestartSimilarityPdf(serviceData)
-    : shouldStartSimilarityPdf(serviceData);
+    : shouldStartSimilarityPdf(serviceData, options);
 }
 
 async function claimSimilarityPdfStart(
   checkRunId: string,
-  options: { force?: boolean } = {},
+  options: { force?: boolean; skipProcessingGrace?: boolean } = {},
 ): Promise<boolean> {
   const force = options.force === true;
   const didClaim = { current: false };
@@ -395,7 +422,7 @@ async function claimSimilarityPdfStart(
     didClaim.current = false;
     const current = (data ?? {}) as CheckServiceRunData;
     const serviceData = readServiceDataFromRunData(current) ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
-    if (!canClaimSimilarityPdfStart(serviceData, force)) return null;
+    if (!canClaimSimilarityPdfStart(serviceData, force, options)) return null;
     didClaim.current = true;
     return {
       ...current,
@@ -450,14 +477,22 @@ async function startSimilarityPdfUnderClaimIfNeeded(args: {
    * false so status polls do not churn PDFs.
    */
   force?: boolean;
+  /** Refresh status catch-up: processing completed via envelopes in this request. */
+  skipProcessingGrace?: boolean;
 }): Promise<StartSimilarityPdfUnderClaimResult> {
   const errorLabel = args.errorLabel ?? 'Failed to start PDF regeneration';
   const force = args.force === true;
-  if (!canClaimSimilarityPdfStart(args.serviceData, force)) {
+  const startOptions: SimilarityPdfStartOptions = {
+    skipProcessingGrace: args.skipProcessingGrace,
+  };
+  if (!canClaimSimilarityPdfStart(args.serviceData, force, startOptions)) {
     return { ok: true, started: false };
   }
 
-  const didClaim = await claimSimilarityPdfStart(args.checkRunId, { force });
+  const didClaim = await claimSimilarityPdfStart(args.checkRunId, {
+    force,
+    skipProcessingGrace: args.skipProcessingGrace,
+  });
   if (!didClaim) {
     return { ok: true, started: false };
   }
@@ -876,6 +911,7 @@ export async function handleTextIntegrityAction(
 
     const serviceData = readServiceDataFromRunData(run.data);
     const externalCheckId = resolveRelayExternalCheckId(serviceData);
+    const processingDoneBeforeStatus = linearStageIsDone(serviceData?.stages?.processing?.status);
     if (!externalCheckId) {
       return {
         error: {
@@ -1106,6 +1142,10 @@ export async function handleTextIntegrityAction(
     });
     const serviceDataAfter =
       readServiceDataFromRunData(runAfterStatus?.data) ?? MINIMAL_TEXT_INTEGRITY_SERVICE_DATA;
+    const skipProcessingGrace = relayStatusLearnedProcessingComplete(
+      envelopes,
+      processingDoneBeforeStatus,
+    );
     const pdfStart = await startSimilarityPdfUnderClaimIfNeeded({
       checkRunId,
       workVersionId,
@@ -1117,6 +1157,7 @@ export async function handleTextIntegrityAction(
       relayInstanceId,
       intent,
       errorLabel: 'Failed to start similarity PDF after status refresh',
+      skipProcessingGrace,
     });
     if (!pdfStart.ok) {
       void notifyTextIntegrityActionError(

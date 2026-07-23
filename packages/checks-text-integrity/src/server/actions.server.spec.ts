@@ -388,6 +388,54 @@ describe('handleTextIntegrityAction relay-status PDF claim', () => {
     expect(runData.serviceData.stages?.reportGeneration?.status).toBe('pending');
   });
 
+  it('starts PDF on same Refresh when status catch-up completes processing', async () => {
+    runData.serviceData.stages!.processing = {
+      status: 'processing',
+      history: [],
+      timestamp: '2025-01-01T00:00:00Z',
+    };
+
+    const processingCompleteEnvelope = {
+      event: 'PROCESSING_PHASE_COMPLETE',
+      check_id: 'external-check-1',
+      client_id: checkRunId,
+      service_name: 'ithenticate',
+      occurred_at: '2025-01-01T00:05:00Z',
+      payload: { completed: true },
+    };
+
+    relayStatusMocks.applyRelayCheckStatusEnvelopes.mockImplementation(async () => {
+      runData.serviceData.stages!.processing = {
+        status: 'completed',
+        history: [],
+        timestamp: new Date().toISOString(),
+      };
+      runData.serviceData.stages!.reportGeneration = {
+        status: 'pending',
+        history: [],
+        timestamp: new Date().toISOString(),
+      };
+      return { ok: true as const };
+    });
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/status')) {
+        return Response.json({ envelopes: [processingCompleteEnvelope] });
+      }
+      return Response.json({ result: { pdf_id: 'pdf-catch-up' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(handleTextIntegrityAction(relayStatusArgs())).resolves.toEqual({ success: true });
+
+    const pdfStartCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes('/report/pdf/start'),
+    );
+    expect(pdfStartCalls).toHaveLength(1);
+    expect(runData.serviceData.reportPdfId).toBe('pdf-catch-up');
+    expect(runData.serviceData.stages.reportGeneration?.status).toBe('processing');
+  });
+
   it('does not start PDF when reportPdfId is already known (status poll only)', async () => {
     runData.serviceData.reportPdfId = 'pdf-existing';
     runData.serviceData.stages.reportGeneration = {
