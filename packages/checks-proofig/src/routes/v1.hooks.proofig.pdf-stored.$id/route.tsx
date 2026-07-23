@@ -53,11 +53,16 @@ export async function action(args: ActionFunctionArgs) {
     throw httpError(401, 'Missing handshake token');
   }
   const config = await getConfig();
-  const claims = verifyHandshakeToken(
-    token,
-    config.api.handshakeIssuer,
-    config.api.handshakeSigningSecret,
-  );
+  let claims: ReturnType<typeof verifyHandshakeToken>;
+  try {
+    claims = verifyHandshakeToken(
+      token,
+      config.api.handshakeIssuer,
+      config.api.handshakeSigningSecret,
+    );
+  } catch {
+    throw httpError(401, 'Invalid handshake token');
+  }
 
   if (claims.aud !== PROOFIG_PERSIST_PDF) {
     throw httpError(401, 'Handshake audience mismatch');
@@ -131,7 +136,10 @@ export async function action(args: ActionFunctionArgs) {
 
   const uploadDate = new Date().toISOString();
   const fileEntry = buildProofigReportFileEntry(body.path, body.size, body.md5, uploadDate);
-  const storedReportId = body.report_id ?? jobPayload.data.report_id;
+  if (jobPayload.data.report_id && body.report_id && jobPayload.data.report_id !== body.report_id) {
+    throw httpError(403, 'report_id does not match handshake job');
+  }
+  const storedReportId = jobPayload.data.report_id ?? body.report_id;
 
   await patchProofigRunServiceData(id, (sd) =>
     replaceGeneratedProofigReport(sd, fileEntry, storedReportId),

@@ -7,7 +7,7 @@ import { resolveRoutePath } from '@curvenote/scms-server';
 /**
  * Registers routes for the Proofig checks extension.
  *
- * Webhook routes are mounted under `/v1/api/hooks/*` via `attachTo: 'v1/hooks'`.
+ * Webhook routes are mounted under `/v1/hooks/*` via `attachTo: 'v1/hooks'`.
  * App route for manuscript checks is mounted at `/app/manuscript-checks` via `attachTo: 'app'`.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

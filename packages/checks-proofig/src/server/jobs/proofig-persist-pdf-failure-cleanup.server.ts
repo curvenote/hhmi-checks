@@ -62,7 +62,7 @@ export async function proofigPersistPdfFailureCleanupHandler(_ctx: Context, data
   const rawMessage = lastJobMessage(parent?.messages) ?? 'Proofig report PDF generation failed';
 
   await patchProofigRunServiceData(checkServiceRunId, (sd) =>
-    markProofigReportPdfError(sd, rawMessage),
+    markProofigReportPdfError(sd, rawMessage, undefined, resolvedReportId),
   );
 
   if (parentJobId) {

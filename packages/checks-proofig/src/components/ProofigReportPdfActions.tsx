@@ -1,9 +1,15 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { useFetcher, useRevalidator } from 'react-router';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useFetcher, useFetchers, useRevalidator } from 'react-router';
 import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
 import type { ProofigDataSchema } from '../schema.js';
-import { PROOFIG_REPORT_FILENAME, getProofigPdfReadiness } from '../proofigReportFiles.js';
-import { ProofigActionOverflow, type ProofigOverflowMenuItem } from './ProofigActionOverflow.js';
+import {
+  PROOFIG_REPORT_FILENAME,
+  PROOFIG_PDF_GENERATING_STALE_MS,
+  getProofigPdfAttemptState,
+  getProofigPdfReadiness,
+  parseProofigPdfRequestStamp,
+} from '../proofigReportFiles.js';
+import { ActionOverflow, type ActionOverflowMenuItem } from '@hhmi/checks-shared/ActionOverflow';
 import { ProofigRefreshRemoteStatusButton } from './ProofigRefreshRemoteStatusButton.js';
 
 type ActionFetcherData = {
@@ -13,6 +19,25 @@ type ActionFetcherData = {
 
 function downloadHref(checkRunId: string): string {
   return `/app/checks-proofig/download-pdf/${encodeURIComponent(checkRunId)}`;
+}
+
+const PROOFIG_PDF_REGENERATE_KEY_PREFIX = 'proofig-pdf-regenerate:';
+
+/** True when another instance's regenerate fetcher is in flight for the same check run. */
+function isPeerRegenerateSubmitting(
+  fetchers: ReturnType<typeof useFetchers>,
+  checkRunId: string | undefined,
+  localFetcherKey: string,
+): boolean {
+  const runId = checkRunId?.trim();
+  if (!runId) return false;
+  return fetchers.some((f) => {
+    if (f.key === localFetcherKey || f.state === 'idle') return false;
+    if (!f.key.startsWith(PROOFIG_PDF_REGENERATE_KEY_PREFIX)) return false;
+    const intent = f.formData?.get('intent');
+    if (intent != null && intent !== 'regenerate-pdf') return false;
+    return f.formData?.get('checkRunId') === runId;
+  });
 }
 
 /**
@@ -36,12 +61,39 @@ export function ProofigReportPdfActions({
   includeRemoteRefresh?: boolean;
 }) {
   const { blocked, message: maintenanceMessage } = useCheckMaintenanceBlocked('proofig');
-  const regenerateFetcher = useFetcher<ActionFetcherData>();
-  const refreshFetcher = useFetcher<ActionFetcherData>();
+  // Fetcher keys are router-global; prefix per-instance ids so concurrent mounts of the same
+  // checkRunId (design gallery, concurrent view mounts) stay isolated for toast/settle while
+  // still allowing run-scoped useFetchers busy scanning against shared regenerate submissions.
+  const instanceId = useId();
+  const regenerateFetcherKey = `proofig-pdf-regenerate:${instanceId}`;
+  const regenerateFetcher = useFetcher<ActionFetcherData>({
+    key: regenerateFetcherKey,
+  });
+  const refreshFetcher = useFetcher<ActionFetcherData>({
+    key: `proofig-pdf-refresh:${instanceId}`,
+  });
+  const fetchers = useFetchers();
   const revalidator = useRevalidator();
   const lastRegenRef = useRef<unknown>(undefined);
   const lastRefreshRef = useRef<unknown>(undefined);
   const [downloading, setDownloading] = useState(false);
+  // Stale stamped jobs conservatively render Generating during SSR and correct in this client
+  // effect; stale jobs are rarer, and this keeps the server and initial client markup identical.
+  const [nowMs, setNowMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    const requestedAtMs = parseProofigPdfRequestStamp(proofigData?.proofigReportPdfRequestedAt);
+    if (requestedAtMs == null) return;
+
+    const now = Date.now();
+    setNowMs(now);
+    const remainingMs = PROOFIG_PDF_GENERATING_STALE_MS - (now - requestedAtMs);
+    if (remainingMs <= 0) return;
+
+    // One final render at expiry is sufficient; do not continue scheduling once stale.
+    const id = window.setTimeout(() => setNowMs(Date.now()), remainingMs);
+    return () => window.clearTimeout(id);
+  }, [proofigData?.proofigReportPdfRequestedAt]);
 
   useEffect(() => {
     if (regenerateFetcher.state !== 'idle' || !regenerateFetcher.data) return;
@@ -136,16 +188,16 @@ export function ProofigReportPdfActions({
   }
 
   const stored = readiness === 'stored-current';
-  const failed = readiness === 'failed';
-  const regenBusy = regenerateFetcher.state !== 'idle';
+  const regenBusy =
+    regenerateFetcher.state !== 'idle' ||
+    isPeerRegenerateSubmitting(fetchers, checkRunId, regenerateFetcherKey);
   const refreshBusy = refreshFetcher.state !== 'idle';
   const canRegenerate = Boolean(actionPath?.trim() && workVersionId?.trim() && checkRunId?.trim());
-  const pdfError = proofigData?.proofigReportPdfError?.trim();
-  const pdfRequested = Boolean(proofigData?.proofigReportPdfRequestedAt?.trim());
-  // “Generating…” only when a job was enqueued (stamp) or the regenerate fetcher is busy.
-  // Idle `pending` / `stored-stale` without a stamp = legacy / never-requested → Generate link.
-  const showGenerating =
-    regenBusy || ((readiness === 'pending' || readiness === 'stored-stale') && pdfRequested);
+  const attempt = getProofigPdfAttemptState(proofigData, nowMs);
+  const failed = attempt.status === 'failed';
+  const pdfError = failed ? attempt.error : undefined;
+  // Fetcher state wins immediately; persisted attempt state covers navigation/revalidation.
+  const showGenerating = regenBusy || attempt.status === 'generating';
   const showGeneratePrimary =
     !showGenerating &&
     !stored &&
@@ -177,7 +229,7 @@ export function ProofigReportPdfActions({
       ? 'Regenerate PDF'
       : 'Generate PDF';
 
-  const menuItems: ProofigOverflowMenuItem[] = [];
+  const menuItems: ActionOverflowMenuItem[] = [];
   if (canRefresh) {
     menuItems.push({
       id: 'refresh',
@@ -192,6 +244,8 @@ export function ProofigReportPdfActions({
       id: 'regenerate-pdf',
       label: regenerateLabel,
       onSelect: submitRegenerate,
+      // Only block while the fetcher is in flight; stale `showGenerating` is already false
+      // once `proofigReportPdfRequestedAt` ages out, so stuck runs remain recoverable.
       disabled: blocked || regenBusy || showGenerating,
     });
   }
@@ -215,7 +269,7 @@ export function ProofigReportPdfActions({
       </ui.Button>
     );
   } else if (stored && checkRunId) {
-    primary = (
+    const download = (
       <ui.Button
         type="button"
         variant="link"
@@ -225,6 +279,17 @@ export function ProofigReportPdfActions({
         {downloading ? 'Downloading…' : 'Download PDF report'}
       </ui.Button>
     );
+    primary =
+      failed && pdfError ? (
+        <span className="inline-flex items-center gap-2">
+          {download}
+          <ui.SimpleTooltip title={pdfError} side="top">
+            <span className="text-sm text-destructive cursor-help">PDF generation failed</span>
+          </ui.SimpleTooltip>
+        </span>
+      ) : (
+        download
+      );
   } else if (failed) {
     const failedLabel = (
       <span className="text-sm font-normal whitespace-nowrap text-destructive">
@@ -245,7 +310,7 @@ export function ProofigReportPdfActions({
 
   return (
     <ui.MaintenanceTooltip enabled={blocked} message={maintenanceMessage}>
-      <ProofigActionOverflow primary={primary} menuItems={menuItems} />
+      <ActionOverflow primary={primary} menuItems={menuItems} />
     </ui.MaintenanceTooltip>
   );
 }

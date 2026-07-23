@@ -4,6 +4,7 @@ import { KnownState, MINIMAL_PROOFIG_SERVICE_DATA } from '../schema.js';
 
 const mockFindFirst = vi.fn();
 const mockEnqueue = vi.fn();
+const mockTrackChecksEvent = vi.fn();
 
 vi.mock('@curvenote/scms-server', () => ({
   getPrismaClient: vi.fn(async () => ({
@@ -15,7 +16,12 @@ vi.mock('./enqueue-proofig-persist-pdf.server.js', () => ({
   enqueueProofigPersistPdfIfNeeded: (...args: unknown[]) => mockEnqueue(...args),
 }));
 
+vi.mock('@hhmi/checks-shared/analytics/server', () => ({
+  trackChecksEvent: (...args: unknown[]) => mockTrackChecksEvent(...args),
+}));
+
 import { handleRegenerateProofigPdfAction } from './regenerateProofigPdf.server.js';
+import { ImageIntegrityTrackEvent } from '../analytics.catalog.js';
 
 function finalReportServiceData(overrides: Record<string, unknown> = {}) {
   return {
@@ -52,6 +58,7 @@ const ctx = {
 describe('handleRegenerateProofigPdfAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTrackChecksEvent.mockResolvedValue(undefined);
   });
 
   it('rejects when ctx is missing', async () => {
@@ -152,6 +159,15 @@ describe('handleRegenerateProofigPdfAction', () => {
       force: true,
       invokedById: 'user-1',
     });
+    expect(mockTrackChecksEvent).toHaveBeenCalledWith(
+      ctx,
+      ImageIntegrityTrackEvent.CHECKS_PDF_REGENERATION_REQUESTED,
+      expect.objectContaining({
+        checkKind: 'proofig',
+        workVersionId: 'wv-1',
+        checkRunId: 'run-1',
+      }),
+    );
   });
 
   it('returns enqueue failure reason', async () => {
@@ -169,5 +185,48 @@ describe('handleRegenerateProofigPdfAction', () => {
 
     expect(result.status).toBe(400);
     expect(result.error?.message).toContain('run-not-found');
+    expect(mockTrackChecksEvent).not.toHaveBeenCalled();
+  });
+
+  it('treats already-in-flight as benign success', async () => {
+    mockFindFirst.mockResolvedValue({
+      id: 'run-1',
+      data: { serviceData: finalReportServiceData() },
+    });
+    mockEnqueue.mockResolvedValue({ enqueued: false, reason: 'already-in-flight' });
+
+    const result = await handleRegenerateProofigPdfAction({
+      ctx,
+      workVersionId: 'wv-1',
+      formData: formData({ checkRunId: 'run-1' }),
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(mockTrackChecksEvent).not.toHaveBeenCalled();
+  });
+
+  it('logs and contains fire-and-forget analytics rejection', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFindFirst.mockResolvedValue({
+      id: 'run-1',
+      data: { serviceData: finalReportServiceData() },
+    });
+    mockEnqueue.mockResolvedValue({ enqueued: true, jobId: 'job-1' });
+    mockTrackChecksEvent.mockRejectedValue(new Error('analytics unavailable'));
+
+    const result = await handleRegenerateProofigPdfAction({
+      ctx,
+      workVersionId: 'wv-1',
+      formData: formData({ checkRunId: 'run-1' }),
+    });
+
+    expect(result).toEqual({ success: true });
+    await vi.waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        '[proofig] PDF regeneration analytics failed',
+        expect.objectContaining({ checkRunId: 'run-1', err: expect.any(Error) }),
+      );
+    });
+    consoleError.mockRestore();
   });
 });

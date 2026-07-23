@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { useHoldingBusy, HOLDING_BUSY_TIMEOUT_MS } from '@hhmi/checks-shared/useHoldingBusy';
+import { HOLDING_BUSY_TIMEOUT_MS, useHoldingBusy } from './useHoldingBusy.js';
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }

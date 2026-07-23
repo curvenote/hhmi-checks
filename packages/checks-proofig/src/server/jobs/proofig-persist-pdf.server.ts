@@ -43,12 +43,17 @@ type CheckServiceRunData = {
   serviceData?: unknown;
 };
 
-async function failPersistPdfJob(jobId: string, checkServiceRunId: string, message: string) {
+async function failPersistPdfJob(
+  jobId: string,
+  checkServiceRunId: string,
+  message: string,
+  targetedReportId?: string,
+) {
   // Write error onto the check run immediately; the FAILURE cleanup dependent also does this
   // for worker-path failures (and as a redundant write for dispatcher failures).
   try {
     await patchProofigRunServiceData(checkServiceRunId, (sd) =>
-      markProofigReportPdfError(sd, message),
+      markProofigReportPdfError(sd, message, undefined, targetedReportId),
     );
   } catch (err) {
     console.error('[proofig] failed to record PDF persist error on check run', {
@@ -129,6 +134,7 @@ export async function proofigPersistPdfHandler(ctx: Context, data: CreateJob) {
       job.id,
       payload.check_service_run_id,
       'No Proofig report URL stored on this run; cannot render PDF',
+      targetedReportId,
     );
   }
 
@@ -142,6 +148,7 @@ export async function proofigPersistPdfHandler(ctx: Context, data: CreateJob) {
       job.id,
       payload.check_service_run_id,
       'checks-proofig pdfService.topic not configured; cannot dispatch PDF render',
+      targetedReportId,
     );
   }
 
@@ -152,6 +159,7 @@ export async function proofigPersistPdfHandler(ctx: Context, data: CreateJob) {
       job.id,
       payload.check_service_run_id,
       'checks-proofig apiBaseUrl not configured; cannot refresh report token',
+      targetedReportId,
     );
   }
 
@@ -166,7 +174,7 @@ export async function proofigPersistPdfHandler(ctx: Context, data: CreateJob) {
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to build report URL';
-    return failPersistPdfJob(job.id, payload.check_service_run_id, message);
+    return failPersistPdfJob(job.id, payload.check_service_run_id, message, targetedReportId);
   }
 
   const handshake = createHandshakeToken(
@@ -200,7 +208,7 @@ export async function proofigPersistPdfHandler(ctx: Context, data: CreateJob) {
       err instanceof Error
         ? `Failed to publish Proofig PDF render message: ${err.message}`
         : 'Failed to publish Proofig PDF render message';
-    return failPersistPdfJob(job.id, payload.check_service_run_id, message);
+    return failPersistPdfJob(job.id, payload.check_service_run_id, message, targetedReportId);
   }
 
   return jobs.dbUpdateJob(job.id, {

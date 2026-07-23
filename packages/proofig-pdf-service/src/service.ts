@@ -38,6 +38,22 @@ function md5OfFile(localPath: string): string {
   return createHash('md5').update(content).digest('hex');
 }
 
+/** Remove URL query strings so worker failures cannot persist live report tokens. */
+export function sanitizeWorkerError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.replace(/https?:\/\/[^\s"'<>]+/g, (rawUrl) => {
+    const trailing = rawUrl.match(/[),.;:]+$/)?.[0] ?? '';
+    const candidate = trailing ? rawUrl.slice(0, -trailing.length) : rawUrl;
+    try {
+      const url = new URL(candidate);
+      url.search = '';
+      return `${url.toString()}${trailing}`;
+    } catch {
+      return `${candidate.replace(/\?.*$/, '')}${trailing}`;
+    }
+  });
+}
+
 /**
  * Register the stored PDF back on the Proofig check run via the extension hook
  * (`v1/hooks/proofig/pdf-stored/:checkRunId`). Uses the same handshake bearer the
@@ -74,7 +90,7 @@ async function registerStoredPdf(
   }
 }
 
-async function handleProductionJob(ctx: HandlerContext<unknown>): Promise<void> {
+async function runProductionJob(ctx: HandlerContext<unknown>): Promise<void> {
   const { client, payload, tmpFolder, res, attributes } = ctx;
 
   const data = validateProofigPdfPayload(payload);
@@ -110,6 +126,15 @@ async function handleProductionJob(ctx: HandlerContext<unknown>): Promise<void> 
     path: upload.path,
     size,
   });
+}
+
+/** Production boundary: sanitize failures before withPubSubHandler persists them. */
+export async function handleProductionJob(ctx: HandlerContext<unknown>): Promise<void> {
+  try {
+    await runProductionJob(ctx);
+  } catch (error) {
+    throw new Error(sanitizeWorkerError(error));
+  }
 }
 
 /**

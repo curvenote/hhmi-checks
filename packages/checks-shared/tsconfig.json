@@ -1,6 +1,6 @@
 {
-  "include": ["src/**/*.ts"],
-  "exclude": ["dist", "node_modules", "src/**/*.spec.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["dist", "node_modules", "src/**/*.spec.ts", "src/**/*.spec.tsx"],
   "compilerOptions": {
     "composite": false,
     "declaration": true,
@@ -11,6 +11,7 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
+    "jsx": "react-jsx",
     "target": "ES2019",
     "strict": true,
     "forceConsistentCasingInFileNames": true,

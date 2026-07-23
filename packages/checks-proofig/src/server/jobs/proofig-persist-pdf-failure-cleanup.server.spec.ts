@@ -68,6 +68,7 @@ describe('proofigPersistPdfFailureCleanupHandler', () => {
     });
     expect(marked.proofigReportPdfError).toContain('ERR_CONNECTION_REFUSED');
     expect(marked.proofigReportPdfError).not.toContain('token=abc');
+    expect(marked.proofigReportPdfFailedReportId).toBe('report-1');
 
     expect(mockEnqueueFollowUp).toHaveBeenCalledWith('run-1', {
       excludeJobId: 'parent-1',

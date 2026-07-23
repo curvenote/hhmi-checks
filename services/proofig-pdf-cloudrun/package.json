@@ -10,7 +10,7 @@
   },
   "scripts": {
     "start": "node index.js",
-    "build:service": "cd ../../packages/proofig-pdf-service && npm run build && cd ../.. && cp packages/proofig-pdf-service/dist/* services/proofig-pdf-cloudrun && cd services/proofig-pdf-cloudrun",
+    "build:service": "cd ../../packages/proofig-pdf-service && npm run build && cd ../.. && cp packages/proofig-pdf-service/dist/index.js services/proofig-pdf-cloudrun/ && mkdir -p services/proofig-pdf-cloudrun/native && rm -f services/proofig-pdf-cloudrun/native/*.node && touch services/proofig-pdf-cloudrun/native/.keep && (cp packages/proofig-pdf-service/dist/*.node services/proofig-pdf-cloudrun/native/ 2>/dev/null || true) && cd services/proofig-pdf-cloudrun",
     "build": "npm run build:service && ./build.sh",
     "deploy": "./deploy.sh",
     "build:local": "npm run build:service && docker build --tag proofig-pdf-local .",

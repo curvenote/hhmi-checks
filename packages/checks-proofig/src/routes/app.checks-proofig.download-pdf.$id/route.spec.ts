@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   fileExists: vi.fn(),
   fileReadStream: vi.fn(),
   knownBucketFromCDN: vi.fn(),
+  loadChecksRunAnalyticsContext: vi.fn(),
+  trackChecksEvent: vi.fn(),
 }));
 
 vi.mock('@curvenote/scms-server', () => ({
@@ -43,6 +45,15 @@ vi.mock('../../server/checkRunColumns.server.js', () => ({
 vi.mock('../../server/enqueue-proofig-persist-pdf.server.js', () => ({
   enqueueProofigPersistPdfIfNeeded: (...args: unknown[]) =>
     mocks.enqueueProofigPersistPdfIfNeeded(...args),
+}));
+
+vi.mock('@hhmi/checks-shared/analytics/server', () => ({
+  trackChecksEvent: (...args: unknown[]) => mocks.trackChecksEvent(...args),
+}));
+
+vi.mock('@hhmi/checks-shared/analytics/runContext.server', () => ({
+  loadChecksRunAnalyticsContext: (...args: unknown[]) =>
+    mocks.loadChecksRunAnalyticsContext(...args),
 }));
 
 import { loader } from './route.js';
@@ -113,6 +124,8 @@ describe('app.checks-proofig.download-pdf loader', () => {
     mocks.knownBucketFromCDN.mockReturnValue('prv');
     mocks.fileExists.mockResolvedValue(true);
     mocks.fileReadStream.mockResolvedValue(new ReadableStream());
+    mocks.loadChecksRunAnalyticsContext.mockResolvedValue({ checkKind: 'proofig' });
+    mocks.trackChecksEvent.mockResolvedValue(undefined);
     mocks.patchProofigRunServiceData.mockResolvedValue({});
     mocks.enqueueProofigPersistPdfIfNeeded.mockResolvedValue({ enqueued: true, jobId: 'j1' });
     mocks.getPrismaClient.mockResolvedValue({
@@ -223,5 +236,21 @@ describe('app.checks-proofig.download-pdf loader', () => {
     const res = await loader(makeArgs());
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toBe('application/pdf');
+  });
+
+  it('logs and contains fire-and-forget analytics rejection', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.trackChecksEvent.mockRejectedValue(new Error('analytics unavailable'));
+
+    const res = await loader(makeArgs());
+
+    expect(res.status).toBe(200);
+    await vi.waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        '[proofig] PDF download analytics failed',
+        expect.objectContaining({ checkRunId: RUN_ID, err: expect.any(Error) }),
+      );
+    });
+    consoleError.mockRestore();
   });
 });

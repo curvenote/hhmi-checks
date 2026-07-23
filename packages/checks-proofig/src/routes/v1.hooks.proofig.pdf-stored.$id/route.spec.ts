@@ -121,6 +121,17 @@ describe('v1.hooks.proofig.pdf-stored action', () => {
     await expectResponseStatus(() => action(makeArgs({ auth: null })), 401);
   });
 
+  it('returns 401 without database work when handshake verification throws', async () => {
+    mocks.verifyHandshakeToken.mockImplementation(() => {
+      throw new Error('jwt malformed');
+    });
+
+    await expectResponseStatus(() => action(makeArgs({})), 401);
+
+    expect(mocks.getPrismaClient).not.toHaveBeenCalled();
+    expect(mocks.patchProofigRunServiceData).not.toHaveBeenCalled();
+  });
+
   it('returns 401 when handshake audience mismatches', async () => {
     mocks.verifyHandshakeToken.mockReturnValue({ aud: 'OTHER', jobId: JOB_ID });
     await expectResponseStatus(() => action(makeArgs({})), 401);
@@ -184,6 +195,23 @@ describe('v1.hooks.proofig.pdf-stored action', () => {
     expect(mocks.enqueueProofigPersistPdfFollowUpIfNeeded).toHaveBeenCalledWith(
       RUN_ID,
       expect.objectContaining({ excludeJobId: JOB_ID, jobReportId: 'report-1' }),
+    );
+  });
+
+  it('prefers the job payload report_id over the request body', async () => {
+    const res = await action(makeArgs({ body: validBody({ report_id: undefined }) }));
+    expect(res.status).toBe(200);
+    const patcher = mocks.patchProofigRunServiceData.mock.calls[0][1] as (sd: {
+      reportId?: string;
+    }) => { storedReportId?: string };
+    const next = patcher({});
+    expect(next.storedReportId).toBe('report-1');
+  });
+
+  it('returns 403 when body report_id disagrees with the job payload', async () => {
+    await expectResponseStatus(
+      () => action(makeArgs({ body: validBody({ report_id: 'report-other' }) })),
+      403,
     );
   });
 });

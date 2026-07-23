@@ -6,10 +6,14 @@ import {
   clearProofigReportPdfError,
   clearProofigReportPdfRequested,
   clearStoredProofigReport,
+  getProofigPdfAttemptState,
   getProofigPdfReadiness,
   hasStoredProofigReport,
+  isProofigPdfGenerationInFlight,
   markProofigReportPdfError,
   markProofigReportPdfRequested,
+  parseProofigPdfRequestStamp,
+  PROOFIG_PDF_GENERATING_STALE_MS,
   replaceGeneratedProofigReport,
   shouldPersistProofigReport,
   summarizeProofigPdfError,
@@ -205,16 +209,19 @@ describe('markProofigReportPdfError / summarizeProofigPdfError', () => {
       finalReportData({ proofigReportPdfRequestedAt: '2025-01-01T00:00:00Z' }),
       'Converter failed: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/x?token=abc\nCall log:',
       '2025-01-02T00:00:00Z',
+      'report-1',
     );
     expect(marked.proofigReportPdfError).toBe(
       'Converter failed: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5173/x',
     );
     expect(marked.proofigReportPdfFailedAt).toBe('2025-01-02T00:00:00Z');
+    expect(marked.proofigReportPdfFailedReportId).toBe('report-1');
     expect(marked.proofigReportPdfRequestedAt).toBeUndefined();
     expect(getProofigPdfReadiness(marked)).toBe('failed');
 
     const cleared = clearProofigReportPdfError(marked);
     expect(cleared.proofigReportPdfError).toBeUndefined();
+    expect(cleared.proofigReportPdfFailedReportId).toBeUndefined();
     expect(getProofigPdfReadiness(cleared)).toBe('pending');
   });
 
@@ -229,5 +236,112 @@ describe('markProofigReportPdfRequested / clearProofigReportPdfRequested', () =>
     const stamped = markProofigReportPdfRequested(finalReportData(), '2025-03-01T12:00:00Z');
     expect(stamped.proofigReportPdfRequestedAt).toBe('2025-03-01T12:00:00Z');
     expect(clearProofigReportPdfRequested(stamped).proofigReportPdfRequestedAt).toBeUndefined();
+  });
+});
+
+describe('parseProofigPdfRequestStamp', () => {
+  it('returns parsed milliseconds for a valid trimmed request stamp', () => {
+    expect(parseProofigPdfRequestStamp(' 2025-03-01T12:00:00Z ')).toBe(
+      Date.parse('2025-03-01T12:00:00Z'),
+    );
+  });
+
+  it('returns null for missing, empty, or invalid request stamps', () => {
+    expect(parseProofigPdfRequestStamp(undefined)).toBeNull();
+    expect(parseProofigPdfRequestStamp('')).toBeNull();
+    expect(parseProofigPdfRequestStamp('   ')).toBeNull();
+    expect(parseProofigPdfRequestStamp('not-a-date')).toBeNull();
+  });
+});
+
+describe('isProofigPdfGenerationInFlight', () => {
+  it('is true within the staleness bound and false after', () => {
+    const now = Date.parse('2025-03-01T12:00:00Z');
+    const stamped = markProofigReportPdfRequested(finalReportData(), '2025-03-01T12:00:00Z');
+    expect(isProofigPdfGenerationInFlight(stamped, now)).toBe(true);
+    expect(isProofigPdfGenerationInFlight(stamped, now + PROOFIG_PDF_GENERATING_STALE_MS - 1)).toBe(
+      true,
+    );
+    expect(isProofigPdfGenerationInFlight(stamped, now + PROOFIG_PDF_GENERATING_STALE_MS)).toBe(
+      false,
+    );
+  });
+
+  it('is false when no stamp is present', () => {
+    expect(isProofigPdfGenerationInFlight(finalReportData())).toBe(false);
+    expect(isProofigPdfGenerationInFlight(undefined)).toBe(false);
+  });
+});
+
+describe('getProofigPdfAttemptState', () => {
+  const now = Date.parse('2025-03-01T12:00:00Z');
+
+  it('returns generating for a fresh request even when an artifact is current', () => {
+    const data = finalReportData({
+      proofigReportStored: true,
+      storedReportId: 'report-1',
+      files: { [GENERATED_PATH]: storedFileEntry() },
+      proofigReportPdfRequestedAt: '2025-03-01T12:00:00Z',
+    });
+
+    expect(getProofigPdfAttemptState(data, now)).toEqual({ status: 'generating' });
+  });
+
+  it('conservatively returns generating with a valid request stamp before a client clock exists', () => {
+    const data = finalReportData({
+      proofigReportPdfRequestedAt: '2025-03-01T12:00:00Z',
+    });
+
+    expect(getProofigPdfAttemptState(data, null)).toEqual({ status: 'generating' });
+  });
+
+  it('does not return generating without a valid request stamp before a client clock exists', () => {
+    expect(getProofigPdfAttemptState(finalReportData(), null)).toEqual({ status: 'idle' });
+    expect(
+      getProofigPdfAttemptState(
+        finalReportData({ proofigReportPdfRequestedAt: 'not-a-date' }),
+        null,
+      ),
+    ).toEqual({ status: 'idle' });
+  });
+
+  it('returns idle after a request stamp becomes stale', () => {
+    const data = finalReportData({
+      proofigReportPdfRequestedAt: '2025-03-01T12:00:00Z',
+    });
+
+    expect(getProofigPdfAttemptState(data, now + PROOFIG_PDF_GENERATING_STALE_MS)).toEqual({
+      status: 'idle',
+    });
+  });
+
+  it('returns failed only when the failure targets the current report', () => {
+    const currentFailure = finalReportData({
+      proofigReportPdfError: 'render failed',
+      proofigReportPdfFailedReportId: 'report-1',
+    });
+    const oldFailure = finalReportData({
+      reportId: 'report-2',
+      proofigReportPdfError: 'render failed',
+      proofigReportPdfFailedReportId: 'report-1',
+    });
+
+    expect(getProofigPdfAttemptState(currentFailure, now)).toEqual({
+      status: 'failed',
+      error: 'render failed',
+    });
+    expect(getProofigPdfAttemptState(oldFailure, now)).toEqual({ status: 'idle' });
+  });
+
+  it('treats a legacy unscoped error as current conservatively', () => {
+    expect(
+      getProofigPdfAttemptState(
+        finalReportData({ proofigReportPdfError: 'legacy render failed' }),
+        now,
+      ),
+    ).toEqual({
+      status: 'failed',
+      error: 'legacy render failed',
+    });
   });
 });

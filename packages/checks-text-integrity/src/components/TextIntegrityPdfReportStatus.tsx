@@ -3,10 +3,7 @@ import { useFetcher, useRevalidator } from 'react-router';
 import { ui, useCheckMaintenanceBlocked } from '@curvenote/scms-core';
 import { TextIntegrityEulaDialog } from './TextIntegrityEulaDialog.js';
 import { useTextIntegrityEulaEnable } from './useTextIntegrityEulaEnable.js';
-import {
-  TextIntegrityActionOverflow,
-  type TextIntegrityOverflowMenuItem,
-} from './TextIntegrityActionOverflow.js';
+import { ActionOverflow, type ActionOverflowMenuItem } from '@hhmi/checks-shared/ActionOverflow';
 
 export interface TextIntegrityPdfReportStatusProps {
   reportGenerationComplete: boolean;
@@ -315,7 +312,7 @@ export function TextIntegrityPdfReportStatus({
   // already the primary control (Proofig-aligned).
   const showRegenerateInMenu = canRestart && !showRegeneratePrimary;
 
-  const menuItems: TextIntegrityOverflowMenuItem[] = [];
+  const menuItems: ActionOverflowMenuItem[] = [];
   if (canRefresh) {
     menuItems.push({
       id: 'refresh',
@@ -388,7 +385,7 @@ export function TextIntegrityPdfReportStatus({
   return (
     <>
       <ui.MaintenanceTooltip enabled={blocked} message={maintenanceMessage}>
-        <TextIntegrityActionOverflow primary={primary} menuItems={menuItems} />
+        <ActionOverflow primary={primary} menuItems={menuItems} />
       </ui.MaintenanceTooltip>
       {eulaPresentation ? (
         <TextIntegrityEulaDialog

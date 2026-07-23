@@ -6,7 +6,7 @@ import { resolveRoutePath } from '@curvenote/scms-server';
 
 /**
  * Registers routes for the Text Integrity checks extension.
- * Webhook route is mounted under `/v1/api/hooks/*` via `attachTo: 'v1/hooks'`.
+ * Webhook route is mounted under `/v1/hooks/*` via `attachTo: 'v1/hooks'`.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function registerRoutes(_appConfig: Config): Promise<RouteRegistration[]> {

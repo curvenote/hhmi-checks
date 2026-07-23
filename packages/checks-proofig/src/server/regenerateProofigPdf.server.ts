@@ -3,6 +3,8 @@ import type {
   ExtensionCheckHandleActionArgs,
   ExtensionCheckHandleActionResult,
 } from '@curvenote/scms-core';
+import { trackChecksEvent } from '@hhmi/checks-shared/analytics/server';
+import { ImageIntegrityTrackEvent } from '../analytics.catalog.js';
 import { proofigDataSchema } from '../schema.js';
 import { getProofigPdfReadiness } from '../proofigReportFiles.js';
 import { enqueueProofigPersistPdfIfNeeded } from './enqueue-proofig-persist-pdf.server.js';
@@ -84,10 +86,23 @@ export async function handleRegenerateProofigPdfAction(
     invokedById: ctx.user?.id,
   });
   if (!result.enqueued) {
+    if (result.reason === 'already-in-flight') {
+      return { success: true };
+    }
     return {
       error: { type: 'general', message: `Could not regenerate PDF: ${result.reason}` },
       status: 400,
     };
   }
+  void trackChecksEvent(ctx, ImageIntegrityTrackEvent.CHECKS_PDF_REGENERATION_REQUESTED, {
+    checkKind: 'proofig',
+    workVersionId,
+    checkRunId: run.id,
+  }).catch((err) => {
+    console.error('[proofig] PDF regeneration analytics failed', {
+      checkRunId: run.id,
+      err,
+    });
+  });
   return { success: true };
 }

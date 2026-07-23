@@ -7,6 +7,9 @@ import {
   getPrismaClient,
   withAppContext,
 } from '@curvenote/scms-server';
+import { trackChecksEvent } from '@hhmi/checks-shared/analytics/server';
+import { loadChecksRunAnalyticsContext } from '@hhmi/checks-shared/analytics/runContext.server';
+import { ImageIntegrityTrackEvent } from '../../analytics.catalog.js';
 import { proofigDataSchema } from '../../schema.js';
 import {
   PROOFIG_REPORT_FILENAME,
@@ -136,6 +139,16 @@ export async function loader(args: LoaderFunctionArgs) {
   }
 
   const stream = await file.readStream();
+  void loadChecksRunAnalyticsContext(run.work_version_id, 'proofig', {
+    checkRunId: id,
+  })
+    .then((props) => trackChecksEvent(ctx, ImageIntegrityTrackEvent.CHECKS_PDF_DOWNLOADED, props))
+    .catch((err) => {
+      console.error('[proofig] PDF download analytics failed', {
+        checkRunId: id,
+        err,
+      });
+    });
   return new Response(stream as unknown as ReadableStream, {
     status: 200,
     headers: {

@@ -13,6 +13,12 @@ export type ProofigPdfReadiness =
   | 'stored-current'
   | 'stored-stale';
 
+/** State of the latest PDF generation attempt, independent of artifact availability. */
+export type ProofigPdfAttemptState =
+  | { status: 'idle' }
+  | { status: 'generating' }
+  | { status: 'failed'; error: string };
+
 /** Strip query strings and truncate noisy worker/job error text for UI display. */
 export function summarizeProofigPdfError(message: string): string {
   const withoutQuery = message.replace(/\?[^?\s]*/g, '');
@@ -26,25 +32,46 @@ export function markProofigReportPdfError(
   serviceData: ProofigDataSchema,
   message: string,
   failedAt = new Date().toISOString(),
+  failedReportId?: string,
 ): ProofigDataSchema {
   return {
     ...serviceData,
     proofigReportPdfError: summarizeProofigPdfError(message),
     proofigReportPdfFailedAt: failedAt,
+    proofigReportPdfFailedReportId: failedReportId,
     proofigReportPdfRequestedAt: undefined,
   };
 }
 
 /** Clear PDF persist failure flags (e.g. before retry enqueue or after successful store). */
 export function clearProofigReportPdfError(serviceData: ProofigDataSchema): ProofigDataSchema {
-  if (serviceData.proofigReportPdfError == null && serviceData.proofigReportPdfFailedAt == null) {
+  if (
+    serviceData.proofigReportPdfError == null &&
+    serviceData.proofigReportPdfFailedAt == null &&
+    serviceData.proofigReportPdfFailedReportId == null
+  ) {
     return serviceData;
   }
   return {
     ...serviceData,
     proofigReportPdfError: undefined,
     proofigReportPdfFailedAt: undefined,
+    proofigReportPdfFailedReportId: undefined,
   };
+}
+
+/**
+ * After this age, treat `proofigReportPdfRequestedAt` as stale so the UI leaves perpetual
+ * “Generating…” when a job never terminates (stuck RUNNING, lost Pub/Sub, etc.).
+ */
+export const PROOFIG_PDF_GENERATING_STALE_MS = 15 * 60 * 1000;
+
+/** Parse a persisted PDF request stamp, returning null when it is absent or invalid. */
+export function parseProofigPdfRequestStamp(stamp: string | null | undefined): number | null {
+  const trimmed = stamp?.trim();
+  if (!trimmed) return null;
+  const parsed = Date.parse(trimmed);
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 /** Mark that a PROOFIG_PERSIST_PDF job was enqueued (UI “Generating…” signal). */
@@ -56,6 +83,57 @@ export function markProofigReportPdfRequested(
     ...serviceData,
     proofigReportPdfRequestedAt: requestedAt,
   };
+}
+
+/**
+ * True when a PDF persist was requested recently enough that the UI should show
+ * “Generating…” (and keep Download hidden while a re-render is in flight).
+ */
+export function isProofigPdfGenerationInFlight(
+  serviceData: ProofigDataSchema | undefined,
+  nowMs = Date.now(),
+): boolean {
+  const requestedAtMs = parseProofigPdfRequestStamp(serviceData?.proofigReportPdfRequestedAt);
+  if (requestedAtMs == null) return false;
+  return nowMs - requestedAtMs < PROOFIG_PDF_GENERATING_STALE_MS;
+}
+
+/**
+ * True when the recorded failure applies to the current report.
+ *
+ * Legacy errors have no failed report id. Treat them as current conservatively so existing
+ * permanent failures do not enter an automatic retry loop after deployment.
+ */
+export function isProofigPdfFailureForCurrentReport(
+  serviceData: ProofigDataSchema | undefined,
+): boolean {
+  const error = serviceData?.proofigReportPdfError?.trim();
+  if (!error) return false;
+  const failedReportId = serviceData?.proofigReportPdfFailedReportId?.trim();
+  const currentReportId = currentProofigReportId(serviceData);
+  return !failedReportId || !currentReportId || failedReportId === currentReportId;
+}
+
+/**
+ * Derive generation-attempt UI state independently from stored artifact readiness.
+ * A null clock means SSR / initial hydration: conservatively treat a valid request stamp as
+ * generating until the client effect supplies a clock and can prove that the stamp is stale.
+ */
+export function getProofigPdfAttemptState(
+  serviceData: ProofigDataSchema | undefined,
+  nowMs: number | null = Date.now(),
+): ProofigPdfAttemptState {
+  const requestedAtMs = parseProofigPdfRequestStamp(serviceData?.proofigReportPdfRequestedAt);
+  if (
+    requestedAtMs != null &&
+    (nowMs == null || isProofigPdfGenerationInFlight(serviceData, nowMs))
+  ) {
+    return { status: 'generating' };
+  }
+  if (isProofigPdfFailureForCurrentReport(serviceData)) {
+    return { status: 'failed', error: serviceData!.proofigReportPdfError!.trim() };
+  }
+  return { status: 'idle' };
 }
 
 /** Clear the enqueue stamp once generation has terminated (stored or failed). */
@@ -158,7 +236,7 @@ export function getProofigPdfReadiness(
   ) {
     return 'stored-stale';
   }
-  if (serviceData?.proofigReportPdfError?.trim()) return 'failed';
+  if (isProofigPdfFailureForCurrentReport(serviceData)) return 'failed';
   return 'pending';
 }
 
