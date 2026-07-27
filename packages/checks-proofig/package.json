@@ -45,6 +45,7 @@
     "build:server": "tsc --project tsconfig.json",
     "build:client": "tsup",
     "compile": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:ci": "vitest run",

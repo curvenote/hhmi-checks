@@ -23,6 +23,7 @@
     "lint:format": "bunx prettier --check \"src/**/*.ts\"",
     "lint:format:fix": "bunx prettier --write \"src/**/*.ts\"",
     "compile": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest watch"
   },

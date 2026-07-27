@@ -66,6 +66,7 @@
     "lint:format:fix": "prettier --write \"src/**/*.ts\"",
     "build": "tsc --project tsconfig.json",
     "compile": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run"
   },
