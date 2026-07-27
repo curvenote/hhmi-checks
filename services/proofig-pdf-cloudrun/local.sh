@@ -9,7 +9,7 @@ echo "🔨 Building proofig-pdf-service package..."
 
 # Navigate to the service package and build it
 cd ../../packages/proofig-pdf-service
-npm run build
+bun run build
 
 echo "📦 Copying built assets to cloudrun directory..."
 

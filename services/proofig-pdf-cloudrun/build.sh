@@ -33,7 +33,7 @@ echo "Project: $GCP_PROJECT"
 echo "Region: ${GCP_REGION:-us-central1}"
 
 echo "Running build:service (proofig-pdf-service esbuild bundle → index.js)..."
-npm run build:service
+bun run build:service
 
 if [ ! -f "index.js" ]; then
     echo "❌ Error: index.js not found after build:service"
