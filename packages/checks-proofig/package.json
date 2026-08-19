@@ -65,14 +65,16 @@
     "@curvenote/scms-server": "*",
     "@hhmi/checks-notify": "*",
     "@hhmi/checks-shared": "*",
-    "@react-router/dev": "7.9.5",
     "lucide-react": "^0.552.0",
-    "react": "^18.3.1",
-    "react-router": "^7.9.5",
     "date-fns": "3.6.0",
     "uuidv7": "^1.1.0",
-    "zod": "^4.1.12",
-    "@react-router/node": "7.9.5"
+    "zod": "^4.1.12"
+  },
+  "peerDependencies": {
+    "@react-router/dev": "7.18.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router": "7.18.2"
   },
   "optionalDependencies": {
     "@esbuild/linux-x64": "^0.25.1",
@@ -80,7 +82,9 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",
-    "@react-router/serve": "^7.0.0",
+    "@react-router/dev": "7.18.2",
+    "@react-router/node": "7.18.2",
+    "@react-router/serve": "7.18.2",
     "@tailwindcss/postcss": "^4.0.14",
     "@types/node": "^22.19.0",
     "@types/react": "^18.3.18",
@@ -92,7 +96,9 @@
     "madge": "^8.0.0",
     "prettier": "^3.5.3",
     "prettier-eslint": "^16.3.0",
+    "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-router": "7.18.2",
     "tsup": "^8.5.1",
     "tsx": "^4.19.3",
     "typescript": "^5.6.3",

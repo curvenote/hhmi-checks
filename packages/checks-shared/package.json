@@ -73,9 +73,12 @@
   "dependencies": {
     "@curvenote/scms-core": "*",
     "@curvenote/scms-server": "*",
-    "lucide-react": "^0.552.0",
+    "lucide-react": "^0.552.0"
+  },
+  "peerDependencies": {
     "react": "^18.3.1",
-    "react-router": "^7.9.5"
+    "react-dom": "^18.3.1",
+    "react-router": "7.18.2"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",
@@ -84,7 +87,9 @@
     "eslint-config-curvenote": "^0.0.4",
     "jsdom": "^29.1.1",
     "prettier": "^3.5.3",
+    "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-router": "7.18.2",
     "typescript": "^5.6.3",
     "vitest": "^4.1.3"
   },
